@@ -5,6 +5,7 @@
 
 #include "vc/core/util/CacheCompression.hpp"
 #include "vc/core/util/Logging.hpp"
+#include "vc/core/util/ThreadBudget.hpp"
 #include "vc/core/render/ChunkRequestScheduler.hpp"
 #include "vc/core/render/PersistentZarrCacheBudget.hpp"
 
@@ -648,8 +649,14 @@ struct ChunkCacheService::Impl {
         , activeFetchWorkers(options.fetchConcurrency.maxConcurrentReads)
         , activeFetchAdaptive(options.fetchConcurrency.adaptive)
     {
+        // Lower both together so the capacity invariant below still holds when
+        // a thread budget is in force.
         const std::size_t workerCapacity =
-            options.fetchConcurrency.workerCapacity;
+            vc::core::util::clampWorkerCount(
+                options.fetchConcurrency.workerCapacity);
+        activeFetchWorkers =
+            std::min(vc::core::util::clampWorkerCount(activeFetchWorkers),
+                     workerCapacity);
         if (workerCapacity == 0 || activeFetchWorkers == 0 ||
             activeFetchWorkers > workerCapacity) {
             throw std::invalid_argument(
@@ -699,12 +706,19 @@ struct ChunkCacheService::Impl {
         std::make_shared<std::atomic<std::uint64_t>>(1);
     std::shared_ptr<ChunkRequestSelectionGate> schedulerSelectionGate =
         std::make_shared<ChunkRequestSelectionGate>();
+    // Worker counts are lowered by the process thread budget (VC_MAX_THREADS /
+    // "thread_limit") when one is set. These schedulers eagerly start every
+    // worker, so on a batch-tracing host they dominate the process thread
+    // count; draining the same queues with fewer workers is slower but
+    // produces identical results.
     std::shared_ptr<ChunkRequestScheduler> probeScheduler =
         std::make_shared<ChunkRequestScheduler>(
-            kPersistentProbeWorkers, 7, schedulerSelectionGate);
+            vc::core::util::clampWorkerCount(kPersistentProbeWorkers), 7,
+            schedulerSelectionGate);
     std::shared_ptr<ChunkRequestScheduler> decodeScheduler =
         std::make_shared<ChunkRequestScheduler>(
-            kDecodeWorkers, 7, schedulerSelectionGate);
+            vc::core::util::clampWorkerCount(kDecodeWorkers), 7,
+            schedulerSelectionGate);
     std::shared_ptr<ChunkRequestScheduler> fetchScheduler;
     std::size_t activeFetchWorkers = 0;
     bool activeFetchAdaptive = false;

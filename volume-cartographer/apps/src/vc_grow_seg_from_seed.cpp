@@ -12,6 +12,7 @@
 #include "vc/core/types/Volume.hpp"
 #include "vc/core/render/ChunkCache.hpp"
 #include "vc/core/util/StreamOperators.hpp"
+#include "vc/core/util/ThreadBudget.hpp"
 #include "vc/tracer/Tracer.hpp"
 
 #include "vc/core/types/VcDataset.hpp"
@@ -318,6 +319,20 @@ int main(int argc, char *argv[])
         params = Json::parse_file(params_path);
     }
 
+    // Apply "thread_limit" before anything that builds a worker pool. The
+    // chunk cache schedulers (created via processChunkCacheService() below)
+    // and the OpenMP pool both start their workers eagerly, so applying the
+    // limit later -- as this tool used to, just before tracing -- left them
+    // already sized from hardware_concurrency(). Measured on a 32-core host
+    // with "thread_limit": 1, the process still reached 172 OS threads.
+    // omp_set_num_threads() is also hoisted here for the same reason: seed
+    // search below runs OpenMP regions.
+    const int thread_limit_early = params.value("thread_limit", 0);
+    if (thread_limit_early > 0) {
+        vc::core::util::setThreadBudget(thread_limit_early);
+        omp_set_num_threads(thread_limit_early);
+    }
+
     // Honor optional CUDA toggle from params (default true)
     if (params.contains("use_cuda")) {
         set_space_tracing_use_cuda(params.value("use_cuda", true));
@@ -573,6 +588,9 @@ int main(int argc, char *argv[])
     }
 
     if (thread_limit) {
+        // Already applied right after params were parsed (see
+        // thread_limit_early above); repeated here only so the limit still
+        // holds if this value is ever changed between the two points.
         omp_set_num_threads(thread_limit);
     }
     else if (omp_get_max_threads() > 8) {

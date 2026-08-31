@@ -1,5 +1,7 @@
 #include "vc/core/render/ChunkedPlaneSampler.hpp"
 
+#include "vc/core/util/ThreadBudget.hpp"
+
 #include <utils/thread_pool.hpp>
 
 #include <algorithm>
@@ -152,7 +154,13 @@ int cornerBatchWorkerCount()
     const unsigned hc = std::thread::hardware_concurrency();
     if (hc <= 2)
         return 1;
-    return std::clamp(static_cast<int>(hc) - 2, 1, kMaxCornerBatchWorkers);
+    const int automatic =
+        std::clamp(static_cast<int>(hc) - 2, 1, kMaxCornerBatchWorkers);
+    // Lowered by the process thread budget (VC_MAX_THREADS / "thread_limit")
+    // when one is set; the pool is a work queue, so fewer workers changes
+    // only concurrency, not results.
+    return static_cast<int>(
+        vc::core::util::clampWorkerCount(static_cast<std::size_t>(automatic)));
 }
 
 utils::ThreadPool& cornerBatchPool()
