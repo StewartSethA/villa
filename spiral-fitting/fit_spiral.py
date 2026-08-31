@@ -176,7 +176,7 @@ _SDT_COVERAGE_AND_LOCATION_KEYS = (
     'path', 'source', 'complete', 'z_range_working', 'built_z_ranges_working',
 )
 
-_HEADLESS_AUTOSAVE_INTERVAL = 1000
+_HEADLESS_AUTOSAVE_INTERVAL = int(os.environ.get('FIT_SPIRAL_AUTOSAVE_INTERVAL', '1000'))
 
 
 def comparable_sdt_fingerprint(fingerprint):
