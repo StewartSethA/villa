@@ -4675,9 +4675,27 @@ class FitContext:
         progress = progress_or_null(self.progress)
         has_progress = self.progress is not None
 
+        # Lightweight setup-phase timing (FIT_SPIRAL_SETUP_TIMING=1): brackets
+        # the one-time, pre-training-loop phases that have repeatedly been the
+        # actual bottleneck in practice (patch/point loading, device/model
+        # construction, first-iteration warmup) — separate from StepTimer,
+        # which only covers steady-state per-step cost once the loop is
+        # already running. Print-based on purpose: cheap, always-safe to
+        # leave in, no dependency on a profiler being installed.
+        _setup_timing = os.environ.get('FIT_SPIRAL_SETUP_TIMING') == '1' and self.dist.is_main_process
+        def _mark(label, _t=[time.monotonic()]):
+            if not _setup_timing:
+                return
+            now = time.monotonic()
+            print(f'[setup timing] {label}: +{now - _t[0]:.1f}s', flush=True)
+            _t[0] = now
+
+        _mark('start')
         self.load_host_inputs()
+        _mark('load_host_inputs done')
         self.resolve_output_path()
         self.build_device_state()
+        _mark('build_device_state done (model constructed)')
 
         # ==========================================================================
         # Training loop
@@ -4691,6 +4709,9 @@ class FitContext:
                 range(self.start_iteration, self.num_training_steps),
                 disable=not self.dist.is_main_process or has_progress):
             loss, losses, log_metrics, shell_metrics = self.step(iteration)
+            if _setup_timing and iteration == self.start_iteration:
+                _mark('first step() returned (includes any one-time warmup: '
+                      'cudnn autotune, lazy batch/cache construction, etc.)')
             progress.update(iteration - self.start_iteration + 1)
             self.log_step_metrics(iteration, loss, losses, log_metrics, shell_metrics)
             self._maybe_save_headless_checkpoint(iteration + 1)

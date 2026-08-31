@@ -15,13 +15,23 @@ mkdir -p "$OUT_DIR" "$CACHE_DIR"
 LOG="$OUT_DIR/keepalive.log"
 ATTEMPT=0
 
+BASE_JSON="\"z_begin\":$ZB,\"z_end\":$ZE,\"optimizer_num_training_steps\":30000,\"input_use_tracks\":false,\"dense_spacing_mode\":\"grad_mag\",\"loss_weight_dense_spacing_density\":0.0,\"loss_weight_dense_normals\":0.0,\"loss_weight_dense_spacing\":0.0,\"model_flow_field_direct_lr\":false"
+if [ -n "$EXTRA_JSON" ]; then
+  CONFIG_JSON="{${BASE_JSON},${EXTRA_JSON}}"
+else
+  CONFIG_JSON="{${BASE_JSON}}"
+fi
+if ! echo "$CONFIG_JSON" | .venv/bin/python -c "import json,sys; json.loads(sys.stdin.read())" 2>>"$LOG"; then
+  echo "[$(date -Is)] FATAL: FIT_SPIRAL_CONFIG_OVERRIDES is not valid JSON, aborting: $CONFIG_JSON" >> "$LOG"
+  exit 1
+fi
+
 echo "[$(date -Is)] keepalive starting for $TAG (gpu $CVD, z=$ZB-$ZE)" >> "$LOG"
 
 while true; do
   ATTEMPT=$((ATTEMPT + 1))
-  CKPT="$OUT_DIR/checkpoint_fitted.ckpt"
-  RESUME_ARGS=()
-  if [ -f "$CKPT" ]; then
+  CKPT=$(find "$OUT_DIR" -maxdepth 2 -name "checkpoint_fitted.ckpt" 2>/dev/null | head -1)
+  if [ -n "$CKPT" ] && [ -f "$CKPT" ]; then
     echo "[$(date -Is)] attempt $ATTEMPT: resuming from $CKPT" >> "$LOG"
     export FIT_SPIRAL_RESUME_PATH="$CKPT"
   else
@@ -33,11 +43,13 @@ while true; do
   FIT_SPIRAL_OUT_DIR="$OUT_DIR" \
   FIT_SPIRAL_CACHE_DIR="$CACHE_DIR" \
   FIT_SPIRAL_RUN_TAG="$TAG" \
-  FIT_SPIRAL_AUTOSAVE_INTERVAL=100 \
+  FIT_SPIRAL_AUTOSAVE_INTERVAL=50 \
+  FIT_SPIRAL_SETUP_TIMING=1 \
+  FIT_SPIRAL_PATCH_LOAD_WORKERS="${FIT_SPIRAL_PATCH_LOAD_WORKERS:-5}" \
   WANDB_MODE=disabled \
-  FIT_SPIRAL_CONFIG_OVERRIDES="{\"z_begin\":$ZB,\"z_end\":$ZE,\"optimizer_num_training_steps\":30000,\"input_use_tracks\":false,\"dense_spacing_mode\":\"grad_mag\",\"loss_weight_dense_spacing_density\":0.0,\"loss_weight_dense_normals\":0.0,\"loss_weight_dense_spacing\":0.0,\"model_flow_field_direct_lr\":false,$EXTRA_JSON}" \
+  FIT_SPIRAL_CONFIG_OVERRIDES="$CONFIG_JSON" \
   FIT_SPIRAL_TRITON=0 \
-  .venv/bin/python fit_spiral.py \
+  .venv/bin/torchrun --nproc-per-node=1 fit_spiral.py \
     --dataset /mnt/raid10T/spiral_datasets/PHercParis4 \
     --cache "$CACHE_DIR" \
     >> "$OUT_DIR/run_$ATTEMPT.log" 2>&1
