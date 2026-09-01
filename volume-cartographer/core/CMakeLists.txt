@@ -1,6 +1,7 @@
 configure_file(src/Version.cpp.in Version.cpp)
 
 add_library(vc_core
+        src/DirectoryReplace.cpp
         src/GridStore.cpp
         src/NormalGridVolume.cpp
         src/normalgridtools.cpp

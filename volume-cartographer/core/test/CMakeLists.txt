@@ -72,6 +72,8 @@ vc_add_test(NAME test_surface_area_units)
 
 vc_add_test(NAME test_voxel_size_metadata)
 
+vc_add_test(NAME test_directory_replace)
+
 vc_add_test(NAME test_tifxyz_identity)
 
 vc_add_test(NAME test_appendmask_render)
