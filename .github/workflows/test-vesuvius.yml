@@ -11,6 +11,7 @@ jobs:
   test-vesuvius-python:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
             # Limit the test matrix to ubuntu-latest for now, as other platforms may not
             # support all dependencies yet.  Extend this list once the build scripts
