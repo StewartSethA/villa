@@ -40,14 +40,9 @@
 #include <windows.h>
 #endif
 
-#ifdef __linux__
-// renameat2(RENAME_EXCHANGE) in save() needs the GNU prototypes.
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-#include <fcntl.h>
-#include <unistd.h>
-#endif
+
+
+#include "vc/core/util/DirectoryReplace.hpp"
 
 #include "vc/core/util/MemMap.hpp"
 
@@ -2189,48 +2184,28 @@ void QuadSurface::save(const std::filesystem::path &path_, const std::string &uu
         }
     }
 
-    // Atomically move the saved data to the final location
+    // Move the saved data into its final location. replaceDirectory()
+    // picks the strongest guarantee the filesystem actually offers, so this
+    // reads the same whether the segment lives on ext4, tmpfs, NFS or a FUSE
+    // mount, and whether the build targets a current glibc or an old sysroot.
     bool replacedExisting = false;
     if (force_overwrite && std::filesystem::exists(final_path)) {
-#ifdef __linux__
-        if (renameat2(AT_FDCWD, temp_path.c_str(), AT_FDCWD, final_path.c_str(), RENAME_EXCHANGE) != 0) {
-            const int err = errno;
-            if (err == ENOSYS || err == EINVAL) {
-                // System doesn't support atomic exchange, fall back to remove + rename
-                std::filesystem::remove_all(final_path);
-                std::filesystem::rename(temp_path, final_path);
-                replacedExisting = true;
-            } else {
-                path = original_path; // Restore on error
-                const std::error_code ec(err, std::generic_category());
-                throw std::runtime_error("atomic exchange failed for " + temp_path.string() +
-                                       " and " + final_path.string() + ": " + ec.message());
-            }
-        } else {
-            // Atomic exchange succeeded, clean up the old data now in temp location
-            std::error_code cleanupErr;
-            std::filesystem::remove_all(temp_path, cleanupErr);
-            if (cleanupErr) {
-                path = original_path; // Restore on error
-                throw std::runtime_error("failed to clean up previous segmentation data at " +
-                                       temp_path.string() + ": " + cleanupErr.message());
-            }
-            replacedExisting = true;
-        }
-#elif defined(_WIN32)
+#ifdef _WIN32
         try {
             replaceDirectoryContents(temp_path, final_path);
         } catch (...) {
-            path = original_path;
+            path = original_path; // Restore on error
             throw;
         }
-        replacedExisting = true;
 #else
-        // renameat2/RENAME_EXCHANGE is Linux-only; use remove + rename fallback
-        std::filesystem::remove_all(final_path);
-        std::filesystem::rename(temp_path, final_path);
-        replacedExisting = true;
+        try {
+            replaceDirectory(temp_path, final_path);
+        } catch (...) {
+            path = original_path; // Restore on error
+            throw;
+        }
 #endif
+        replacedExisting = true;
     }
 
     if (!replacedExisting) {
