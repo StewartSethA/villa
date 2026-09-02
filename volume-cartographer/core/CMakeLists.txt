@@ -74,8 +74,23 @@ target_link_libraries(vc_core
 target_link_libraries(vc_core PUBLIC
     $<BUILD_INTERFACE:utils>
     $<BUILD_INTERFACE:utils_c3d_codec>
-    vc_delta3d::vc_delta3d
 )
+
+# vc_delta3d builds as a static archive. When vc_core is a SHARED library, GNU
+# ld does not extract archive members to satisfy a shared library's undefined
+# symbols (they are permitted to stay undefined and resolve at load time), so
+# the codec symbols end up missing from libvc_core.so and every downstream
+# executable link fails with "undefined reference to vc_delta3d::...".
+# Forcing whole-archive embeds the codec into libvc_core.so, which is what a
+# PUBLIC dependency on a static archive is meant to mean here. Scoped to the
+# GNU-ld case: ld64/lld/MSVC archive semantics differ and do not need it.
+if(BUILD_SHARED_LIBS AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
+   AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_link_libraries(vc_core PUBLIC
+        -Wl,--whole-archive vc_delta3d::vc_delta3d -Wl,--no-whole-archive)
+else()
+    target_link_libraries(vc_core PUBLIC vc_delta3d::vc_delta3d)
+endif()
 target_link_libraries(vc_core PRIVATE
     Blosc::blosc
     ${VC_LIBBACKTRACE}
@@ -147,8 +162,25 @@ if(VC_USE_PCH)
     target_precompile_headers(vc_core REUSE_FROM vc_common_pch)
 endif()
 
-add_library(vc_flattening src/ABFFlattening.cpp)
+add_library(vc_flattening src/ABFFlattening.cpp src/AbfSolver.cpp)
 target_link_libraries(vc_flattening PUBLIC vc_core OpenABF)
+
+# Optional GPU path for the ABF++ linear solve (ILU(0) + BiCGSTAB on cuSPARSE).
+# OFF by default so a CPU-only build is unchanged and needs no CUDA at all.
+#
+# This needs no CUDA COMPILER and no `enable_language(CUDA)`: the solver writes
+# no kernels of its own, it drives cuSPARSE and cuBLAS through their host APIs,
+# so an ordinary C++ compiler plus these three libraries is the whole
+# requirement. Without VC_ENABLE_GPU_ABF, AbfSolver.cpp still compiles and is
+# exactly Eigen::SparseLU behind the same API, so no caller needs a #ifdef.
+if(VC_ENABLE_GPU_ABF)
+    find_package(CUDAToolkit REQUIRED)
+    target_compile_definitions(vc_flattening PRIVATE VC_HAVE_GPU_ABF)
+    target_link_libraries(vc_flattening PRIVATE
+        CUDA::cudart CUDA::cusparse CUDA::cublas)
+    message(STATUS "vc_flattening: GPU ABF solver ENABLED "
+                   "(select at runtime with VC_ABF_SOLVER=auto|cpu|gpu)")
+endif()
 
 add_library(vc_inpaint src/InpaintSurface.cpp)
 target_link_libraries(vc_inpaint PUBLIC vc_core PRIVATE Ceres::ceres)

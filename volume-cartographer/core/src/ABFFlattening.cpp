@@ -3,6 +3,8 @@
 
 #include <OpenABF/OpenABF.hpp>
 
+#include "vc/flattening/AbfSolver.hpp"
+
 #include <Eigen/Core>
 #include <opencv2/imgproc.hpp>
 
@@ -20,7 +22,15 @@ namespace vc {
 
 // Type aliases for OpenABF
 using HalfEdgeMesh = OpenABF::detail::ABF::Mesh<double>;
-using ABF = OpenABF::ABFPlusPlus<double>;
+// The linear solver is a TEMPLATE PARAMETER of ABFPlusPlus, documented as
+// taking any type modelling the Eigen sparse-solver concept, so swapping it
+// needs no change to the algorithm -- this typedef is the entire integration.
+// AbfSolver is Eigen::SparseLU unless the build enabled VC_ENABLE_GPU_ABF AND a
+// device is usable AND the GPU answer meets an explicit ||Ax-b||/||b|| bar
+// computed from the original matrix; otherwise it falls back per solve. So this
+// line can only make a correct flatten faster, never make a flatten wrong.
+using ABF = OpenABF::ABFPlusPlus<
+    double, OpenABF::detail::ABF::Mesh<double>, volcart::flattening::AbfSolver>;
 using LSCM = OpenABF::AngleBasedLSCM<double, HalfEdgeMesh>;
 
 static inline bool isValidSurfacePoint(const cv::Vec3f& p)
