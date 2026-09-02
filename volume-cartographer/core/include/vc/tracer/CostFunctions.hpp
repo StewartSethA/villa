@@ -1326,8 +1326,29 @@ struct NormalConstraintPlane {
             return T(0.0);
         }
 
-        T total_weighted_dot_loss = T(0.0);
-        T total_weight = T(0.0);
+        // The loop below produces only quantities that are constant with respect
+        // to the parameters: the segment weights, the segment normals and the
+        // sign that ceres::abs applies all depend on val(p1)/val(p2) alone. Run
+        // in T, it makes Ceres carry an O(#segments) loop through
+        // Jet<double, 12> autodiff and then discard twelve derivative lanes of
+        // every intermediate.
+        //
+        // Fold it instead. With n_edge the (differentiable) edge normal, n_k the
+        // k-th segment normal, w_k its weight and
+        //     s_k = copysign(1, n_edge . n_k)
+        // the sign ceres::abs applies to both parts of the jet
+        // (jet.h: abs(f) = {abs(f.a), copysign(1, f.a) * f.v}),
+        //     sum_k w_k (1 - |n_edge . n_k|) / sum_k w_k
+        //       = 1 - n_edge . (sum_k w_k s_k n_k / sum_k w_k).
+        // The loop therefore runs in plain double and only a single dot product
+        // against the mean normal stays differentiable: same value and same
+        // derivative, up to floating-point reassociation.
+        const double edge_normal_x_val = val(edge_normal_x);
+        const double edge_normal_y_val = val(edge_normal_y);
+
+        double mean_normal_x = 0.0;
+        double mean_normal_y = 0.0;
+        double total_weight = 0.0;
 
         for (const std::vector<cv::Point>& path : nearby_paths) {
             if (path.size() < 2) continue;
@@ -1342,7 +1363,7 @@ struct NormalConstraintPlane {
 
                 dist_sq = std::max(10.0f, dist_sq);
 
-                T weight_n = T(1.0 / dist_sq);
+                double weight_n = 1.0 / dist_sq;
 
                 cv::Point2f tangent = p_b - p_a;
                 float length = cv::norm(tangent);
@@ -1351,19 +1372,22 @@ struct NormalConstraintPlane {
                 }
                 cv::Point2f normal(-tangent.y, tangent.x);
 
-                T dot_product = edge_normal_x * T(normal.x) + edge_normal_y * T(normal.y);
+                double dot_product = edge_normal_x_val * normal.x + edge_normal_y_val * normal.y;
+                double dot_sign = 1.0;
                 if (!direction_aware_) {
-                    dot_product = ceres::abs(dot_product);
+                    dot_sign = std::copysign(1.0, dot_product);
                 }
 
-                total_weighted_dot_loss += weight_n*(T(1.0) - dot_product);
+                mean_normal_x += weight_n * dot_sign * normal.x;
+                mean_normal_y += weight_n * dot_sign * normal.y;
                 total_weight += weight_n;
             }
         }
 
         T normal_loss = T(0.0);
-        if (total_weight > T(1e-9)) {
-            normal_loss = total_weighted_dot_loss/total_weight;
+        if (total_weight > 1e-9) {
+            normal_loss = T(1.0) - (edge_normal_x * T(mean_normal_x / total_weight)
+                                    + edge_normal_y * T(mean_normal_y / total_weight));
         }
 
         // Snapping logic
