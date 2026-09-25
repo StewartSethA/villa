@@ -14,9 +14,12 @@ it is Python analysis code that consumes segments those projects produce.
 |---|---|
 | `tifxyz_tools/same_sheet.py` | **Same-sheet estimator.** Is point p of surface P on the *same sheet* as surface T? T covers p when T's surface passes within 4 voxels of p **along T's normal**, T's normal agrees with P's within 20 degrees (orientation-free) and the lateral offset is within 1.5 median lattice edges. `covered_fraction(P, T)` is the fraction of P held by T. |
 
-Other methods built on it live on stacked branches of this repository (see the branch list in the branch
-description): `seed-dedup`, `growth-guard`, `fuse3d`; and, independent of this directory,
+This branch also has `seed_dedup.py`; other branches carry `growth_guard.py`, `fuse3d.py` and
 `spiral-fitting/umbilicus_checks.py`.
+
+| module | what it does |
+|---|---|
+| `tifxyz_tools/seed_dedup.py` | **Sheet-aware seed dedup (PROTOTYPE).** Refuse a tracer seed that lies ON a sheet already held: some existing surface point q has \|(p - q) . n_q\| <= `same_sheet_vox` along q's normal and lateral distance <= `lateral_vox`. Names the coverer (so the caller can extend that segment instead), can be restricted to segments created earlier, and can exclude a segment's own surface. A dilated coverage mask cannot do this: it forbids the next wrap (25-35 voxels away) as firmly as the same sheet. |
 
 ## Run the tests
 

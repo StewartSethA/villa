@@ -45,3 +45,42 @@ database and is **not** included.
   against the other selector's 1,076 of 1,234 duplicates; different denominators, the source notes call this
   agreement). Two methods that share a geometric premise agreeing is weak evidence.
 * Scan resolutions other than 7.9-9.4 um voxels, and lattices with tracer steps other than 20.
+
+# Validation record: seed_dedup (PROTOTYPE)
+
+Source: the fleet repo's `seed_dedup.py` (source commit `f127c30`, 2026-09-25) and its validation script
+`scripts/growguard/validate_seed.py`. Ported with the docstring de-fleeted; logic unchanged.
+
+## TESTED (7 tests, synthetic plane): a seed on an existing sheet is refused and the coverer is named; the NEXT WRAP
+(30 voxels along the normal) is a legitimate seed; a seed far along the sheet, or 200 voxels beyond its rim, is novel;
+only EARLIER segments cover a seed (`before`); a segment never covers its own seed (`own`); points with an undefined
+normal never cover. Mutations that turn tests red: dropping the along-normal condition (the next-wrap test fails);
+ignoring the normal-validity mask.
+
+## RE-RUN on real lattices (2026-09-25; history as ground truth)
+
+Question: does the seed-only check predict that a grown segment DUPLICATES earlier ones? For each test segment the
+seed is the lattice cell with the smallest tracer generation (where the tracer started); truth = fraction of the
+segment's lattice on the SAME SHEET (4 voxels, 20 degrees, `same_sheet`) as segments CREATED EARLIER, measured on the
+whole lattice independently of the seed point: dup >= 0.6, partial 0.3-0.6, new < 0.3. Verdict = `SurfaceIndex.check`
+at the seed with `before` = the segment's creation time. **Both truth and verdict use the same same-sheet premise**, so
+this shows the seed point predicts the whole-lattice verdict, not that "same sheet" is right.
+
+Default policy `SeedPolicy(same_sheet_vox=3, lateral_vox=50)`:
+
+| scroll | test segments (random, seed 1) | dup / partial / new | recall on dup | refuses NEW | refuses partial | precision | raw results md5 |
+|---|---|---|---|---|---|---|---|
+| PHerc0211 | n = 30 | 22 / 5 / 3 | 19/22 = 0.86 | 0/3 | 4/5 | 0.83 | `c491cd49...` |
+| PHerc0191 | n = 60 | 2 / 25 / 33 | 0/2 (unmeasurable) | 2/33 = 6 % | 5/25 | 0.00 (no true duplicates to find) | `6bff6e65...` |
+
+The full 3x3 sweep of (same_sheet_vox, lateral_vox) is in the raw files: recall on PHerc0211 dups runs 0.68 to 1.00 and
+the cost on new seeds stays at 0/3 (PHerc0211) and 2-9 of 33 (PHerc0191, rising with lateral_vox: 6 % at 50 voxels).
+Read the limits:
+* **The two scrolls barely overlap in what they can show.** PHerc0211 is 73 % duplicates (few "new" to refuse, n = 3),
+  PHerc0191 is 3 % duplicates (recall unmeasurable, n = 2). The source project's own figure, pooled over 359 segments
+  on 3 scrolls, was recall 0.76 on later duplicates, 8 % of NEW seeds refused, precision 0.79; the raw file for that
+  run was not located, so it is RECORDED and not reproduced. The runs above are consistent with it, not a
+  confirmation.
+* "refuses partial" is high (4/5, 5/25): a seed lying on a held sheet where the whole lattice is only 30-60 %
+  covered is refused. That is the intended behaviour (extend the covering segment) but it is a cost if the partial
+  segment would have grown new surface.
