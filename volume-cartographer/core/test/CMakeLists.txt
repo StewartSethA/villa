@@ -757,6 +757,10 @@ set_property(TEST test_volume_live_s3 APPEND PROPERTY LABELS network)
 
 vc_add_test(NAME test_normal_grid_volume)
 
+vc_add_test(NAME test_edt_homogeneous_blocks
+    LIBS doctest::doctest
+    INCLUDES ${CMAKE_SOURCE_DIR}/libs/edt)
+
 vc_add_test(NAME test_surface_patch_index)
 
 vc_add_test(NAME test_tiff_merge)

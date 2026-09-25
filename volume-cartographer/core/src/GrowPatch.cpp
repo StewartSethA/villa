@@ -402,7 +402,16 @@ struct lineLossDistance
         std::vector<uint8_t> binary(voxels, 1);
         const uint8_t thr = static_cast<uint8_t>(std::clamp(threshold, 0.0f, 255.0f));
 
-#pragma omp parallel for
+        // Count the foreground while binarising, so that a block whose answer is
+        // a constant can skip the transform entirely.  Both cases are exact:
+        // an all-foreground block has EDT identically 0, and a block with no
+        // foreground has no source, so pyedt returns INF for every voxel, which
+        // the copy-out loop below clamps to 255.  Measured on a live production
+        // run's own chunk cache, 10.8 % of chunks come out all-zero and 38.3 %
+        // all-255, i.e. about half the transforms are avoidable with no change
+        // to a single value.  See FINDINGS.md 42.
+        size_t nfg = 0;
+#pragma omp parallel for reduction(+:nfg)
         for (int z = 0; z < s; ++z) {
             for (int y = 0; y < s; ++y) {
                 for (int x = 0; x < s; ++x) {
@@ -411,10 +420,20 @@ struct lineLossDistance
                     if (invert) {
                         fg = !fg;
                     }
+                    nfg += fg ? 1u : 0u;
                     const size_t idx = static_cast<size_t>(z) + static_cast<size_t>(y) * s + static_cast<size_t>(x) * s * s;
                     binary[idx] = fg ? 0 : 1; // distance to foreground (zeros)
                 }
             }
+        }
+
+        if (nfg == voxels || nfg == 0) {
+            const uint8_t fill = (nfg == voxels) ? uint8_t(0) : uint8_t(255);
+            for (int z = 0; z < CHUNK_SIZE; ++z)
+                for (int y = 0; y < CHUNK_SIZE; ++y)
+                    for (int x = 0; x < CHUNK_SIZE; ++x)
+                        small(z, y, x) = fill;
+            return;
         }
 
         float* edt = edt::binary_edt<uint8_t>(
