@@ -218,6 +218,61 @@ PHercParis4, an underestimate: level 2 undercounts by 1.13 to 1.16x on PHerc0211
 `shell_outer_winding_idx` to 130, which is a value tuned for PHercParis4, so a
 per-scroll value derived this way is worth checking before a fit on another scroll.
 
+## Label-free checks of an umbilicus (`umbilicus_checks.py`)
+
+An umbilicus produced without a human trace needs to be checked before a fit trusts it. These checks say
+which scrolls and which stretches of z deserve a human look, using only the curve and, optionally, the
+surface prediction and CT.
+
+```bash
+python umbilicus_checks.py umbilicus.json --voxel-um 9.362 \
+    [--ct CT.zarr --pred SURFACE_PRED.zarr --level 2] [--variant other.json] [--reference human.json] --out checks.json
+```
+
+`--voxel-um` is required and never guessed: every distance is mm = voxels x pitch / 1000.
+
+* **Curve checks** (polyline only): stored `score`, jitter about a local line (leave-one-out, span 3 % of z),
+  consecutive-point slope, agreement with a second file, error against a human trace.
+* **Volume checks** (16 plane reads at one pyramid level): the crossing criterion of `umbilicus_raycross.py`
+  is re-evaluated in a 12 mm window about the polyline; we report the offset from the polyline to the criterion
+  field's soft centroid, the angular spread of per-ray counts at the polyline, and the deficit against the
+  window maximum. These do not use the stored score. **They are not independent of the criterion**: a scroll
+  whose windings are not closed around its axis could fool both the detector and this check.
+* Flags are advisory (`TOL` in the module), never gates. "No flag" is **not** "verified".
+
+`python -m pytest tests/test_umbilicus_checks.py` runs 8 tests on a synthetic spiral scroll whose umbilicus
+is known: the true curve passes; shifted, jittered and stepped copies are separated from it. Mutations (criterion
+offset forced to 0; jitter blinded) each turn tests red.
+
+### Does each check fail on a deliberately wrong curve? (recorded 2026-09-25, not re-run here)
+
+Three controls, each corrupted 10 ways: PHercParis4's 146-point human trace (md5 `2a6194b1...`), PHercParis4's
+928-point automatic curve (`3bb5da52...`) and PHerc0211's 111-point automatic curve (`178663b7...`); shifts
+of 100 / 200 / 300 / 500 / 1000 voxels, a diagonal shift, a linear drift, a 500-voxel step across the middle
+quarter of z, and per-point jitter of 100 / 300 voxels (seed 1). n = 3 controls x 10 corruptions = 30 corrupted
+curves against 3 clean ones; 16 slices at pyramid level 2; run 2026-09-25 on one host at commit `9435b558` of
+the source project (raw results md5 `8778c1ce...`). PHercParis4 was scored at 9.6 um (a local metadata value;
+its own `spiral-scroll.json` says 7.91 um), PHerc0211 at 9.362 um, so millimetre figures for PHercParis4 carry
+that 20 % uncertainty.
+
+| check | clean false alarms | what it caught (of 3 controls) |
+|---|---|---|
+| criterion offset, median > 2.4 mm | 0/3 | shifts >= 300 voxels 3/3; 200 voxels 2/3; 100 voxels 0/3; a pure local step 0/3 |
+| criterion offset, p90 > 4.8 mm | 0/3 | 500-voxel shift 3/3, drift 3/3, mid-quarter step 3/3, jitter 300 voxels 3/3 |
+| jitter p90 > 1.5 mm | 0/3 | jitter 100 and 300 voxels 3/3; every pure shift 0/3, by construction |
+| agreement with a second file p90 > 3.0 mm | 0/3 | shifts >= 300 voxels 3/3; but for the two PHercParis4 controls the second file is noisy raw detections (clean 2.1 and 2.8 mm), so there it is informational, and it is not independent of the main curve |
+| slope, angular spread, criterion deficit | slope: 1/3 (the human trace) | not useful as flags; reported as numbers |
+
+Read this straight: the criterion offset is the only check that sees a smooth global error and its resolution
+is about 2 mm (clean controls sit at 0.8-1.1 mm), which is also about the detector's own error, so it cannot
+certify better than the detector claims. **The p90 tolerance was chosen after seeing the experiment** (the
+median cannot see a local error) and is therefore fitted to it. Nothing here removes the limit that only a
+human looking at slices can close.
+
+Applied to 15 curves (14 scrolls plus the human trace) on the source fleet, the checks found one broken file (14 of 611 points of
+one scroll had x = 0 or y = 0, jumps of 40-55 mm) and three scrolls whose criterion-offset p90 exceeded
+4.8 mm (5.4-6.2 mm; n = 15-16 slices each); those are where a human should look first. No scroll was verified.
+
 ## Lasagna inputs must be packed first
 
 `fit_spiral.py` reads `normal_x`, `normal_y` and `gradient_magnitude` only
