@@ -129,6 +129,95 @@ specifically):
 }
 ```
 
+## Estimating an umbilicus automatically (ray crossings)
+
+`umbilicus_raycross.py` estimates `umbilicus.json` from a surface prediction
+alone, for scrolls that have no hand-placed trace. It is complementary to
+`vc_gen_umbilicus` (volume-cartographer), which extracts the point the sheet
+normals of a slice point away from; this tool instead uses a topological
+fact: every winding of a rolled sheet is a closed curve about the umbilicus,
+so a ray from the true umbilicus to the outside crosses every winding exactly
+once, whatever the deformation. For each candidate centre in an axial slice it
+casts 96 rays and counts sheet crossings; the umbilicus maximises the mean
+count. Long near-parallel stretches of lamination, which carry no centre
+information, do not affect a crossing count.
+
+```bash
+# 1. per-slice detections (GPU; --device cpu works for tiny inputs only)
+python umbilicus_raycross.py detect --pred SURFACE_PRED.zarr --ct CT.zarr \
+    --level 1 --z-step 40 --out detections.json
+# 2. smooth them into umbilicus.json (CPU, seconds)
+python umbilicus_raycross.py build detections.json --out umbilicus.json
+```
+
+`--pred` and `--ct` are OME-Zarr roots with one array per pyramid level
+(`<root>/<level>`). Without `--ct` the scroll body is derived from the
+prediction alone. Control points are integer **level-0** voxel indices, as
+`umbilicus.json_umbilicus_z_to_yx` expects, and `build` reads the written file
+back through that function and refuses to finish if it does not round-trip.
+`score` is the estimate's own confidence, 1 to 99, and is never 100, the value
+the hand-placed traces carry. Each output file records the inputs, parameters
+and tool version in `_provenance`.
+
+Dependencies: numpy, scipy, torch and zarr, all already in `pyproject.toml`. It
+has been run against zarr 2.18.7, numpy 1.26.4 and torch 2.2.0 only; the pins in
+`pyproject.toml` (Python 3.14, zarr 3, numpy 2.5, torch 2.11) are untested.
+`python -m pytest tests/test_umbilicus_raycross.py` runs synthetic-spiral tests
+on CPU (seconds to a minute, depending on the machine).
+
+### Measured accuracy, and its limits
+
+Reference: PHercParis4's hand-placed `umbilicus.json`, 146 control points, all
+`score` 100, z 563 to 18240, md5 `2a6194b182adf1be9850c228af5d125c`. Voxel size
+7.91 um (its `spiral-scroll.json`). The detector was run on a surface prediction
+only (no CT) and per-slice error is the distance in the xy plane from the
+detection to the reference trace interpolated to that z. These were recomputed
+from the detection files on 2026-09-25:
+
+| pyramid level | slices | median error | p90 error |
+|---|---|---|---|
+| 1 | 125 (z spacing 80) | 91.0 level-0 voxels = 0.72 mm | 295 voxels = 2.34 mm |
+| 2 | 884 (z spacing 20) | 92.8 voxels = 0.73 mm | 274 voxels = 2.17 mm |
+| 3 | 442 (z spacing 40) | 211.5 voxels = 1.67 mm | 530 voxels = 4.19 mm |
+
+Read these limits before relying on it:
+
+* **One scroll, one reference.** Every accuracy number is against a single
+  scroll's single human trace (n = 1 scroll). The trace itself moves a median
+  48 voxels between neighbouring control points, so the floor set by what "the
+  umbilicus" means is of the order of the error above. Transfer to other scrolls
+  is argued from agreement between body masks, not measured.
+* **Pyramid level matters more than the statistic.** At level 3 the laminae
+  merge and the count is systematically short. A paired comparison on 125 shared
+  slices gave 91.0 (level 1), 109.1 (level 2) and 241.4 (level 3) voxels; level
+  1 beat level 2 on 74 of the 125 slices, at about 9x the compute.
+* **The smoothed curve is not more accurate than the raw detections.** Against
+  the same 145 in-range reference points, the level-2 curve `build` makes (10 %
+  span) has a median error of 135 voxels (1.07 mm), against 92.8 voxels for the
+  raw level-2 detections, and the control-point spacing barely matters (spacing
+  160: 133.5 voxels; spacing 20: 135.0). What smoothing buys is bridging slices
+  whose detection is unreliable, not accuracy at a good slice.
+* **`score` is informative.** The rank correlation between the per-slice
+  confidence and the per-slice error is -0.61 (884 slices, level 2); the
+  lowest-confidence quartile has median error 195 voxels and the highest 61,
+  computed without the reference.
+* **Damaged regions are bridged, not followed.** Where the laminae are rubble
+  the crossing-count field goes flat-topped and the per-slice peak wanders; the
+  smoother bridges these slices and the score drops. Check `score` before
+  trusting a stretch.
+* **Value to a fit is unproven.** On PHerc0211, replacing a 111-point curve by
+  an 8x denser confidence-weighted one changed a converged 30,000-step
+  `fit_spiral` run by less than its run-to-run noise (0.45x the noise floor on
+  `satisfied_track_points`). The tool supplies an umbilicus where none exists;
+  it has not been shown to improve one that does.
+* **Not compared with `vc_gen_umbilicus`.** No head-to-head has been run.
+
+The crossing count is also a winding census. It gave 121 windings at level 2 on
+PHercParis4, an underestimate: level 2 undercounts by 1.13 to 1.16x on PHerc0211
+(measured at one z each), so about 137 to 140. `config.py` defaults
+`shell_outer_winding_idx` to 130, which is a value tuned for PHercParis4, so a
+per-scroll value derived this way is worth checking before a fit on another scroll.
+
 ## Lasagna inputs must be packed first
 
 `fit_spiral.py` reads `normal_x`, `normal_y` and `gradient_magnitude` only
