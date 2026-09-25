@@ -14,18 +14,20 @@ it is Python analysis code that consumes segments those projects produce.
 |---|---|
 | `tifxyz_tools/same_sheet.py` | **Same-sheet estimator.** Is point p of surface P on the *same sheet* as surface T? T covers p when T's surface passes within 4 voxels of p **along T's normal**, T's normal agrees with P's within 20 degrees (orientation-free) and the lateral offset is within 1.5 median lattice edges. `covered_fraction(P, T)` is the fraction of P held by T. |
 
-This branch also has `growth_guard.py`, stacked on it; other branches carry `fuse3d.py` (stacked on this one),
-`seed_dedup.py`, and `spiral-fitting/umbilicus_checks.py`.
+This branch also has `growth_guard.py` and `fuse3d.py`, stacked on it; other branches carry `seed_dedup.py` and
+`spiral-fitting/umbilicus_checks.py`.
 
 | module | what it does |
 |---|---|
 | `tifxyz_tools/growth_guard.py` | **Per-cell growth guard (PROTOTYPE).** Cuts the FRONTIER of a grown sheet where it has run into vacuum (needs a CT sampler), a hairpin, a crease/crumple swamp, or a sheet another segment already holds; keeps regions enclosed by good surface (a hole, not a cut); reports why each cell went; `regrown_fraction` says whether a resumed tracer is growing back into pruned ground. Writes a new tifxyz directory, never the source. |
+| `tifxyz_tools/fuse3d.py` | **3-D-first fusion (PROTOTYPE).** Lays overlapping lattices of one sheet on a geometric frame (cylinder about an umbilicus polyline, or PCA plane) where one sheet is a height field; takes a consensus per node; a second mode more than `jump_tol` away (the next wrap, or a sheet jump) is DROPPED AND COUNTED, never averaged in. Also `graft` (keep the best lattice intact and grow it over the others; nothing inside it moves), `verify` (anchor a member to the surface prediction), `setcover` (which members can be retired without losing surface), `sheet_groups`, `edge_ridge_runs` (does a lattice edge step from one wrap onto the next?). |
+
 
 ## Run the tests
 
 ```bash
 cd tifxyz-tools
-python -m pytest tests -q          # needs numpy, scipy, tifffile, pytest (+ zarr for the CT sampler test)
+python -m pytest tests -q          # needs numpy, scipy, tifffile, pytest (+ zarr for the CT sampler test); the fuse3d tests take 16-100 s depending on load
 ```
 
 Tests use synthetic sheets whose right answer is known, and every positive case has a paired negative one

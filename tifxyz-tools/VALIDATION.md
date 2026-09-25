@@ -95,3 +95,42 @@ What this does and does not say, without rounding:
 * One scroll, one host, one day. A canary on one fleet host recorded failures 11 % -> 4 % and grown area per
   attempt-hour 2.3 -> 11.3 mm2 before/after with no concurrent control (RECORDED in the source project's status
   notes, not reproducible from here): treat it as an anecdote.
+
+# Validation record: fuse3d (PROTOTYPE, synthetic evidence only)
+
+Source: the fleet repo's `scripts/stitch/fuse3d.py` at commit `260bd8b` (2026-09-25). The fleet lattice directory, `REPO`
+path juggling and environment variable were removed; `load_member` takes an explicit path.
+
+**No real-data validation is recorded for this module, and none was run while packaging.** An independent review of it
+by another agent was still in progress on 2026-09-25 (registration of level-0 vs level-1 lattices, planted jumps on real
+segments, graft known-answer, set-cover pools); its findings are NOT incorporated here. Treat every claim below as
+"correct on synthetic sheets", nothing more.
+
+## TESTED (11 tests, pass; 16-100 s depending on host load): synthetic cylinder-wrap sheets with a known r(theta, z); each positive has a NEGATIVE control
+
+* two overlapping, re-parameterised, noisy crops fuse back to the truth (median error < 1 voxel, p95 < 2.5), every member
+  is >= 95 % covered by the product, and the overlap really is fused (not just abutted);
+* **NEGATIVE:** an adjacent wrap 30 voxels out at the same (theta, z) is never averaged into the sheet (p95 error < 3, the
+  other wrap is < 20 % covered so it can never be retired; without it the same call reports no conflicts);
+* **NEGATIVE:** a 25-voxel sheet jump inside a member is dropped, not bent around (its jumped half is < 75 % covered, so
+  the member is not retirable);
+* **NEGATIVE:** a wall whose normal is tangential to the frame is not a graph and is dropped and counted (a radial sheet loses nothing);
+* `graft` extends the primary over an overlapping member and keeps the primary intact (a lone member grows nothing);
+  **NEGATIVE:** it will not jump to the adjacent wrap or across a sheet jump; it bridges a short hole only when asked
+  (`max_gap`) and never a long one;
+* `setcover` retires true copies (3 noisy re-samplings of one sheet) and never a distinct sheet;
+* `sheet_groups` separates parallel wraps 15 voxels apart that share a bounding box;
+* `verify` keeps points on a prediction ridge and drops a sheet lying between ridges; **planted-jump test:** a one-pitch
+  jump planted at one column is flagged by `edge_ridge_runs` in exactly that column and nowhere else (< 1 % flagged on
+  the clean sheet, < 5 % on the jumped one).
+Mutations that turn tests red: `verify`'s window widened to 100 voxels; `edge_ridge_runs` counting no rises.
+
+## Limits stated in the code, kept here
+
+* `ct_profile`'s search window MUST stay below half the sheet pitch: a wider window just picks the brightest of several
+  neighbouring wraps and reads about pitch/2 for any surface (source project).
+* On the source project's densest scroll the sheets are ~15 voxels apart and only ~64 % of a grown segment's points sit
+  within 4 voxels of a prediction ridge, so a purely geometric same-sheet test cannot tell "same sheet, wobbling" from
+  "the next wrap"; that is why `verify` anchors to the prediction (source project's figures, not re-measured).
+* The cylinder frame needs an umbilicus polyline; the plane frame does not but is only valid for small clusters
+  (`frame.usable()`).
