@@ -342,16 +342,50 @@ def choose_pyramid_array(
 
 
 def compute_nonempty_mask_from_lowres_array(array: Any) -> np.ndarray:
-    """Collapse a 2D/3D low-resolution array to a 2D occupancy mask."""
+    """Collapse a 2D/3D low-resolution array to a 2D occupancy mask.
+
+    Reads chunk-by-chunk instead of materializing ``array[:]`` in one shot.
+    The "low-res" pyramid level the caller picks can silently be the full
+    native-resolution level when no genuine downsampled level exists (e.g.
+    an older single-level surface-volume Zarr); a whole-array read then
+    scales with the full scroll canvas rather than the occupancy scan's
+    intended low-resolution footprint, which is what drove RSS to ~187GB on
+    a 32k x 51k x 65 segment. Chunked reduction bounds memory to O(one
+    chunk) regardless of which level is selected, with identical output.
+    """
 
     shape = tuple(int(value) for value in array.shape)
-    values = np.asarray(array[:])
-    if len(shape) == 2:
-        return values != 0
-    if len(shape) != 3:
+    if len(shape) not in (2, 3):
         raise ValueError(f"Occupancy array must be rank 2 or 3, got {shape!r}")
-    depth_axis = 0 if int(np.argmin(shape)) == 0 else 2
-    return np.any(values != 0, axis=depth_axis)
+    depth_axis = 0 if (len(shape) == 3 and int(np.argmin(shape)) == 0) else None
+    out_shape = shape[1:] if depth_axis == 0 else (shape[:2] if len(shape) == 3 else shape)
+    occupancy = np.zeros(out_shape, dtype=bool)
+
+    chunk_shape = getattr(array, "chunks", None) or shape
+    plane_step = chunk_shape[0] if depth_axis == 0 else 1
+    row_step = chunk_shape[1] if depth_axis == 0 else chunk_shape[0]
+    col_step = chunk_shape[2] if depth_axis == 0 else chunk_shape[1]
+
+    if depth_axis == 0:
+        for z0 in range(0, shape[0], plane_step):
+            z1 = min(z0 + plane_step, shape[0])
+            for y0 in range(0, shape[1], row_step):
+                y1 = min(y0 + row_step, shape[1])
+                for x0 in range(0, shape[2], col_step):
+                    x1 = min(x0 + col_step, shape[2])
+                    block = np.asarray(array[z0:z1, y0:y1, x0:x1])
+                    occupancy[y0:y1, x0:x1] |= np.any(block != 0, axis=0)
+    else:
+        for y0 in range(0, shape[0], row_step):
+            y1 = min(y0 + row_step, shape[0])
+            for x0 in range(0, shape[1], col_step):
+                x1 = min(x0 + col_step, shape[1])
+                block = np.asarray(array[y0:y1, x0:x1])
+                if len(shape) == 3:
+                    occupancy[y0:y1, x0:x1] |= np.any(block != 0, axis=2)
+                else:
+                    occupancy[y0:y1, x0:x1] |= block != 0
+    return occupancy
 
 
 def build_lowres_block_mask(
