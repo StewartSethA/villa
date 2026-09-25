@@ -334,7 +334,7 @@ _Primary entry point for interacting with the segmentation, more info in the [se
   - `Steps` : The number of "generations" the growth action will undertake
   - `Allowed Directions` : Limits the directions of growth _relative to the flattened 2d quad surface!_ (i.e if you look in the segmentation window in the top left, and you set 'up' it will grow towards the top of the window)
   - `Limit Z range` : Constrains the growth to a selected `Z` range
-  - `Volume` : the volume to pass to the `tracer()` call _should be a surface prediction volume!_ 
+  - `Volume` : the volume to pass to the `tracer()` call _should be a surface prediction volume!_ At the default loss weights the tracer does not read it: the thresholded-distance interpolators built from it in `GrowPatch.cpp` are never evaluated, and the only losses that sample the volume (`space_line_weight`, and the reference-ray occlusion loss, which also needs a reference surface) default to 0. Growth from a fixed seed with default parameters is therefore identical whichever volume is passed; it starts to matter once `space_line_weight` is set above 0.
 - `Editing` - grouping of settings which mostly apply to drag/push/pull actions for mesh deformation. All mesh deformation-type actions are performed on a gaussian-like area which has a circular shape centered at the current mouse location and whose strength is reduced as we reach the edges. _Radius is in quad vertices in the 2d flattened surface._
   - `Max Radius` : the maximum radius of the area to be affected by the action
   - `Sigma` : the _strength_ of the push/pull on affected vertices other the original one (aka how quickly the influence tapers as we step away from the original point)

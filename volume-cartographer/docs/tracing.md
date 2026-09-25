@@ -9,6 +9,7 @@
 ## space_tracing_quad_phys() (surface_helpers.cpp)
 
 - general process: optimize a surface from a thresholded surface prediction (using CachedChunked3dInterpolator<uint8_t,thresholdedDistance> interp(proc_tensor))
+  - note: as of this writing the `thresholdedDistance` interpolators in `GrowPatch.cpp` (`interp_global` and the two `interp`) are constructed but never evaluated, so the distance transform of the volume does not enter the optimisation by itself. The volume is sampled only by the losses gated on `space_line_weight > 0` (SPACELINE) and `reference_ray_weight > 0` (REFERENCE_RAY), both 0 by default. Check with `grep -n 'interp_global\|interp(proc_tensor)' core/src/GrowPatch.cpp`.
 - cv::Mat_<uint8_t> state(size,0) - maintain a state of the current surface corners 
 - general tracing loop:
     - outer loop:
