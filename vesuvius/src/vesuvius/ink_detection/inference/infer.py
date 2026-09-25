@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import math
+import os
 import shutil
 import tempfile
 from contextlib import nullcontext
@@ -102,6 +103,65 @@ def flat_preprocessing_from_config(config: NormalizationConfig) -> str:
         "Flat inference does not support image_normalization mode "
         f"{config.mode!r}"
     )
+
+
+def normalize_batch_on_device(
+    images_BCZYX: torch.Tensor,
+    preprocessing: str,
+) -> torch.Tensor:
+    """Device-side equivalent of :func:`normalize_flat_patch`, applied per sample.
+
+    Statistics stay PER PATCH (the contract the checkpoint was trained with);
+    only the place the arithmetic runs changes. Agreement with the CPU path is
+    to float32 rounding, not bit-exact: ``torch.quantile`` and ``np.percentile``
+    interpolate the same way but accumulate in different orders.
+    """
+
+    if preprocessing == "divide_255":
+        return images_BCZYX * (1.0 / 255.0)
+    if preprocessing != "tifxyz_robust":
+        raise ValueError(f"Unsupported flat preprocessing {preprocessing!r}")
+
+    original_shape = images_BCZYX.shape
+    batch = images_BCZYX.reshape(original_shape[0], -1)
+
+    # Statistics of the UNCLIPPED patch, needed by the degenerate-spread
+    # fallback chain below exactly as normalize_robust computes them.
+    std_preclip = batch.std(dim=1, keepdim=True, unbiased=False)
+
+    lower = torch.quantile(batch, 0.01, dim=1, keepdim=True)
+    upper = torch.quantile(batch, 0.99, dim=1, keepdim=True)
+    clipped = torch.maximum(torch.minimum(batch, upper), lower)
+
+    # torch.median returns the LOWER of the two middle values for an even
+    # element count while np.median averages them; patches here hold
+    # 26*64*64 = 106496 (even) values. quantile(0.5) interpolates like numpy.
+    median = torch.quantile(clipped, 0.5, dim=1, keepdim=True)
+    scaled_mad = torch.quantile(
+        (clipped - median).abs(), 0.5, dim=1, keepdim=True
+    ) * 1.4826
+
+    # Degenerate spread (flat or near-flat patch): reproduce normalize_robust's
+    # ORDERED fallback -- |std of the unclipped patch|, then half the
+    # percentile span, then 1.0 -- not a bare 1.0. Near-empty patches are common
+    # in scroll data, so this path is not exotic.
+    span_fallback = (upper - lower).abs() / 2.0
+    std_fallback = std_preclip.abs()
+    degenerate = ~torch.isfinite(scaled_mad) | (scaled_mad < 1e-6)
+    chosen = torch.where(
+        torch.isfinite(std_fallback) & (std_fallback >= 1e-6),
+        std_fallback,
+        torch.where(
+            torch.isfinite(span_fallback) & (span_fallback >= 1e-6),
+            span_fallback,
+            torch.ones_like(scaled_mad),
+        ),
+    )
+    scaled_mad = torch.where(degenerate, chosen, scaled_mad)
+
+    out = (clipped - median) / scaled_mad
+    out = torch.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0)
+    return out.reshape(original_shape)
 
 
 def normalize_flat_patch(
@@ -502,6 +562,8 @@ class FlatBlockDataset(Dataset):
         self.blocks = tuple(blocks)
         self.patch_size = int(patch_size)
         self.preprocessing = str(preprocessing)
+        # Set by the caller when it will normalize whole batches on device.
+        self.defer_normalization = False
 
     def __len__(self) -> int:
         return len(self.blocks)
@@ -518,7 +580,12 @@ class FlatBlockDataset(Dataset):
         # maps an all-zero patch to nonzero values.
         nonempty = int(patch_HWZ.any())
         patch_ZYX = np.moveaxis(patch_HWZ, -1, 0)
-        patch_ZYX = normalize_flat_patch(patch_ZYX, self.preprocessing)
+        if self.defer_normalization:
+            # Hand over the raw patch; run_block_inference normalizes the whole
+            # batch on the accelerator instead of one patch per worker on CPU.
+            patch_ZYX = np.ascontiguousarray(patch_ZYX, dtype=np.float32)
+        else:
+            patch_ZYX = normalize_flat_patch(patch_ZYX, self.preprocessing)
         image_CZYX = torch.from_numpy(patch_ZYX).unsqueeze(0)
         metadata = torch.tensor(
             [block.y0, block.x0, block.valid_h, block.valid_w, nonempty],
@@ -758,6 +825,10 @@ def run_block_inference(
             if not bool(keep.any()):
                 continue
             images_BCZYX = images_BCZYX[keep].to(device, non_blocking=True)
+            if getattr(loader.dataset, "defer_normalization", False):
+                images_BCZYX = normalize_batch_on_device(
+                    images_BCZYX, loader.dataset.preprocessing
+                )
             metadata = metadata[keep]
             if tta_axes:
                 probabilities = predict_with_mirror_tta(
@@ -1061,6 +1132,12 @@ def infer_single_zarr(
         blocks=blocks,
         patch_size=patch_size,
         preprocessing=configured_model.preprocessing,
+    )
+    # Normalize on the accelerator when there is one (same per-patch statistics).
+    # VESUVIUS_CPU_NORMALIZE=1 restores the per-patch CPU path.
+    dataset.defer_normalization = (
+        device.type == "cuda"
+        and os.environ.get("VESUVIUS_CPU_NORMALIZE") != "1"
     )
     effective_batch_size = args.batch_size * max(1, len(args.gpu_ids))
     loader_kwargs: dict[str, Any] = {
