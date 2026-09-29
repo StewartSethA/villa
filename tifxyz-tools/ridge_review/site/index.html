@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ridge Review</title>
+<style>
+:root{--bg:#fcfcfb;--panel:#f1f0ec;--ink:#0b0b0b;--ink2:#52514e;--line:#d9d7d0;--accent:#2a78d6;--sheet:#1f8a4c;--nots:#b3261e;--unsure:#8a6d00}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1a1a19;--panel:#252523;--ink:#fff;--ink2:#c3c2b7;--line:#3a3935;--accent:#3987e5;--sheet:#48c07a;--nots:#f07167;--unsure:#e0b83a}}
+:root[data-theme="dark"]{--bg:#1a1a19;--panel:#252523;--ink:#fff;--ink2:#c3c2b7;--line:#3a3935;--accent:#3987e5;--sheet:#48c07a;--nots:#f07167;--unsure:#e0b83a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,sans-serif}
+header,main{max-width:1200px;margin:0 auto;padding:12px 16px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;border-bottom:1px solid var(--line)}
+h1{font-size:18px;margin:0 12px 0 0}.muted{color:var(--ink2)}
+button,input,select,textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+button{cursor:pointer}button.on{outline:2px solid var(--accent)}
+.lab button[data-l=sheet].on{background:var(--sheet);color:#fff}.lab button[data-l=not_sheet].on{background:var(--nots);color:#fff}.lab button[data-l=unsure].on{background:var(--unsure);color:#000}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px}
+figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px}
+figcaption{font-size:13px;color:var(--ink2);margin-top:4px}
+.stack{position:relative;display:inline-block;max-width:100%}.stack img{display:block;max-width:100%;height:auto;image-rendering:pixelated}
+.stack img.pred{position:absolute;left:0;top:0;display:none}.showpred .stack img.pred{display:block}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+textarea{width:100%;min-height:48px}.meta{font-size:13px;color:var(--ink2)}
+.progress{height:6px;background:var(--line);border-radius:3px;flex:1;min-width:120px}.progress>div{height:100%;background:var(--accent);border-radius:3px}
+table{border-collapse:collapse;margin-top:8px}td,th{border:1px solid var(--line);padding:4px 8px;text-align:right}th:first-child,td:first-child{text-align:left}
+details{margin-top:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Ridge review</h1>
+  <span class="muted">Is the yellow-ringed cell on a papyrus sheet?</span>
+  <label>Reviewer <input id="who" size="10" placeholder="initials"></label>
+  <div class="progress" title="labelled / total"><div id="prog" style="width:0"></div></div>
+  <span id="count" class="muted"></span>
+  <button id="export">Export labels (JSON)</button>
+  <button id="reveal" title="Shows removed/kept only after you export">Reveal answers</button>
+  <button id="theme" title="Toggle light/dark">◐</button>
+</header>
+<main>
+  <details>
+    <summary>How to review (read once)</summary>
+    <ul>
+      <li>Each sample is one surface cell that a growth run produced. Decide from the CT whether that cell lies <b>on a papyrus sheet</b>, is <b>not on a sheet</b> (in the gap between sheets, in air, or cutting across sheets), or you are <b>unsure</b>.</li>
+      <li>The two <b>sections</b> contain the surface normal (vertical, +normal up) and one surface direction (horizontal). A cell on a sheet sits on a bright band that runs horizontally through the ring. Cyan dots are the surface itself near that section.</li>
+      <li>The three <b>planes</b> are parallel to the surface, 4 voxels below, at, and above it. The <b>xy</b> view is the ordinary CT slice at the cell's z, with the surface trace in cyan.</li>
+      <li>You are <b>blind</b> to whether the guard removed or kept the cell. The surface-prediction overlay (the input the check under review uses) is hidden. Showing it is allowed, and it is recorded per sample.</li>
+      <li>Keys: <b>1</b> sheet · <b>2</b> not sheet · <b>3</b> unsure · <b>p</b> toggle prediction · <b>←/→</b> previous/next. Progress is saved in this browser; export when done.</li>
+    </ul>
+  </details>
+  <div class="bar">
+    <button id="prev">← prev</button><span id="pos" class="muted"></span><button id="next">next →</button>
+    <span class="lab"><button data-l="sheet">1 · sheet</button><button data-l="not_sheet">2 · not sheet</button><button data-l="unsure">3 · unsure</button></span>
+    <label><input type="checkbox" id="pred"> show surface prediction (p)</label>
+    <label>severity <select id="sev"><option value="">–</option><option>minor</option><option>moderate</option><option>severe</option></select></label>
+  </div>
+  <div class="meta" id="meta"></div>
+  <div class="grid" id="views"></div>
+  <div class="bar"><textarea id="note" placeholder="Note (optional): what you saw, why unsure, how bad a mistake here would be"></textarea></div>
+  <div id="answers"></div>
+</main>
+<script src="samples.js"></script>
+<script src="review.js"></script>
+</body>
+</html>

@@ -1,0 +1,5122 @@
+[
+{
+"sample_id": "22362a74202e",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_0fae49d5f7",
+"round": "r2",
+"round_id": "6221234",
+"source": "production_policy_D",
+"cell": [
+116,
+138
+],
+"center_xyz": [
+5955.28,
+5898.47,
+15104.8
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "e59ffbb2fbb9",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_0fae49d5f7",
+"round": "r2",
+"round_id": "6221234",
+"source": "production_policy_D",
+"cell": [
+130,
+172
+],
+"center_xyz": [
+6517.55,
+5729.08,
+14646.07
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "8fad75c591fb",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_7cde2d7f97",
+"round": "r1",
+"round_id": "6247389",
+"source": "production_policy_D",
+"cell": [
+130,
+121
+],
+"center_xyz": [
+4342.26,
+5495.09,
+8857.84
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "defb89f63bc4",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_b343c6def6",
+"round": "r1",
+"round_id": "6225704",
+"source": "production_policy_D",
+"cell": [
+142,
+11
+],
+"center_xyz": [
+4276.08,
+5672.38,
+13001.05
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "cd413396effa",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_3fef81ea28",
+"round": "r1",
+"round_id": "6217200",
+"source": "production_policy_D",
+"cell": [
+149,
+69
+],
+"center_xyz": [
+4514.08,
+5920.71,
+14788.39
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "bb642908cda4",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_fb77b3a6cf",
+"round": "r1",
+"round_id": "6227067",
+"source": "production_policy_D",
+"cell": [
+109,
+72
+],
+"center_xyz": [
+1761.46,
+4755.25,
+7980.37
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "560f5d700ea9",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_3d925c9f7b",
+"round": "r1",
+"round_id": "6232131",
+"source": "production_policy_D",
+"cell": [
+159,
+178
+],
+"center_xyz": [
+6467.93,
+5155.45,
+15917.33
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a707cd761c68",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_295a44f208",
+"round": "r1",
+"round_id": "6218274",
+"source": "production_policy_D",
+"cell": [
+24,
+85
+],
+"center_xyz": [
+581.02,
+3876.47,
+8961.11
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "043b1a3af3c3",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_d8ae579b82",
+"round": "r1",
+"round_id": "6244521",
+"source": "production_policy_D",
+"cell": [
+175,
+62
+],
+"center_xyz": [
+3107.45,
+5141.18,
+15706.45
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a5dd9671e192",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_0fd0645b41",
+"round": "r1",
+"round_id": "6231185",
+"source": "production_policy_D",
+"cell": [
+13,
+86
+],
+"center_xyz": [
+1362.04,
+4618.87,
+14835.06
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "679481e62868",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_87795bdfa3",
+"round": "r1",
+"round_id": "6233836",
+"source": "production_policy_D",
+"cell": [
+77,
+108
+],
+"center_xyz": [
+5919.91,
+5361.56,
+8945.97
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "bb62e593bc30",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_91d05a3a6b",
+"round": "r1",
+"round_id": "6228221",
+"source": "production_policy_D",
+"cell": [
+106,
+113
+],
+"center_xyz": [
+3951.09,
+5799.14,
+16247.48
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "c532addd7be0",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_4de5e6850b",
+"round": "r1",
+"round_id": "6251657",
+"source": "production_policy_D",
+"cell": [
+23,
+3
+],
+"center_xyz": [
+3541.82,
+5531.46,
+14627.37
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "0dcc3fc1bb92",
+"scroll": "PHerc0125",
+"segment": "PHerc0125_merged_9c281aeed6",
+"round": "r1",
+"round_id": "6245089",
+"source": "production_policy_D",
+"cell": [
+64,
+92
+],
+"center_xyz": [
+2141.83,
+4620.38,
+13780.81
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0125.zarr",
+"prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a456366ff480",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c61d15f",
+"round": "r2",
+"round_id": "6255444",
+"source": "production_policy_D",
+"cell": [
+39,
+44
+],
+"center_xyz": [
+2161.08,
+4692.62,
+11337.8
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "9e5a4e2cccb3",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c8e5c73",
+"round": "r1",
+"round_id": "6232881",
+"source": "production_policy_D",
+"cell": [
+80,
+32
+],
+"center_xyz": [
+2534.36,
+2500.33,
+13690.31
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "c81af1aabb6b",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c21bc99",
+"round": "r1",
+"round_id": "6255553",
+"source": "production_policy_D",
+"cell": [
+23,
+41
+],
+"center_xyz": [
+4648.65,
+7028.04,
+16185.69
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "5b48f141c27b",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c8f138f",
+"round": "r1",
+"round_id": "6266322",
+"source": "production_policy_D",
+"cell": [
+79,
+23
+],
+"center_xyz": [
+2737.95,
+6818.79,
+7738.91
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "918f263b78c2",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c8f138f",
+"round": "r1",
+"round_id": "6266322",
+"source": "production_policy_D",
+"cell": [
+64,
+27
+],
+"center_xyz": [
+2966.33,
+6894.66,
+7563.64
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "c7a7b8df8496",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c3a716c",
+"round": "r1",
+"round_id": "6255170",
+"source": "production_policy_D",
+"cell": [
+14,
+5
+],
+"center_xyz": [
+2586.5,
+2629.78,
+5822.3
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "4a8f388bee8c",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_cd0425f",
+"round": "r1",
+"round_id": "6250651",
+"source": "production_policy_D",
+"cell": [
+58,
+43
+],
+"center_xyz": [
+4477.57,
+4056.99,
+13222.72
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "9d018d840151",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c2a147f",
+"round": "r2",
+"round_id": "6233934",
+"source": "production_policy_D",
+"cell": [
+83,
+2
+],
+"center_xyz": [
+6685.6,
+3274.05,
+9161.6
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "da6fad3e8354",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c8e5c73",
+"round": "r2",
+"round_id": "6234622",
+"source": "production_policy_D",
+"cell": [
+10,
+39
+],
+"center_xyz": [
+2345.88,
+2471.65,
+15017.88
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "3c3f0d8867f0",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c10039e",
+"round": "r1",
+"round_id": "6155331",
+"source": "production_policy_D",
+"cell": [
+45,
+84
+],
+"center_xyz": [
+4922.19,
+3943.01,
+8267.37
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "cc7badee42ed",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c796212",
+"round": "r1",
+"round_id": "6249270",
+"source": "production_policy_D",
+"cell": [
+36,
+40
+],
+"center_xyz": [
+5351.46,
+3027.1,
+12265.78
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "7bbeb40f0aec",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c9a0ae4",
+"round": "r1",
+"round_id": "6249634",
+"source": "production_policy_D",
+"cell": [
+69,
+54
+],
+"center_xyz": [
+2583.79,
+4423.99,
+11956.99
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "66f29393b1c4",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_cf7eb70",
+"round": "r1",
+"round_id": "6256214",
+"source": "production_policy_D",
+"cell": [
+49,
+32
+],
+"center_xyz": [
+3266.44,
+6324.16,
+17781.41
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "16b3db7fbd7b",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c2ca4ee",
+"round": "r1",
+"round_id": "6172572",
+"source": "production_policy_D",
+"cell": [
+11,
+7
+],
+"center_xyz": [
+3768.38,
+4273.84,
+6322.46
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "f700e18270d2",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_cfa301b",
+"round": "r2",
+"round_id": "6177169",
+"source": "production_policy_D",
+"cell": [
+57,
+86
+],
+"center_xyz": [
+3296.16,
+6127.92,
+8757.09
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "c348e29e76ba",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_ca5815c",
+"round": "r1",
+"round_id": "6181427",
+"source": "production_policy_D",
+"cell": [
+74,
+49
+],
+"center_xyz": [
+6063.4,
+5153.07,
+5323.48
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "ff350bf4d0c8",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c8130da",
+"round": "r1",
+"round_id": "6179928",
+"source": "production_policy_D",
+"cell": [
+69,
+66
+],
+"center_xyz": [
+5535.89,
+4636.47,
+16670.99
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "da7cea30e192",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c7925eb",
+"round": "r1",
+"round_id": "6198786",
+"source": "production_policy_D",
+"cell": [
+29,
+80
+],
+"center_xyz": [
+2726.35,
+5603.3,
+7369.36
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "ccdedca993da",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_ce5a12d",
+"round": "r2",
+"round_id": "6176663",
+"source": "production_policy_D",
+"cell": [
+35,
+65
+],
+"center_xyz": [
+3852.64,
+6077.99,
+5654.7
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "2cecc0f7dc87",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c51bee1",
+"round": "r2",
+"round_id": "6238410",
+"source": "production_policy_D",
+"cell": [
+15,
+30
+],
+"center_xyz": [
+6043.91,
+5562.84,
+15758.15
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "eeda4ad3d6bc",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c35cc0e",
+"round": "r2",
+"round_id": "6244458",
+"source": "production_policy_D",
+"cell": [
+34,
+78
+],
+"center_xyz": [
+3182.48,
+4294.24,
+13385.65
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "b953126ef46a",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c4d9f71",
+"round": "r1",
+"round_id": "6250343",
+"source": "production_policy_D",
+"cell": [
+53,
+6
+],
+"center_xyz": [
+3049.39,
+4230.54,
+11609.39
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "bae0f26bfd20",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c6a510d",
+"round": "r2",
+"round_id": "6212636",
+"source": "production_policy_D",
+"cell": [
+61,
+26
+],
+"center_xyz": [
+3108.84,
+4970.21,
+9979.25
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "d73c81bf838b",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_ce8c7b0",
+"round": "r1",
+"round_id": "6195806",
+"source": "production_policy_D",
+"cell": [
+83,
+39
+],
+"center_xyz": [
+2168.96,
+2988.11,
+5529.83
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "25d0b3b1248e",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c98bc20",
+"round": "r2",
+"round_id": "6211484",
+"source": "production_policy_D",
+"cell": [
+34,
+37
+],
+"center_xyz": [
+3790.57,
+6210.13,
+15304.4
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "34c0ca1904ec",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c98bc20",
+"round": "r2",
+"round_id": "6211484",
+"source": "production_policy_D",
+"cell": [
+44,
+43
+],
+"center_xyz": [
+3830.19,
+6170.14,
+15490.7
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "e6c0c34ea477",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c433f41",
+"round": "r1",
+"round_id": "6229781",
+"source": "production_policy_D",
+"cell": [
+28,
+75
+],
+"center_xyz": [
+4733.92,
+4463.47,
+15097.55
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "be51b12a766e",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c19d2f4",
+"round": "r1",
+"round_id": "6170956",
+"source": "production_policy_D",
+"cell": [
+41,
+3
+],
+"center_xyz": [
+3886.74,
+4244.07,
+16025.62
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "d128bf64e28c",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_cb58c0a",
+"round": "r1",
+"round_id": "6246799",
+"source": "production_policy_D",
+"cell": [
+87,
+11
+],
+"center_xyz": [
+2887.38,
+3221.72,
+7791.93
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "5bdee1387896",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_cc91681",
+"round": "r2",
+"round_id": "6236481",
+"source": "production_policy_D",
+"cell": [
+53,
+40
+],
+"center_xyz": [
+7154.55,
+4328.98,
+1144.02
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "9cac1a942a28",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_cc55d7d",
+"round": "r1",
+"round_id": "6169607",
+"source": "production_policy_D",
+"cell": [
+10,
+17
+],
+"center_xyz": [
+3701.68,
+5118.22,
+3264.97
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "f9bf84054f0f",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_ca59698",
+"round": "r1",
+"round_id": "6183132",
+"source": "production_policy_D",
+"cell": [
+44,
+43
+],
+"center_xyz": [
+5128.9,
+5695.11,
+8246.87
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "3432c5bdf679",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_ce39d72",
+"round": "r1",
+"round_id": "6238582",
+"source": "production_policy_D",
+"cell": [
+45,
+46
+],
+"center_xyz": [
+4289.56,
+6351.32,
+10104.77
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a3f9c63c5e7c",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c7925eb",
+"round": "r2",
+"round_id": "6201699",
+"source": "production_policy_D",
+"cell": [
+44,
+52
+],
+"center_xyz": [
+3070.48,
+5719.73,
+7702.67
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "1c4cc6f4bf2f",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c762e44",
+"round": "r2",
+"round_id": "6173013",
+"source": "production_policy_D",
+"cell": [
+48,
+52
+],
+"center_xyz": [
+4846.63,
+3377.5,
+18117.06
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "698b69e6d27b",
+"scroll": "PHerc0191",
+"segment": "PHerc0191_c4fdb0d",
+"round": "r2",
+"round_id": "6192102",
+"source": "production_policy_D",
+"cell": [
+44,
+42
+],
+"center_xyz": [
+5282.08,
+2365.08,
+17635.16
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0191.zarr",
+"prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "7925df030264",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_66017d3e06_D",
+"round": "r2",
+"round_id": "ab680",
+"source": "ab_ovn20260929_armD",
+"cell": [
+36,
+28
+],
+"center_xyz": [
+4932.9,
+3413.22,
+10308.93
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a0552f92e44a",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_66017d3e06_D",
+"round": "r2",
+"round_id": "ab680",
+"source": "ab_ovn20260929_armD",
+"cell": [
+77,
+45
+],
+"center_xyz": [
+5333.44,
+4061.66,
+9918.0
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "e2364a1857f7",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_8972dac333_D",
+"round": "r2",
+"round_id": "ab448",
+"source": "ab_ovn20260929_armD",
+"cell": [
+54,
+23
+],
+"center_xyz": [
+3511.98,
+5762.83,
+3255.12
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "b66bb35df002",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_8972dac333_D",
+"round": "r2",
+"round_id": "ab448",
+"source": "ab_ovn20260929_armD",
+"cell": [
+26,
+63
+],
+"center_xyz": [
+4265.15,
+5426.93,
+3748.27
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "f132d9ed27d4",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_21357d8031_D",
+"round": "r2",
+"round_id": "ab596",
+"source": "ab_ovn20260929_armD",
+"cell": [
+77,
+9
+],
+"center_xyz": [
+3297.25,
+5065.18,
+2906.74
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "1e95f02dc89c",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_8972dac333_D",
+"round": "r1",
+"round_id": "ab57",
+"source": "ab_ovn20260929_armD",
+"cell": [
+15,
+68
+],
+"center_xyz": [
+4403.48,
+5324.36,
+3896.72
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "b53db7af7a62",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_bbe62774ec_D",
+"round": "r2",
+"round_id": "ab616",
+"source": "ab_ovn20260929_armD",
+"cell": [
+18,
+45
+],
+"center_xyz": [
+3196.53,
+2311.78,
+17052.46
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a2467ea1e835",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_bbe62774ec_D",
+"round": "r2",
+"round_id": "ab616",
+"source": "ab_ovn20260929_armD",
+"cell": [
+53,
+41
+],
+"center_xyz": [
+3638.2,
+2463.06,
+17581.37
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "816275f2d02c",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_8729c62943_D",
+"round": "r2",
+"round_id": "ab532",
+"source": "ab_ovn20260929_armD",
+"cell": [
+20,
+60
+],
+"center_xyz": [
+4001.4,
+5710.19,
+3127.67
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "e72d13a53e1f",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_8729c62943_D",
+"round": "r2",
+"round_id": "ab532",
+"source": "ab_ovn20260929_armD",
+"cell": [
+70,
+14
+],
+"center_xyz": [
+3313.5,
+5227.88,
+4170.28
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "af2882866b99",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_71fb3a9f59_D",
+"round": "r2",
+"round_id": "ab700",
+"source": "ab_ovn20260929_armD",
+"cell": [
+37,
+43
+],
+"center_xyz": [
+5245.58,
+3634.68,
+10571.42
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "6de75c3aa04f",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_8729c62943_D",
+"round": "r1",
+"round_id": "ab222",
+"source": "ab_ovn20260929_armD",
+"cell": [
+30,
+43
+],
+"center_xyz": [
+3859.78,
+5537.41,
+3438.72
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "b2b885274d75",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_72c0d36df1_D",
+"round": "r1",
+"round_id": "ab76",
+"source": "ab_ovn20260929_armD",
+"cell": [
+65,
+69
+],
+"center_xyz": [
+6283.51,
+3917.95,
+10293.05
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "37466e2602df",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_72c0d36df1_D",
+"round": "r1",
+"round_id": "ab76",
+"source": "ab_ovn20260929_armD",
+"cell": [
+34,
+37
+],
+"center_xyz": [
+5453.48,
+3738.57,
+10476.64
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "5dd557bb7132",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_f262ddb880_D",
+"round": "r1",
+"round_id": "ab406",
+"source": "ab_ovn20260929_armD",
+"cell": [
+24,
+16
+],
+"center_xyz": [
+4927.26,
+3661.25,
+3697.66
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "031be718bda6",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_f262ddb880_D",
+"round": "r1",
+"round_id": "ab406",
+"source": "ab_ovn20260929_armD",
+"cell": [
+34,
+36
+],
+"center_xyz": [
+4915.85,
+3714.39,
+3757.25
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "7d3532aa245a",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_dc0b45300a_D",
+"round": "r1",
+"round_id": "ab326",
+"source": "ab_ovn20260929_armD",
+"cell": [
+26,
+26
+],
+"center_xyz": [
+1971.26,
+4381.88,
+15093.11
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "736f2bdee9db",
+"scroll": "PHerc0211",
+"segment": "gab_ovn20260929_dc0b45300a_D",
+"round": "r1",
+"round_id": "ab326",
+"source": "ab_ovn20260929_armD",
+"cell": [
+31,
+36
+],
+"center_xyz": [
+2016.66,
+4343.75,
+14997.18
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0211.zarr",
+"prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "2883e464ce4a",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cfc63ec",
+"round": "r3",
+"round_id": "6256390",
+"source": "production_policy_D",
+"cell": [
+25,
+84
+],
+"center_xyz": [
+5561.72,
+5919.42,
+10373.06
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "9da5c141835d",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cc079de",
+"round": "r1",
+"round_id": "6204601",
+"source": "production_policy_D",
+"cell": [
+13,
+57
+],
+"center_xyz": [
+5412.03,
+5087.08,
+13468.82
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "0a89896c8f1d",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cc079de",
+"round": "r1",
+"round_id": "6204601",
+"source": "production_policy_D",
+"cell": [
+41,
+80
+],
+"center_xyz": [
+5705.01,
+4884.84,
+12830.67
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "34d69ef789f5",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c059962",
+"round": "r2",
+"round_id": "6230955",
+"source": "production_policy_D",
+"cell": [
+38,
+65
+],
+"center_xyz": [
+6905.2,
+4619.39,
+13334.35
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a8a8531e17a4",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_ccda74b",
+"round": "r1",
+"round_id": "6189357",
+"source": "production_policy_D",
+"cell": [
+81,
+40
+],
+"center_xyz": [
+6503.6,
+4506.15,
+1930.14
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "6872d8d5f3ee",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_ccda74b",
+"round": "r1",
+"round_id": "6189357",
+"source": "production_policy_D",
+"cell": [
+50,
+81
+],
+"center_xyz": [
+6171.15,
+4163.75,
+2837.57
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "60934b7ff511",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c5a0d74",
+"round": "r1",
+"round_id": "6249405",
+"source": "production_policy_D",
+"cell": [
+47,
+7
+],
+"center_xyz": [
+2320.05,
+4799.35,
+7812.27
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "f99577c674a3",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_ccda74b",
+"round": "r3",
+"round_id": "6194586",
+"source": "production_policy_D",
+"cell": [
+5,
+83
+],
+"center_xyz": [
+6049.93,
+3622.74,
+2724.09
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "c255774815a4",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c49c6f9",
+"round": "r1",
+"round_id": "6261554",
+"source": "production_policy_D",
+"cell": [
+83,
+8
+],
+"center_xyz": [
+4898.26,
+6046.94,
+8735.88
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "829672671c5b",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c635ba1",
+"round": "r1",
+"round_id": "6150000",
+"source": "production_policy_D",
+"cell": [
+27,
+47
+],
+"center_xyz": [
+5906.7,
+2996.65,
+2787.91
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "c566fa9fa2e2",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c9edc7f",
+"round": "r2",
+"round_id": "6214393",
+"source": "production_policy_D",
+"cell": [
+3,
+61
+],
+"center_xyz": [
+2878.93,
+3471.21,
+13973.03
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "ed9f3c249fc1",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c002c85",
+"round": "r1",
+"round_id": "6157262",
+"source": "production_policy_D",
+"cell": [
+18,
+81
+],
+"center_xyz": [
+1913.35,
+4470.78,
+13841.49
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "b1ee27f9266f",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_ce7a611",
+"round": "r2",
+"round_id": "6194457",
+"source": "production_policy_D",
+"cell": [
+29,
+44
+],
+"center_xyz": [
+1481.06,
+3614.79,
+13204.52
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "fdb73294a841",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c66f6bc",
+"round": "r1",
+"round_id": "6211975",
+"source": "production_policy_D",
+"cell": [
+4,
+13
+],
+"center_xyz": [
+1393.45,
+7171.96,
+138.58
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a4b13d54f462",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c93f95a",
+"round": "r1",
+"round_id": "6170465",
+"source": "production_policy_D",
+"cell": [
+74,
+27
+],
+"center_xyz": [
+3698.09,
+4057.23,
+12838.33
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "2e8a5b5e85dd",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_ca0df7f",
+"round": "r2",
+"round_id": "6205682",
+"source": "production_policy_D",
+"cell": [
+35,
+74
+],
+"center_xyz": [
+2621.49,
+3815.34,
+3103.27
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "186d1cb65d16",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c9edc7f",
+"round": "r3",
+"round_id": "6214771",
+"source": "production_policy_D",
+"cell": [
+70,
+59
+],
+"center_xyz": [
+3584.23,
+3729.83,
+13710.8
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "1b9148870811",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_ce7a611",
+"round": "r1",
+"round_id": "6193681",
+"source": "production_policy_D",
+"cell": [
+36,
+67
+],
+"center_xyz": [
+1544.92,
+3401.23,
+13549.25
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "7f96b8b5ec39",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cd4dc8f",
+"round": "r1",
+"round_id": "6155940",
+"source": "production_policy_D",
+"cell": [
+5,
+23
+],
+"center_xyz": [
+6128.46,
+3101.85,
+3912.05
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "18fefc68cb92",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cdabc06",
+"round": "r2",
+"round_id": "6259797",
+"source": "production_policy_D",
+"cell": [
+38,
+36
+],
+"center_xyz": [
+4917.03,
+3965.85,
+6429.97
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "f675d7b0edfe",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c9edc7f",
+"round": "r1",
+"round_id": "6213154",
+"source": "production_policy_D",
+"cell": [
+49,
+36
+],
+"center_xyz": [
+3168.7,
+3529.73,
+13887.04
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "bbb7faf6f4d0",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c402d5d",
+"round": "r1",
+"round_id": "6252008",
+"source": "production_policy_D",
+"cell": [
+34,
+3
+],
+"center_xyz": [
+5441.9,
+4414.56,
+4686.76
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "2ad293025cef",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c91715f",
+"round": "r1",
+"round_id": "6215679",
+"source": "production_policy_D",
+"cell": [
+13,
+4
+],
+"center_xyz": [
+335.94,
+4186.18,
+32.81
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "46699c532ef5",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c3e8183",
+"round": "r1",
+"round_id": "6157875",
+"source": "production_policy_D",
+"cell": [
+29,
+24
+],
+"center_xyz": [
+6330.99,
+2555.89,
+2406.05
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "3ede7abb1e04",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cd70bfb",
+"round": "r1",
+"round_id": "6174942",
+"source": "production_policy_D",
+"cell": [
+6,
+10
+],
+"center_xyz": [
+2247.45,
+6364.8,
+81.98
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "f5270ec5f6a1",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c7bb6f4",
+"round": "r1",
+"round_id": "6160709",
+"source": "production_policy_D",
+"cell": [
+12,
+6
+],
+"center_xyz": [
+3109.81,
+5779.01,
+52.46
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "92fe4dffd040",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cc356b2",
+"round": "r1",
+"round_id": "6152258",
+"source": "production_policy_D",
+"cell": [
+12,
+5
+],
+"center_xyz": [
+2556.44,
+7277.48,
+45.9
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "945c3272686b",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cee341e",
+"round": "r1",
+"round_id": "6224633",
+"source": "production_policy_D",
+"cell": [
+12,
+9
+],
+"center_xyz": [
+2630.78,
+4823.84,
+110.74
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "9ea791d3cb11",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cf6c643",
+"round": "r1",
+"round_id": "6237290",
+"source": "production_policy_D",
+"cell": [
+10,
+9
+],
+"center_xyz": [
+5280.46,
+7517.95,
+41.78
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a15dbee1fb20",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cd59d2c",
+"round": "r1",
+"round_id": "6184341",
+"source": "production_policy_D",
+"cell": [
+12,
+5
+],
+"center_xyz": [
+5286.31,
+5658.0,
+143.41
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "f0e232952dc4",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cd5971a",
+"round": "r1",
+"round_id": "6191324",
+"source": "production_policy_D",
+"cell": [
+5,
+6
+],
+"center_xyz": [
+5092.91,
+7003.92,
+124.72
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "fb36ece1d9c3",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cdfefa6",
+"round": "r1",
+"round_id": "6182662",
+"source": "production_policy_D",
+"cell": [
+4,
+5
+],
+"center_xyz": [
+1649.35,
+7080.51,
+65.64
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "6618bdab408e",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_c2e77e6",
+"round": "r1",
+"round_id": "6172197",
+"source": "production_policy_D",
+"cell": [
+9,
+7
+],
+"center_xyz": [
+1260.06,
+4915.43,
+85.74
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "d70ecd684df0",
+"scroll": "PHerc0826",
+"segment": "PHerc0826_cf7f2de",
+"round": "r1",
+"round_id": "6175246",
+"source": "production_policy_D",
+"cell": [
+5,
+13
+],
+"center_xyz": [
+3330.47,
+4492.37,
+208.59
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0826.zarr",
+"prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "22955f1ef419",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_9ad11ed290",
+"round": "r1",
+"round_id": "6233416",
+"source": "production_policy_D",
+"cell": [
+58,
+69
+],
+"center_xyz": [
+4250.95,
+4586.19,
+14109.04
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "7386e23d01e5",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_9ad11ed290",
+"round": "r1",
+"round_id": "6233416",
+"source": "production_policy_D",
+"cell": [
+84,
+28
+],
+"center_xyz": [
+3404.14,
+4915.03,
+13938.82
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "66202720e626",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_e4cb510505",
+"round": "r1",
+"round_id": "6234254",
+"source": "production_policy_D",
+"cell": [
+43,
+110
+],
+"center_xyz": [
+3922.16,
+2287.14,
+12307.55
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a7be01f15d45",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_e4cb510505",
+"round": "r1",
+"round_id": "6234254",
+"source": "production_policy_D",
+"cell": [
+42,
+11
+],
+"center_xyz": [
+3099.65,
+2464.55,
+13541.07
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "45730e9ca543",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_c8989f7",
+"round": "r2",
+"round_id": "6153123",
+"source": "production_policy_D",
+"cell": [
+31,
+62
+],
+"center_xyz": [
+4189.99,
+1776.68,
+13693.58
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "c01bec3555f9",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_c8989f7",
+"round": "r1",
+"round_id": "6149525",
+"source": "production_policy_D",
+"cell": [
+30,
+43
+],
+"center_xyz": [
+4098.06,
+1622.1,
+13435.06
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "0f397ff9abd6",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_c6947ff",
+"round": "r1",
+"round_id": "6150951",
+"source": "production_policy_D",
+"cell": [
+39,
+64
+],
+"center_xyz": [
+4443.86,
+2666.05,
+14137.41
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "4622af40d78b",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_ccbb1b5",
+"round": "r1",
+"round_id": "6148690",
+"source": "production_policy_D",
+"cell": [
+29,
+75
+],
+"center_xyz": [
+2621.28,
+3528.38,
+14804.85
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "9cc2892c75c5",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_c249a95",
+"round": "r1",
+"round_id": "6163893",
+"source": "production_policy_D",
+"cell": [
+37,
+59
+],
+"center_xyz": [
+3659.17,
+2876.91,
+15178.38
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "1b2ca45e61d9",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_c575db5eda",
+"round": "r2",
+"round_id": "6222072",
+"source": "production_policy_D",
+"cell": [
+55,
+15
+],
+"center_xyz": [
+3428.73,
+4676.58,
+14454.79
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "152ad1f182f2",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_c575db5eda",
+"round": "r2",
+"round_id": "6222072",
+"source": "production_policy_D",
+"cell": [
+72,
+38
+],
+"center_xyz": [
+3668.8,
+4758.97,
+13942.66
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "6ecd5a58b977",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_d8ed2ae57f",
+"round": "r2",
+"round_id": "6215571",
+"source": "production_policy_D",
+"cell": [
+43,
+31
+],
+"center_xyz": [
+4163.38,
+1410.93,
+15491.15
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "f3cba35728c6",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_68098c6811",
+"round": "r2",
+"round_id": "6214501",
+"source": "production_policy_D",
+"cell": [
+94,
+9
+],
+"center_xyz": [
+4023.96,
+1307.32,
+14641.69
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "62153a4114cc",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_f50621634c",
+"round": "r1",
+"round_id": "6211957",
+"source": "production_policy_D",
+"cell": [
+94,
+8
+],
+"center_xyz": [
+701.01,
+3755.87,
+15096.27
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "462d32c800bd",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_4a79f007c9",
+"round": "r1",
+"round_id": "6218489",
+"source": "production_policy_D",
+"cell": [
+94,
+70
+],
+"center_xyz": [
+3973.57,
+2736.08,
+13384.87
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "147746c87138",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_e3cfd9377b",
+"round": "r1",
+"round_id": "6225417",
+"source": "production_policy_D",
+"cell": [
+21,
+103
+],
+"center_xyz": [
+4833.01,
+1764.67,
+14234.94
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "b09526a11ecd",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_ca04eb11c5",
+"round": "r2",
+"round_id": "6213566",
+"source": "production_policy_D",
+"cell": [
+77,
+77
+],
+"center_xyz": [
+4805.09,
+1869.78,
+15732.13
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "7b45a4f056af",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_b2271e29b8",
+"round": "r1",
+"round_id": "6219678",
+"source": "production_policy_D",
+"cell": [
+62,
+40
+],
+"center_xyz": [
+3749.89,
+2188.2,
+13538.12
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "d21aef66f974",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_bc52730b5d",
+"round": "r1",
+"round_id": "6218139",
+"source": "production_policy_D",
+"cell": [
+16,
+7
+],
+"center_xyz": [
+2231.23,
+4930.64,
+14227.67
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "43a9bed0b92d",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_83a1569e51",
+"round": "r1",
+"round_id": "6217783",
+"source": "production_policy_D",
+"cell": [
+83,
+57
+],
+"center_xyz": [
+3651.48,
+4925.01,
+13691.26
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a447e4645e6a",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_8eb3b230bb",
+"round": "r1",
+"round_id": "6213386",
+"source": "production_policy_D",
+"cell": [
+36,
+16
+],
+"center_xyz": [
+2629.43,
+5093.16,
+12849.42
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a898b05cf24c",
+"scroll": "PHerc0813",
+"segment": "PHerc0813_merged_8eb3b230bb",
+"round": "r1",
+"round_id": "6213386",
+"source": "production_policy_D",
+"cell": [
+27,
+17
+],
+"center_xyz": [
+2653.6,
+4969.39,
+12996.06
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0813.zarr",
+"prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "e0f271de2424",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c9eac55",
+"round": "r1",
+"round_id": "6260190",
+"source": "production_policy_D",
+"cell": [
+6,
+64
+],
+"center_xyz": [
+5042.36,
+5315.62,
+4546.28
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "e226a3e95628",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_caa9afc",
+"round": "r1",
+"round_id": "6258882",
+"source": "production_policy_D",
+"cell": [
+37,
+17
+],
+"center_xyz": [
+4293.76,
+4831.21,
+492.35
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "77c4904a3447",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_caa9afc",
+"round": "r1",
+"round_id": "6258882",
+"source": "production_policy_D",
+"cell": [
+81,
+10
+],
+"center_xyz": [
+3929.29,
+4841.36,
+510.26
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "8bc7a0162a78",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_ccbb38a",
+"round": "r2",
+"round_id": "6172550",
+"source": "production_policy_D",
+"cell": [
+59,
+8
+],
+"center_xyz": [
+2380.77,
+5295.4,
+6908.11
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "7616def9a507",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_ccbb38a",
+"round": "r1",
+"round_id": "6168328",
+"source": "production_policy_D",
+"cell": [
+51,
+73
+],
+"center_xyz": [
+3741.23,
+4970.36,
+6696.61
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "4af982c934f7",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c1af79e",
+"round": "r1",
+"round_id": "6228382",
+"source": "production_policy_D",
+"cell": [
+44,
+25
+],
+"center_xyz": [
+2426.88,
+4228.22,
+3581.67
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "b047bcb3c60e",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c15c60f",
+"round": "r2",
+"round_id": "6169073",
+"source": "production_policy_D",
+"cell": [
+83,
+46
+],
+"center_xyz": [
+2014.35,
+5243.47,
+3790.95
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "84d1046edaac",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c15c60f",
+"round": "r2",
+"round_id": "6169073",
+"source": "production_policy_D",
+"cell": [
+13,
+8
+],
+"center_xyz": [
+1888.05,
+4248.9,
+3453.87
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "ba5d21559da8",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_cadf3f9",
+"round": "r2",
+"round_id": "6160645",
+"source": "production_policy_D",
+"cell": [
+94,
+64
+],
+"center_xyz": [
+1643.53,
+5065.87,
+6089.52
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "ee3adf2ecdce",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c4975a7",
+"round": "r1",
+"round_id": "6150107",
+"source": "production_policy_D",
+"cell": [
+2,
+4
+],
+"center_xyz": [
+2093.68,
+3166.17,
+12408.87
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "83333b1e0d3b",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c96d69d",
+"round": "r3",
+"round_id": "6185871",
+"source": "production_policy_D",
+"cell": [
+31,
+54
+],
+"center_xyz": [
+6284.74,
+3259.66,
+4079.46
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "19340d55fba4",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c96d69d",
+"round": "r2",
+"round_id": "6183864",
+"source": "production_policy_D",
+"cell": [
+56,
+34
+],
+"center_xyz": [
+6135.47,
+3854.95,
+3940.86
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "ec06487dcf43",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_caae9ae",
+"round": "r1",
+"round_id": "6204704",
+"source": "production_policy_D",
+"cell": [
+26,
+3
+],
+"center_xyz": [
+2897.06,
+3486.52,
+11779.13
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "3d78e988190c",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_cc5e1df",
+"round": "r1",
+"round_id": "6189826",
+"source": "production_policy_D",
+"cell": [
+35,
+89
+],
+"center_xyz": [
+4274.62,
+3098.93,
+9524.4
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "6ecc2629dd6a",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c909c47",
+"round": "r2",
+"round_id": "6181536",
+"source": "production_policy_D",
+"cell": [
+61,
+75
+],
+"center_xyz": [
+1973.27,
+3419.34,
+7167.82
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "8d34ed36e80b",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c909c47",
+"round": "r2",
+"round_id": "6181536",
+"source": "production_policy_D",
+"cell": [
+83,
+63
+],
+"center_xyz": [
+2258.89,
+3680.7,
+6835.7
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "c6ae2ed88ac5",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c5f40c2",
+"round": "r1",
+"round_id": "6187455",
+"source": "production_policy_D",
+"cell": [
+26,
+32
+],
+"center_xyz": [
+2256.39,
+3387.88,
+9663.14
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "5626a8e08ddd",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_cb28951",
+"round": "r2",
+"round_id": "6167725",
+"source": "production_policy_D",
+"cell": [
+43,
+74
+],
+"center_xyz": [
+2698.51,
+1928.36,
+3184.47
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "d7037bb5916e",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_cd4bf0f",
+"round": "r1",
+"round_id": "6218825",
+"source": "production_policy_D",
+"cell": [
+63,
+80
+],
+"center_xyz": [
+4049.98,
+3904.33,
+9710.98
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "74e9c6767a47",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_cc69eeb",
+"round": "r1",
+"round_id": "6205398",
+"source": "production_policy_D",
+"cell": [
+51,
+70
+],
+"center_xyz": [
+5283.58,
+5617.37,
+4625.26
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "effa5462cebc",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c1a69c3",
+"round": "r2",
+"round_id": "6216001",
+"source": "production_policy_D",
+"cell": [
+64,
+83
+],
+"center_xyz": [
+2382.49,
+5074.32,
+8683.12
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "f007ba0297b7",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c643964",
+"round": "r1",
+"round_id": "6177888",
+"source": "production_policy_D",
+"cell": [
+28,
+12
+],
+"center_xyz": [
+5010.37,
+2405.54,
+3455.95
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "7b9014c55b56",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c093476",
+"round": "r2",
+"round_id": "6186914",
+"source": "production_policy_D",
+"cell": [
+10,
+47
+],
+"center_xyz": [
+4767.58,
+4844.22,
+7583.84
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "2695e5cf89d3",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_cc7f870",
+"round": "r1",
+"round_id": "6203480",
+"source": "production_policy_D",
+"cell": [
+34,
+53
+],
+"center_xyz": [
+1015.99,
+4737.17,
+3867.82
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "72626a0a8ce8",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c01b6d0",
+"round": "r1",
+"round_id": "6195092",
+"source": "production_policy_D",
+"cell": [
+60,
+86
+],
+"center_xyz": [
+6058.12,
+3109.35,
+8790.83
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "56744c8d5ea1",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c60de10",
+"round": "r1",
+"round_id": "6173472",
+"source": "production_policy_D",
+"cell": [
+65,
+60
+],
+"center_xyz": [
+5493.36,
+6473.76,
+577.08
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "5a2ff0e2e3a0",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c84ac09",
+"round": "r1",
+"round_id": "6224530",
+"source": "production_policy_D",
+"cell": [
+10,
+4
+],
+"center_xyz": [
+6912.38,
+2822.76,
+46.63
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "eaf0d32dafb1",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c4b1bca",
+"round": "r1",
+"round_id": "6158589",
+"source": "production_policy_D",
+"cell": [
+13,
+46
+],
+"center_xyz": [
+4912.61,
+3592.56,
+161.66
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "e3e0fe5e277d",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c5c9a8d",
+"round": "r1",
+"round_id": "6160904",
+"source": "production_policy_D",
+"cell": [
+12,
+3
+],
+"center_xyz": [
+7062.05,
+3025.44,
+125.82
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "33d71eda3db7",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_ce8d536",
+"round": "r1",
+"round_id": "6225084",
+"source": "production_policy_D",
+"cell": [
+77,
+14
+],
+"center_xyz": [
+2764.96,
+7116.01,
+600.49
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "0d8390d52750",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c63bcd3",
+"round": "r1",
+"round_id": "6170071",
+"source": "production_policy_D",
+"cell": [
+18,
+3
+],
+"center_xyz": [
+2982.75,
+6001.79,
+218.93
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "e553c3675eae",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_cba6e8a",
+"round": "r1",
+"round_id": "6218002",
+"source": "production_policy_D",
+"cell": [
+18,
+23
+],
+"center_xyz": [
+2656.09,
+1175.91,
+363.35
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "c5d771eb3724",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c6a8d87",
+"round": "r1",
+"round_id": "6174523",
+"source": "production_policy_D",
+"cell": [
+4,
+15
+],
+"center_xyz": [
+4645.69,
+2094.85,
+3.36
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "1fdf6ee2ef02",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_c1daa49",
+"round": "r1",
+"round_id": "6190406",
+"source": "production_policy_D",
+"cell": [
+12,
+6
+],
+"center_xyz": [
+2968.17,
+390.72,
+178.6
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "60604bf0c393",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_cedec3e",
+"round": "r1",
+"round_id": "6178702",
+"source": "production_policy_D",
+"cell": [
+17,
+55
+],
+"center_xyz": [
+7213.78,
+4843.79,
+489.39
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+},
+{
+"sample_id": "a7379feeafeb",
+"scroll": "PHerc0846A",
+"segment": "PHerc0846A_ca48092",
+"round": "r1",
+"round_id": "6159696",
+"source": "production_policy_D",
+"cell": [
+11,
+10
+],
+"center_xyz": [
+2169.29,
+2678.95,
+183.49
+],
+"voxel_um": 9.362,
+"ridge_hit_vox": 3.0,
+"ct_volume": "PHerc0846A.zarr",
+"prediction": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+"geometry": {
+"normal_offsets_vox": [
+-16,
+16
+],
+"inplane_half_px": 24,
+"xy_half_px": 64,
+"lattice_half_cells": 10,
+"px_um": 9.362
+},
+"voxel_um_source": "scroll registry (src/vesuvius_pipeline/scroll_registry) and the CT volume meta.json agree: 9.362"
+}
+]

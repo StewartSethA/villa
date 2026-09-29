@@ -1,0 +1,138 @@
+[
+{
+"scroll": "PHerc0125",
+"stratum": "lt10",
+"cls": "removed",
+"wanted": 6,
+"got": 1,
+"pool_rounds": 1
+},
+{
+"scroll": "PHerc0125",
+"stratum": "lt10",
+"cls": "kept",
+"wanted": 6,
+"got": 1,
+"pool_rounds": 1
+},
+{
+"scroll": "PHerc0125",
+"stratum": "gt50_or_emptied",
+"cls": "removed",
+"wanted": 6,
+"got": 0,
+"pool_rounds": 0
+},
+{
+"scroll": "PHerc0125",
+"stratum": "gt50_or_emptied",
+"cls": "kept",
+"wanted": 6,
+"got": 0,
+"pool_rounds": 0
+},
+{
+"scroll": "PHerc0211",
+"stratum": "lt10",
+"cls": "removed",
+"wanted": 6,
+"got": 0,
+"pool_rounds": 0
+},
+{
+"scroll": "PHerc0211",
+"stratum": "lt10",
+"cls": "kept",
+"wanted": 6,
+"got": 0,
+"pool_rounds": 0
+},
+{
+"scroll": "PHerc0211",
+"stratum": "gt50_or_emptied",
+"cls": "removed",
+"wanted": 6,
+"got": 3,
+"pool_rounds": 3
+},
+{
+"scroll": "PHerc0211",
+"stratum": "gt50_or_emptied",
+"cls": "kept",
+"wanted": 6,
+"got": 3,
+"pool_rounds": 3
+},
+{
+"scroll": "PHerc0813",
+"stratum": "lt10",
+"cls": "removed",
+"wanted": 6,
+"got": 2,
+"pool_rounds": 2
+},
+{
+"scroll": "PHerc0813",
+"stratum": "gt50_or_emptied",
+"cls": "removed",
+"wanted": 6,
+"got": 1,
+"pool_rounds": 1
+},
+{
+"scroll": "PHerc0813",
+"stratum": "gt50_or_emptied",
+"cls": "kept",
+"wanted": 6,
+"got": 1,
+"pool_rounds": 1
+},
+{
+"scroll": "PHerc0490B",
+"stratum": "lt10",
+"cls": "removed",
+"wanted": 6,
+"got": 0,
+"pool_rounds": 0
+},
+{
+"scroll": "PHerc0490B",
+"stratum": "lt10",
+"cls": "kept",
+"wanted": 6,
+"got": 0,
+"pool_rounds": 0
+},
+{
+"scroll": "PHerc0490B",
+"stratum": "10to50",
+"cls": "removed",
+"wanted": 6,
+"got": 0,
+"pool_rounds": 0
+},
+{
+"scroll": "PHerc0490B",
+"stratum": "10to50",
+"cls": "kept",
+"wanted": 6,
+"got": 0,
+"pool_rounds": 0
+},
+{
+"scroll": "PHerc0490B",
+"stratum": "gt50_or_emptied",
+"cls": "removed",
+"wanted": 6,
+"got": 0,
+"pool_rounds": 0
+},
+{
+"scroll": "PHerc0490B",
+"stratum": "gt50_or_emptied",
+"cls": "kept",
+"wanted": 6,
+"got": 0,
+"pool_rounds": 0
+}
+]

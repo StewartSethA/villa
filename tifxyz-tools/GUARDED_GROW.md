@@ -243,6 +243,8 @@ the pre-guard and the guarded checkpoint from the host that grew it.
   - neither has been measured.
 - The decision to relax it is the operator's.
 
+**Human review.** `ridge_review/` (README there) is a blind, stratified sample of 160 real ridge_hit decisions. It covers 6 scrolls and 3 severity strata, with production prevalence, a static review page, and a scorer that reweights human labels to the production cut. Until someone reviews it, the verdict above rests on the automated CT test alone.
+
 ## Integration with upstream tools, and what was compared
 
 | upstream tool or parameter | how the guard relates | measured here? |

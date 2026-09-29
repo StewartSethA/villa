@@ -1,0 +1,402 @@
+[
+{
+"source": "ab_ovn20260929_armD",
+"scroll": "PHerc0211",
+"stratum": "10to50",
+"rounds": 14,
+"cells_grown": 70689,
+"cells_kept": 38602,
+"cells_flagged": 20309,
+"cells_removed_by_ridge": 15847
+},
+{
+"source": "ab_ovn20260929_armD",
+"scroll": "PHerc0211",
+"stratum": "gt50_or_emptied",
+"rounds": 3,
+"cells_grown": 13872,
+"cells_kept": 60,
+"cells_flagged": 5706,
+"cells_removed_by_ridge": 4035
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0125",
+"stratum": "10to50",
+"rounds": 55,
+"cells_grown": 2241357,
+"cells_kept": 977604,
+"cells_flagged": 970081,
+"cells_removed_by_ridge": 622719
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0125",
+"stratum": "lt10",
+"rounds": 1,
+"cells_grown": 13673,
+"cells_kept": 11621,
+"cells_flagged": 2151,
+"cells_removed_by_ridge": 1296
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0175A",
+"stratum": "10to50",
+"rounds": 8,
+"cells_grown": 43957,
+"cells_kept": 9957,
+"cells_flagged": 12609,
+"cells_removed_by_ridge": 5782
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0175A",
+"stratum": "gt50_or_emptied",
+"rounds": 2,
+"cells_grown": 2317,
+"cells_kept": 72,
+"cells_flagged": 734,
+"cells_removed_by_ridge": 123
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0175A",
+"stratum": "lt10",
+"rounds": 12,
+"cells_grown": 102763,
+"cells_kept": 52213,
+"cells_flagged": 17897,
+"cells_removed_by_ridge": 5106
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0175B",
+"stratum": "10to50",
+"rounds": 14,
+"cells_grown": 105015,
+"cells_kept": 23160,
+"cells_flagged": 30882,
+"cells_removed_by_ridge": 15774
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0175B",
+"stratum": "gt50_or_emptied",
+"rounds": 4,
+"cells_grown": 26904,
+"cells_kept": 128,
+"cells_flagged": 9499,
+"cells_removed_by_ridge": 3110
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0175B",
+"stratum": "lt10",
+"rounds": 8,
+"cells_grown": 65332,
+"cells_kept": 31716,
+"cells_flagged": 13218,
+"cells_removed_by_ridge": 4353
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0191",
+"stratum": "10to50",
+"rounds": 176,
+"cells_grown": 1122779,
+"cells_kept": 309681,
+"cells_flagged": 418204,
+"cells_removed_by_ridge": 234980
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0191",
+"stratum": "gt50_or_emptied",
+"rounds": 13,
+"cells_grown": 81339,
+"cells_kept": 265,
+"cells_flagged": 30120,
+"cells_removed_by_ridge": 17025
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0191",
+"stratum": "lt10",
+"rounds": 62,
+"cells_grown": 468471,
+"cells_kept": 270700,
+"cells_flagged": 116945,
+"cells_removed_by_ridge": 22155
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0306B",
+"stratum": "10to50",
+"rounds": 14,
+"cells_grown": 97516,
+"cells_kept": 27979,
+"cells_flagged": 25649,
+"cells_removed_by_ridge": 13440
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0306B",
+"stratum": "lt10",
+"rounds": 15,
+"cells_grown": 112663,
+"cells_kept": 59877,
+"cells_flagged": 21620,
+"cells_removed_by_ridge": 6847
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0343",
+"stratum": "10to50",
+"rounds": 7,
+"cells_grown": 31080,
+"cells_kept": 10036,
+"cells_flagged": 8639,
+"cells_removed_by_ridge": 4051
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0343",
+"stratum": "gt50_or_emptied",
+"rounds": 8,
+"cells_grown": 22100,
+"cells_kept": 95,
+"cells_flagged": 7002,
+"cells_removed_by_ridge": 3087
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0343",
+"stratum": "lt10",
+"rounds": 14,
+"cells_grown": 178476,
+"cells_kept": 161622,
+"cells_flagged": 17056,
+"cells_removed_by_ridge": 5345
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0483A",
+"stratum": "10to50",
+"rounds": 10,
+"cells_grown": 75835,
+"cells_kept": 28146,
+"cells_flagged": 20329,
+"cells_removed_by_ridge": 9358
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0483A",
+"stratum": "gt50_or_emptied",
+"rounds": 2,
+"cells_grown": 16200,
+"cells_kept": 33,
+"cells_flagged": 5119,
+"cells_removed_by_ridge": 224
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0483A",
+"stratum": "lt10",
+"rounds": 24,
+"cells_grown": 215857,
+"cells_kept": 134946,
+"cells_flagged": 37466,
+"cells_removed_by_ridge": 9317
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0483B",
+"stratum": "10to50",
+"rounds": 7,
+"cells_grown": 49789,
+"cells_kept": 12753,
+"cells_flagged": 14130,
+"cells_removed_by_ridge": 6458
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0483B",
+"stratum": "gt50_or_emptied",
+"rounds": 8,
+"cells_grown": 64800,
+"cells_kept": 152,
+"cells_flagged": 24567,
+"cells_removed_by_ridge": 1875
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0483B",
+"stratum": "lt10",
+"rounds": 11,
+"cells_grown": 76979,
+"cells_kept": 32353,
+"cells_flagged": 15563,
+"cells_removed_by_ridge": 3548
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0490A",
+"stratum": "10to50",
+"rounds": 23,
+"cells_grown": 106987,
+"cells_kept": 19321,
+"cells_flagged": 33159,
+"cells_removed_by_ridge": 17256
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0490A",
+"stratum": "gt50_or_emptied",
+"rounds": 5,
+"cells_grown": 24620,
+"cells_kept": 93,
+"cells_flagged": 8399,
+"cells_removed_by_ridge": 2607
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0490A",
+"stratum": "lt10",
+"rounds": 7,
+"cells_grown": 45464,
+"cells_kept": 3389,
+"cells_flagged": 14043,
+"cells_removed_by_ridge": 2855
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0813",
+"stratum": "10to50",
+"rounds": 22,
+"cells_grown": 198027,
+"cells_kept": 89889,
+"cells_flagged": 71518,
+"cells_removed_by_ridge": 47641
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0813",
+"stratum": "gt50_or_emptied",
+"rounds": 1,
+"cells_grown": 9801,
+"cells_kept": 98,
+"cells_flagged": 7271,
+"cells_removed_by_ridge": 6286
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0813",
+"stratum": "lt10",
+"rounds": 7,
+"cells_grown": 56941,
+"cells_kept": 48760,
+"cells_flagged": 17926,
+"cells_removed_by_ridge": 513
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0826",
+"stratum": "10to50",
+"rounds": 31,
+"cells_grown": 213557,
+"cells_kept": 62057,
+"cells_flagged": 89782,
+"cells_removed_by_ridge": 37991
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0826",
+"stratum": "gt50_or_emptied",
+"rounds": 181,
+"cells_grown": 86655,
+"cells_kept": 2195,
+"cells_flagged": 63158,
+"cells_removed_by_ridge": 13635
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0826",
+"stratum": "lt10",
+"rounds": 77,
+"cells_grown": 589854,
+"cells_kept": 212026,
+"cells_flagged": 186083,
+"cells_removed_by_ridge": 18824
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0846A",
+"stratum": "10to50",
+"rounds": 99,
+"cells_grown": 628659,
+"cells_kept": 218110,
+"cells_flagged": 253563,
+"cells_removed_by_ridge": 151915
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0846A",
+"stratum": "gt50_or_emptied",
+"rounds": 121,
+"cells_grown": 253756,
+"cells_kept": 1379,
+"cells_flagged": 180173,
+"cells_removed_by_ridge": 48517
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0846A",
+"stratum": "lt10",
+"rounds": 26,
+"cells_grown": 198851,
+"cells_kept": 131911,
+"cells_flagged": 64572,
+"cells_removed_by_ridge": 6431
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0846B",
+"stratum": "10to50",
+"rounds": 9,
+"cells_grown": 60730,
+"cells_kept": 8210,
+"cells_flagged": 18170,
+"cells_removed_by_ridge": 8765
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0846B",
+"stratum": "gt50_or_emptied",
+"rounds": 2,
+"cells_grown": 16200,
+"cells_kept": 27,
+"cells_flagged": 5860,
+"cells_removed_by_ridge": 269
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc0846B",
+"stratum": "lt10",
+"rounds": 14,
+"cells_grown": 116507,
+"cells_kept": 71865,
+"cells_flagged": 22921,
+"cells_removed_by_ridge": 6850
+},
+{
+"source": "production_policy_D",
+"scroll": "PHerc1545",
+"stratum": "gt50_or_emptied",
+"rounds": 1,
+"cells_grown": 8100,
+"cells_kept": 39,
+"cells_flagged": 3321,
+"cells_removed_by_ridge": 70
+}
+]
