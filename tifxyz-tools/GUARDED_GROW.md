@@ -164,6 +164,85 @@ empty_space criteria**, which read the same prediction. D's large lift is theref
 construction. B's small lift, from a policy that never reads the prediction, is the clean
 comparison.
 
+## Is ridge_hit over-pruning? (measured 2026-09-29)
+
+`ridge_hit` flags a cell when the thresholded surface prediction has no positive voxel within
+±3 voxels of the cell along its normal. It is D's largest pruner, so we measured two things:
+- how much it removes from segments already known to be clean;
+- whether what it removes elsewhere is sound surface, judged by a test that does not use the
+  prediction.
+
+Summary numbers: `ab/ovn20260929/ridge_hit_fpr_2026-09-29.json`.
+
+**1. Removal rate on known-clean segments.** 156 segments whose `vc_tifxyz_selfcross` density is
+exactly 0 (114 PHerc0125, 36 PHerc0191, 6 PHerc0211; drawn from 3,000 random segments), 1.46 M cells.
+The per-cell mask matched an earlier independent run on all 156 segments, cell for cell. Run on its
+own, as production enforces it (frontier-touching regions ≥ 12 cells):
+
+| | pooled, 95 % CI (bootstrap over segments) | per segment p10 / p50 / p90 |
+|---|---|---|
+| cells flagged | **24.9 %** [22.2, 28.0] | 10.9 / 21.7 / 71.2 % |
+| cells removed as enforced | **16.7 %** [13.6, 20.2] | 3.2 / 11.3 / 69.4 % |
+| cells removed including islands cut off | 19.0 % [15.4, 23.0] | |
+
+- Removal by scroll: PHerc0125 13.8 %, **PHerc0191 34.0 %**, PHerc0211 8.4 %.
+- ridge_hit alone would have emptied 14 of the 156 segments.
+
+Read against "self-intersection-free" as the truth, that is a high false-positive rate. The earlier
+segment-level figure (60.9 % of these segments over the 0.2011 threshold) is the same observation.
+**But self-intersection-free is not the same as on-sheet**, so we asked whether those cells lie on
+papyrus at all.
+
+**2. An independent on-sheet test: the CT itself.** For each cell:
+- sample the CT at level 0 along the cell's normal, ±12 voxels;
+- score = the brightest value within ±3 voxels minus the median of the profile;
+- compare that score with the same score half a lamina pitch away (±10 voxels) on the same normal.
+
+A cell on a sheet sits on a density peak, so it scores higher at 0 than beside it, whatever the local
+contrast. This uses no prediction and no geometry criterion. But the prediction is itself a model of
+this CT, so the two are not fully independent; they can fail together where contrast is low.
+
+| | cells ridge_hit supports | cells ridge_hit removes |
+|---|---|---|
+| clean 156 segments: CT lift at the cell over beside it (grey levels, mean over segments, 95 % CI) | **+13.1** [9.7, 16.8] | **−3.9** [−4.8, −3.2] |
+| clean 156: cells brighter than both neighbours at ±10 voxels | 43.9 % | 26.8 % |
+| production sample (40 rounds): CT lift | **+11.4** [5.6, 18.4] | **−1.6** [−2.7, −0.4] |
+| production sample: brighter than both neighbours | 35.1 % | 23.9 % |
+
+The cells ridge_hit removes show **no CT sheet peak**: their lift is below zero, and below the
+level of the cells it keeps. On the clean segments, a mixture estimate puts the "on-sheet-like"
+share of removed cells at **4 %** [−5, 15]. It works by placing removed cells between the kept
+cells and the half-pitch null on a pass-rate scale.
+
+**3. Production's cut.** Under D, from 2026-09-29 13:15 to 19:48 UTC (1,411 rounds):
+- 5,597,201 cells were removed, 61.4 % of those grown;
+- ridge_hit was charged with 1,302,818 of them: **23.3 % of what was removed, 14.3 % of what was
+  grown**.
+
+Sample: 40 rounds drawn at random from the 563 with ridge pruning on scrolls whose full CT and
+prediction are local (PHerc0826 20, PHerc0191 14, PHerc0125 3, PHerc0813 3). For each, we pulled
+the pre-guard and the guarded checkpoint from the host that grew it.
+- Recomputing the guard reproduced the production cut: 213,515 of 213,627 removed cells, and the
+  ridge_hit attribution to within 1.6 % (87,489 vs 86,109 cells; 32 of 40 rounds exact).
+- The estimated share of ridge-removed cells that were sound is **−14 % [−48, 25]** on the pass-rate
+  estimator and **33 % [6, 96]** on the mean-score estimator. Both are wide. Neither is evidence of
+  large-scale removal of sound surface. The upper bounds allow up to about a quarter to a third.
+- At the mean-score point estimate, sound surface removed by ridge_hit would be about 0.33 × 14.3 %
+  ≈ **4.7 % of grown cells** (CI 0.9 %–13.7 %).
+
+**Verdict, stated plainly.**
+- ridge_hit removes a lot, including ~17 % of the cells of segments that never self-intersect, and
+  34 % on PHerc0191.
+- By the only independent check available, the removed cells do not look like sheet surface.
+  So this is **not measured over-pruning**, but it is **not proven safe** either.
+- The CT test's own separation is modest: AUC 0.642 for kept cells vs the half-pitch null. The
+  production estimate spans roughly 0 to a third.
+- If the goal is to cap the risk:
+  - relaxing `ridge_hit_vox` from 3 to 5 voxels, or scoring only the frontier (as `empty_space`
+    does), would cut less;
+  - neither has been measured.
+- The decision to relax it is the operator's.
+
 ## Integration with upstream tools, and what was compared
 
 | upstream tool or parameter | how the guard relates | measured here? |
@@ -190,10 +269,10 @@ comparison.
 2. **Small, ragged patches.** D's median clean area per seed is **0.10 cm²** (max 3.18 cm²; 7 of 40 ≥
    1 cm²). **18 of 40 D seeds were trimmed to nothing in round 1.** First Letters needs a 4 cm²
    region. The gain is mainly from stopping bad seeds early, not from growing large sheets.
-3. **ridge_hit is D's largest pruner (22.6 % of cells) and its false-positive rate at the threshold
-   used (0.5) is unmeasured.** At 0.2011 it flagged 60.9 % of 156 known-clean segments. D may be
-   discarding sound surface. This is the first thing to measure next (the 156 clean segments are
-   listed).
+3. **ridge_hit is D's largest pruner** (22.6 % of cells in the A/B, 14.3 % in production). Its
+   false-positive rate is measured in the next section. The finding: on clean segments it removes
+   16.7 % of cells. By an independent CT test those cells look like surface lying off the sheet, not
+   sound surface wrongly cut. The CT test is weak, so this is evidence, not proof.
 4. **CPU savings depend on the 30-minute ceiling.** 20 of 40 unguarded seeds ran until the wall
    ceiling. A longer ceiling raises A's CPU and the ratio; a shorter one lowers it.
 5. **No "grow unguarded, trim afterwards" control.** That is the natural alternative and it was not

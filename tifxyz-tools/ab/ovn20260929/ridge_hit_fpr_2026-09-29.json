@@ -1,0 +1,111 @@
+{
+ "date": "2026-09-29",
+ "policy": "GuardPolicy defaults: ridge_hit_vox 3, min_bad_cells 12, reach_rings 2 (as production enforces ridge_hit under D)",
+ "clean_segments": {
+  "n": 156,
+  "by_scroll": {
+   "PHerc0125": 114,
+   "PHerc0191": 36,
+   "PHerc0211": 6
+  },
+  "definition": "vc_tifxyz_selfcross density exactly 0, drawn from 3,000 random hub-local segments",
+  "cells": 1261967,
+  "flagged_per_cell": 0.249,
+  "flagged_ci": [
+   0.222,
+   0.28
+  ],
+  "removed_as_enforced": 0.167,
+  "removed_ci": [
+   0.136,
+   0.202
+  ],
+  "removed_incl_island_margin": 0.19,
+  "segments_emptied_by_ridge_alone": 14,
+  "per_scroll_removed": {
+   "PHerc0125": 0.138,
+   "PHerc0191": 0.34,
+   "PHerc0211": 0.084
+  },
+  "ct_within_cell_lift_grey": {
+   "supported_mean": 13.1,
+   "supported_ci": [
+    9.7,
+    16.8
+   ],
+   "removed_mean": -3.9,
+   "removed_ci": [
+    -4.8,
+    -3.2
+   ]
+  },
+  "ct_frac_brighter_than_both_neighbours": {
+   "supported": 0.439,
+   "removed": 0.268
+  },
+  "sound_like_fraction_of_removed_pass_rate_mixture": {
+   "median": 0.04,
+   "ci": [
+    -0.05,
+    0.15
+   ]
+  },
+  "ct_test_own_auc_supported_vs_half_pitch_null": 0.642
+ },
+ "production_sample": {
+  "rounds": 40,
+  "window": "2026-09-29T13:15:55Z..19:48:46Z",
+  "scrolls": {
+   "PHerc0826": 20,
+   "PHerc0191": 14,
+   "PHerc0125": 3,
+   "PHerc0813": 3
+  },
+  "eligible": "563 of 1,411 D-era rounds had ridge pruning and hub-local CT + prediction (PHerc0846A, PHerc0490B and the newer First Letters scrolls excluded: no full CT or prediction on the hub)",
+  "reproduction": {
+   "ridge_attributed_recorded": 86109,
+   "recomputed": 87489,
+   "removed_actual": 213627,
+   "removed_recomputed_overlap": 213515
+  },
+  "ct_within_cell_lift_grey": {
+   "supported_mean": 11.4,
+   "supported_ci": [
+    5.6,
+    18.4
+   ],
+   "ridge_removed_mean": -1.6,
+   "ridge_removed_ci": [
+    -2.7,
+    -0.4
+   ]
+  },
+  "ct_frac_brighter_than_both_neighbours": {
+   "supported": 0.351,
+   "ridge_removed": 0.239
+  },
+  "sound_like_fraction_of_ridge_removed": {
+   "pass_rate_mixture": {
+    "median": -0.14,
+    "ci": [
+     -0.48,
+     0.25
+    ]
+   },
+   "mean_score_mixture": {
+    "median": 0.33,
+    "ci": [
+     0.06,
+     0.96
+    ]
+   }
+  }
+ },
+ "production_totals": {
+  "rounds": 1411,
+  "cells_removed": 5597201,
+  "ridge_attributed": 1302818,
+  "ridge_share_of_removed": 0.233,
+  "ridge_share_of_grown": 0.143
+ }
+}

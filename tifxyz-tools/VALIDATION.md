@@ -152,7 +152,7 @@ after each trim, density 0). A functional check, not a re-measurement.
 
 ## Not established
 
-- The false-positive rate of `ridge_hit` at the 0.5 threshold D ran with (D's largest pruner).
+- Whether `ridge_hit`'s removals are safe: measured 2026-09-29 (GUARDED_GROW.md, "Is ridge_hit over-pruning?"). On 156 clean segments it removes 16.7 % [13.6, 20.2] of cells, and the removed cells show no CT sheet peak (lift −3.9 vs +13.1 grey for kept cells). In 40 production rounds the estimated sound share of ridge-removed cells is −14 % [−48, 25] or 33 % [6, 96] depending on estimator. So there is no evidence of over-pruning, but a bound of up to about a third cannot be excluded. The CT test itself separates kept cells from the half-pitch null at AUC 0.642 only.
 - A "grow unguarded, trim afterwards" control.
 - Production clean yield per CPU-hour after the switch to D.
 - Any comparison against `vc_calc_surface_metrics` or human review; any ink-legibility comparison.
