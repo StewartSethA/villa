@@ -1,0 +1,207 @@
+{
+ "B": {
+  "segments": 40,
+  "rounds": 67,
+  "cells_before": 233157,
+  "cells_after": 204217,
+  "pruned_by": {
+   "selfx": 20651,
+   "vacuum": 3693,
+   "fold": 131,
+   "plan": 173,
+   "margin_or_island": 4292
+  },
+  "computed_rounds": {
+   "quad_flip": 67,
+   "stretch": 67,
+   "ridge_hit": 67,
+   "seam": 67,
+   "empty_space": 67,
+   "roughness": 67,
+   "wrap_spacing": 18,
+   "curvature": 18
+  },
+  "fired_rounds": {
+   "ridge_hit": 67,
+   "seam": 65,
+   "empty_space": 67,
+   "roughness": 67,
+   "quad_flip": 46,
+   "stretch": 9,
+   "curvature": 12,
+   "wrap_spacing": 1
+  },
+  "would_stop_rounds": {
+   "ridge_hit": 21,
+   "empty_space": 50
+  },
+  "stops": {
+   "selfcross_nonzero": 27
+  },
+  "first_round_nothing_left": 0,
+  "selfcross_rounds": 67,
+  "selfcross_rounds_density_gt0": 44,
+  "guard_s": 1666.2,
+  "round_cpu_s": 150620.8
+ },
+ "D": {
+  "segments": 40,
+  "rounds": 64,
+  "cells_before": 214011,
+  "cells_after": 102327,
+  "pruned_by": {
+   "selfx": 20300,
+   "vacuum": 3714,
+   "fold": 215,
+   "plan": 261,
+   "quad_flip": 400,
+   "stretch": 57,
+   "ridge_hit": 48450,
+   "seam": 18771,
+   "margin_or_island": 19271,
+   "wrap_spacing": 0,
+   "curvature": 245
+  },
+  "computed_rounds": {
+   "quad_flip": 64,
+   "stretch": 64,
+   "ridge_hit": 64,
+   "seam": 64,
+   "empty_space": 64,
+   "roughness": 64,
+   "wrap_spacing": 17,
+   "curvature": 17
+  },
+  "fired_rounds": {
+   "ridge_hit": 64,
+   "seam": 63,
+   "empty_space": 64,
+   "roughness": 64,
+   "quad_flip": 41,
+   "stretch": 10,
+   "curvature": 9,
+   "wrap_spacing": 2
+  },
+  "would_stop_rounds": {
+   "ridge_hit": 13,
+   "empty_space": 41
+  },
+  "stops": {
+   "nothing_left": 18,
+   "frontier_blocked": 17
+  },
+  "first_round_nothing_left": 18,
+  "selfcross_rounds": 64,
+  "selfcross_rounds_density_gt0": 38,
+  "guard_s": 993.4,
+  "round_cpu_s": 169002.9
+ },
+ "E": {
+  "segments": 40,
+  "rounds": 65,
+  "cells_before": 231031,
+  "cells_after": 145706,
+  "pruned_by": {
+   "selfx": 35962,
+   "vacuum": 216,
+   "fold": 385,
+   "plan": 1425,
+   "quad_flip": 654,
+   "stretch": 103,
+   "ridge_hit": 17228,
+   "seam": 17322,
+   "margin_or_island": 11316,
+   "wrap_spacing": 0,
+   "curvature": 714
+  },
+  "computed_rounds": {
+   "quad_flip": 65,
+   "stretch": 65,
+   "ridge_hit": 65,
+   "seam": 65,
+   "empty_space": 65,
+   "roughness": 65,
+   "wrap_spacing": 25,
+   "curvature": 25
+  },
+  "fired_rounds": {
+   "quad_flip": 55,
+   "ridge_hit": 65,
+   "seam": 65,
+   "empty_space": 65,
+   "roughness": 65,
+   "stretch": 14,
+   "curvature": 17,
+   "wrap_spacing": 1
+  },
+  "would_stop_rounds": {
+   "empty_space": 21,
+   "ridge_hit": 6
+  },
+  "stops": {
+   "nothing_left": 8,
+   "frontier_blocked": 7,
+   "selfcross_nonzero": 1
+  },
+  "first_round_nothing_left": 8,
+  "selfcross_rounds": 64,
+  "selfcross_rounds_density_gt0": 50,
+  "guard_s": 2321.5,
+  "round_cpu_s": 280214.8
+ },
+ "F": {
+  "segments": 40,
+  "rounds": 73,
+  "cells_before": 246228,
+  "cells_after": 165663,
+  "pruned_by": {
+   "selfx": 37115,
+   "vacuum": 89,
+   "fold": 195,
+   "plan": 279,
+   "quad_flip": 409,
+   "stretch": 63,
+   "ridge_hit": 15764,
+   "seam": 15828,
+   "margin_or_island": 10416,
+   "wrap_spacing": 0,
+   "curvature": 407
+  },
+  "computed_rounds": {
+   "quad_flip": 73,
+   "stretch": 73,
+   "ridge_hit": 73,
+   "seam": 73,
+   "empty_space": 73,
+   "roughness": 73,
+   "wrap_spacing": 31,
+   "curvature": 31
+  },
+  "fired_rounds": {
+   "quad_flip": 61,
+   "ridge_hit": 73,
+   "seam": 73,
+   "empty_space": 73,
+   "roughness": 73,
+   "stretch": 15,
+   "curvature": 19,
+   "wrap_spacing": 1
+  },
+  "would_stop_rounds": {
+   "empty_space": 21,
+   "ridge_hit": 6,
+   "roughness": 6
+  },
+  "stops": {
+   "nothing_left": 8,
+   "frontier_blocked": 9,
+   "selfcross_nonzero": 1,
+   "roughness": 6
+  },
+  "first_round_nothing_left": 8,
+  "selfcross_rounds": 73,
+  "selfcross_rounds_density_gt0": 54,
+  "guard_s": 1296.4,
+  "round_cpu_s": 325319.2
+ }
+}

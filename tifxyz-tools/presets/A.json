@@ -1,0 +1,8 @@
+{
+ "name": "A",
+ "description": "no guard: the tracer runs unmodified (baseline arm A of ovn20260929)",
+ "source": "scripts/growth_ab/run_arm_batch.py arm_policy_settings(), run ovn20260929 (2026-09-29)",
+ "policy": {
+  "enabled": false
+ }
+}

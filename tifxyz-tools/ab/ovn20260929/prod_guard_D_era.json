@@ -1,0 +1,88 @@
+{
+ "since": "2026-09-29T13:15:55Z",
+ "last": "2026-09-29T19:48:46Z",
+ "rounds": 1411,
+ "segments": 1007,
+ "segments_stopped": 842,
+ "cells_before": 9112527,
+ "cells_after": 3515326,
+ "pruned_by": {
+  "selfx": 1670680,
+  "vacuum": 1193825,
+  "fold": 17628,
+  "plan": 16548,
+  "margin_or_island": 763991,
+  "quad_flip": 18964,
+  "stretch": 18822,
+  "ridge_hit": 1302818,
+  "seam": 434626,
+  "wrap_spacing": 1295,
+  "curvature": 106891,
+  "normal_dev": 51113
+ },
+ "computed_rounds": {
+  "quad_flip": 1411,
+  "stretch": 1411,
+  "ridge_hit": 1003,
+  "seam": 1003,
+  "empty_space": 1003,
+  "wrap_spacing": 1411,
+  "curvature": 1411,
+  "roughness": 1411,
+  "normal_dev": 110
+ },
+ "fired_rounds": {
+  "quad_flip": 1285,
+  "ridge_hit": 1003,
+  "seam": 1003,
+  "empty_space": 1003,
+  "curvature": 1225,
+  "roughness": 1411,
+  "stretch": 484,
+  "wrap_spacing": 198,
+  "normal_dev": 110
+ },
+ "would_stop_rounds": {
+  "empty_space": 804,
+  "ridge_hit": 207,
+  "roughness": 25
+ },
+ "stops": {
+  "selfcross_nonzero": 162,
+  "nothing_left": 405,
+  "frontier_blocked": 254,
+  "roughness": 23
+ },
+ "selfcross_rounds": 1411,
+ "selfcross_density_gt0": 1197,
+ "rounds_by_scroll": {
+  "PHerc0490B": 334,
+  "PHerc0826": 280,
+  "PHerc0191": 240,
+  "PHerc0846A": 233,
+  "PHerc0125_merged": 55,
+  "PHerc0358_merged": 40,
+  "PHerc0813": 30,
+  "PHerc0490A": 27,
+  "PHerc0306B": 25,
+  "PHerc0813_merged": 23,
+  "PHerc0483A": 21,
+  "PHerc0343": 20,
+  "PHerc0175B": 19,
+  "PHerc0175A": 17,
+  "PHerc0846B": 17,
+  "PHerc0483B": 16,
+  "PHerc0490B_merged": 6,
+  "PHerc0358": 5,
+  "PHerc0826_merged": 2,
+  "PHerc1545": 1
+ },
+ "guard_s": [
+  23503.926010131836,
+  1413
+ ],
+ "round_cpu_s": [
+  937843.22444,
+  1423
+ ]
+}

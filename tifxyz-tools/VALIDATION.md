@@ -46,7 +46,7 @@ database and is **not** included.
   agreement). Two methods that share a geometric premise agreeing is weak evidence.
 * Scan resolutions other than 7.9-9.4 um voxels, and lattices with tracer steps other than 20.
 
-# Validation record: growth_guard (PROTOTYPE)
+# Validation record: growth_guard (PROTOTYPE, 2026-09-25; superseded by the section below)
 
 Source: the fleet repo's `growth_guard.py` at commit `a4b680a` (2026-09-25), with the database policy loader, the
 neighbour-mergeable pause, the hub neighbour feed and the area-target settings removed (they need the fleet's
@@ -95,3 +95,66 @@ What this does and does not say, without rounding:
 * One scroll, one host, one day. A canary on one fleet host recorded failures 11 % -> 4 % and grown area per
   attempt-hour 2.3 -> 11.3 mm2 before/after with no concurrent control (RECORDED in the source project's status
   notes, not reproducible from here): treat it as an anecdote.
+
+
+# Validation record: growth_guard + guarded_grow (2026-09-29, the version the A/B measured)
+
+`tifxyz_tools/growth_guard.py` is a port of the source project's production module (1,900 lines),
+with its database, alerting and fleet coupling removed: the policy now comes from a preset file
+(`load_policy`, which rejects unknown fields), a guard that cannot verify raises `GuardBroken`, and
+the overlap index uses `same_sheet.py`. The driver `guarded_grow.py` replaces the source project's
+grow stage.
+
+## TESTED (50 tests; `pytest tests`)
+
+| file | tests | what | mutation that turned it red |
+|---|---|---|---|
+| `test_growth_guard.py` | 18 | per-criterion masks on synthetic lattices, frontier-only cutting, holes kept, crop writer, policy parsing, overlap index | ported unchanged from the source project, where each was seen red; `policy_from_dict` new here (a misspelt field raises) |
+| `test_growth_guard_selfcross.py` | 6 | the real `vc_tifxyz_selfcross` on a real self-intersecting checkpoint (`PHerc0191_cea9032` round 1, density 0.813, 79.5 KB fixture) | skipped without the binary; passed with it on 2026-09-29 |
+| `test_growth_guard_ridge_offset_perf.py` | 8 | vectorised ridge search equals the slow reference | ported |
+| `test_growth_guard_self_test.py` | 6 | `self_test()` passes clean; a criterion that never fires, or fires everywhere, fails it; selfcross required without a binary fails; `mark_broken` raises | the two RED tests are themselves mutations |
+| `test_guarded_grow.py` | 5 | the driver with a fake tracer: seed then resume at +10 generations, exhausted stop, trimming vacuum and resuming from the trimmed checkpoint, `nothing_left` reports area 0 and fails, newest checkpoint by time | name-sort checkpoint → red; pre-trim area on `nothing_left` → red; vacuum off → red |
+| `test_ab_metric.py` | 1 | `ab/metric.py` reproduces the published A/B table from the shipped rows | changing one expected value → red |
+| `test_same_sheet.py` | 6 | (earlier branch) | |
+
+## RE-COMPUTED 2026-09-29 for this branch
+
+- A/B table: `python ab/metric.py ab/ovn20260929/rows_reaudited.jsonl`. The rows are the run's
+  re-audited results (34 `nothing_left` rows in D/E/F zeroed after a production bug where a trimmed-to-
+  nothing checkpoint reported its pre-trim area; A, B and G unaffected). Host names are replaced by
+  h1/h2/h3 (h1: PHerc0125, h2: PHerc0191 + PHerc0846A, h3: PHerc0211); checkpoint paths are relative.
+- Guard firing per criterion in the A/B (`ab/ovn20260929/ab_guard_stats.json`), read from each arm's
+  own per-round `guard_summary` records on the three hosts.
+- Production firing under policy D (`ab/ovn20260929/prod_guard_D_era.json`): every `guard_summary`
+  record from 2026-09-29 13:15:55Z (the switch) to 19:48:46Z, 1,411 rounds on 1,007 segments.
+- On-sheet vs half-pitch null for A, B and D (`ab/ovn20260929/onsheet_ab.json`), computed from the
+  final checkpoints pulled from the three hosts.
+- Figures: `figures/ab_same_seed_A_vs_D.png` (renders of four A/B seeds' final checkpoints, made with
+  `vc_render_tifxyz -g 0 --scale 0.5 -n 1`), `figures/crumpled_vs_clean_renders.png` (renders served by
+  the source project's segment gallery, chosen by metric only), `figures/ab_efficiency.png`,
+  `figures/pruned_by_criterion.png`.
+
+## RUN end to end with real binaries (2026-09-29)
+
+`guarded-grow` with `vc_grow_seg_from_seed` / `vc_tifxyz_selfcross` md5 `06f68444…` (a different
+build from the A/B's `b747f765…`), PHerc0211, A/B seed `8972dac333`, presets A and D, surface
+prediction and umbilicus supplied: both completed 2 rounds and stopped on the exhausted rule (A
+0.483 cm², 22.5 tracer CPU-s; D 0.125 cm², 8.6 tracer CPU-s + 1.0 guard-s, selfcross ran before and
+after each trim, density 0). A functional check, not a re-measurement.
+
+## RECORDED, not re-run here
+
+- Pre-guard fleet baseline: 7.05 % self-intersection-free [4.7 %, 9.9 %], n = 383 of 16,886 segments,
+  23 scrolls, seed 20260929002.
+- Hairpin abort ratio 0.66: calibrated on a 20-segment half, test TPR 1.00 / FPR 0.29 (n = 20).
+- `empty_space` vs off-sheet truth: test AUC 0.977 [0.921, 1.0], n_pos 7 / n_neg 67.
+- `ridge_hit_frac` at 0.2011 flags 60.9 % of 156 known-clean segments (so that threshold is not used).
+
+## Not established
+
+- The false-positive rate of `ridge_hit` at the 0.5 threshold D ran with (D's largest pruner).
+- A "grow unguarded, trim afterwards" control.
+- Production clean yield per CPU-hour after the switch to D.
+- Any comparison against `vc_calc_surface_metrics` or human review; any ink-legibility comparison.
+- macOS; spiral-fitting's or vesuvius's pinned environments (tests ran on Python 3.12, numpy 1.26,
+  scipy, tifffile, zarr 2.18).

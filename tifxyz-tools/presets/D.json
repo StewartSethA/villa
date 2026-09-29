@@ -1,0 +1,20 @@
+{
+ "name": "D",
+ "description": "B + every shadow criterion enforced at its GuardPolicy default threshold (arm D, the recommended policy)",
+ "source": "scripts/growth_ab/run_arm_batch.py arm_policy_settings(), run ovn20260929 (2026-09-29)",
+ "policy": {
+  "enabled": true,
+  "selfcross": true,
+  "selfcross_hairpin_abort_ratio": 0.66,
+  "quad_flip_enforce": true,
+  "stretch_enforce": true,
+  "wrap_spacing_enforce": true,
+  "curvature_enforce": true,
+  "ridge_hit_enforce": true,
+  "seam_enforce": true,
+  "normal_dev_enforce": true,
+  "empty_space_enforce": true,
+  "roughness_enforce": true,
+  "flatten_feedback_enforce": true
+ }
+}

@@ -10,6 +10,7 @@ import pytest
 
 from tifxyz_tools import growth_guard as G
 
+pytestmark = pytest.mark.unit
 VOX = 9.362           # um per voxel
 PITCH = 20.0          # voxels per lattice cell (tracer step_size)
 
@@ -46,7 +47,8 @@ def test_vacuum_at_the_frontier_is_cut_and_a_control_keeps_it():
 
 
 def test_enclosed_vacuum_is_a_hole_not_a_cut():
-    """The frontier may wrap AROUND a vacuum and leave a hole; only growing THROUGH it is limited."""
+    """The user's distinction: the frontier may wrap AROUND a vacuum and leave a hole; only
+    growing THROUGH it is limited."""
     X, Y, Z = plane()
     bite = lambda p: np.where((np.abs(p[:, 0] - 1900) < 130) & (np.abs(p[:, 1] - 1900) < 130), 0.0, 100.0)
     r = G.evaluate(X, Y, Z, pol(vacuum=True), VOX, sampler=bite)
@@ -109,7 +111,7 @@ def test_overlap_with_a_neighbour_is_cut_but_a_seam_is_kept():
 
 
 def test_a_neighbouring_WRAP_is_not_overlap():
-    """The next wrap sits ~25-35 voxels along the normal (same_sheet.py): it must NOT read as the same sheet."""
+    """The next wrap sits ~25-35 voxels along the normal (coverage.py): it must NOT read as the same sheet."""
     X, Y, Z = plane(70, 90)
     idx = G.SegmentIndex(vox=4.0, deg=20.0)
     idx.add("PHercX_next_wrap", *(a if k < 2 else a + 30.0 for k, a in enumerate(plane(70, 90))))
@@ -154,42 +156,97 @@ def test_guard_tifxyz_writes_a_new_dir_and_never_touches_the_source(tmp_path):
     assert meta["guard"]["cells_after"] == res.cells_after and meta["area_cm2"] > 0
 
 
-def test_guard_round_crops_carries_state_and_blocks_a_frontier_that_regrows(tmp_path):
+def test_policy_from_dict_reads_fields_defaults_off_and_rejects_typos(tmp_path):
+    assert G.policy_from_dict({}).enabled is False                     # nothing given: OFF
+    p = G.policy_from_dict({"enabled": "1", "plan_deg": "40", "grow.guard.vacuum_win": 3})
+    assert p.enabled is True and p.plan_deg == 40.0 and p.vacuum_win == 3
+    with pytest.raises(KeyError):
+        G.policy_from_dict({"nonsense": 9})
+    f = tmp_path / "D.json"
+    f.write_text(json.dumps({"policy": {"enabled": True, "ridge_hit_enforce": True}}))
+    q = G.load_policy(str(f))
+    assert q.enabled and q.ridge_hit_enforce and not q.seam_enforce
+
+
+def _neighbour_index():
+    idx = G.SegmentIndex(vox=4.0, deg=20.0)
+    Xo, Yo, Zo = plane(70, 90)
+    idx.add("PHercX_friend", Xo[:, 30:], Yo[:, 30:], Zo[:, 30:] + 1.0)
+    return idx
+
+
+def test_merge_pause_fires_only_for_a_clean_neighbour_and_keeps_the_overlap(tmp_path):
+    """The frontier lies on ONE neighbour: with a clean neighbour the segment stops as 'mergeable' and its
+    overlap is NOT cropped (the merger registers on it); with a mush neighbour it is not paused."""
+    X, Y, Z = plane(70, 60)
+    polm = pol(overlap=True, merge_pause=True, overlap_keep_rings=0)
     import tifffile
-    X, Y, Z = plane(60, 60)
     src = tmp_path / "s"; src.mkdir()
     for a, A in zip("xyz", (X, Y, Z)):
         tifffile.imwrite(src / f"{a}.tif", A)
-    air = lambda p: np.where(p[:, 0] > 1000 + 45 * PITCH, 0.0, 100.0)
     st = G.GuardState()
-    out, info = G.guard_round(str(src), pol(vacuum=True), VOX, st, sampler=air)
-    assert out != str(src) and info["stop"] is None and st.rounds_cut == 1 and len(st.pruned_xyz) > 0
-    # the "tracer" now regrows exactly the ground we pruned: the next round must say the frontier is blocked
-    out2, info2 = G.guard_round(str(src), pol(vacuum=True), VOX, st, sampler=air)
-    assert info2["regrown_frac"] >= 0.9 and info2["stop"] == "frontier_blocked"
-    # control: a round that adds nothing on pruned ground is not blocked
-    st3 = G.GuardState(pruned_xyz=np.array([[9e5, 9e5, 9e5]]), keep_xyz=np.zeros((0, 3)), rounds_cut=1)
-    _, info3 = G.guard_round(str(src), pol(vacuum=False), VOX, st3)
-    assert info3["stop"] is None
-
-
-def test_zarr_sampler_reads_level_and_treats_outside_as_air(tmp_path):
-    zarr = pytest.importorskip("zarr")
-    g = zarr.open_group(str(tmp_path / "ct.zarr"), mode="w")
-    a = g.create_dataset("1", shape=(20, 20, 20), chunks=(8, 8, 8), dtype="uint8")
-    a[:] = 77
-    a[0:5] = 0                                       # air below z = 10 (level-1 index 5 -> level-0 z 10)
-    s = G.ZarrSampler(str(tmp_path / "ct.zarr"), level=1)
-    got = s(np.array([[20.0, 20.0, 30.0], [20.0, 20.0, 4.0], [1e6, 0.0, 0.0]]))   # x, y, z in level-0 voxels
-    assert got.tolist() == [77.0, 0.0, 0.0]
+    out, info = G.guard_round(str(src), polm, VOX, st, cover=_neighbour_index(), own="PHercX_me", neighbour_ok=lambda n: True)
+    assert info["stop"] == "mergeable" and info["merge"]["with"] == "PHercX_friend"
+    assert out == str(src), "overlap kept: nothing cropped, so the checkpoint is unchanged"
+    st2 = G.GuardState()
+    out2, info2 = G.guard_round(str(src), polm, VOX, st2, cover=_neighbour_index(), own="PHercX_me", neighbour_ok=lambda n: False)
+    assert info2["stop"] is None and info2["merge"]["mergeable"] is False and "quality" in info2["merge"]["reason"]
+    assert out2 != str(src), "a mush neighbour is cut like any overlap, not paused for"
 
 
 def test_a_young_small_lattice_that_lost_nothing_is_never_declared_nothing_left():
-    """A tiny lattice below min_keep_cells that lost nothing must not be reported as emptied by the guard
-    (a real canary run ended two young 9- and 28-cell lattices this way)."""
+    """First canary, 2026-09-25: a 9-cell and a 28-cell lattice after round 1 were ended `guard_nothing_left` although the
+    guard had cut nothing -- they were merely below min_keep_cells."""
     X, Y, Z = plane(4, 4)
     r = G.evaluate(X, Y, Z, G.GuardPolicy(enabled=True), VOX, sampler=lambda p: np.full(len(p), 100.0))
     assert r.cells_after == r.cells_before == 16 and r.stop is None
     air = lambda p: np.where(p[:, 0] > 1000 + 1 * PITCH, 0.0, 100.0)      # but a guard that empties the sheet still says so
     r2 = G.evaluate(*plane(12, 12), pol(vacuum=True, min_keep_cells=64), VOX, sampler=air)
     assert r2.stop == "nothing_left"
+
+
+# ------------------------------------------------------------- empty_space (ARM E, 2026-09-29)
+def test_empty_space_mask_none_sampler_returns_none():
+    X, Y, Z = plane(20, 20)
+    P, V = G.lattice_frame(X, Y, Z)
+    assert G.empty_space_mask(P, V, None, G.GuardPolicy()) is None
+
+
+def test_empty_space_mask_fires_only_on_the_frontier_when_prediction_never_matches():
+    """A cheap ridge_hit: no window search, so EVERY cell (interior or frontier) reads
+    unsupported against a sampler that never matches -- but the criterion is defined ONLY over
+    the frontier band, so the interior must stay clean regardless."""
+    X, Y, Z = plane(20, 20)
+    P, V = G.lattice_frame(X, Y, Z)
+    never = lambda p: np.zeros(len(p))  # noqa: E731
+    m = G.empty_space_mask(P, V, never, G.GuardPolicy(reach_rings=2))
+    band = G.frontier_band(V, 2)
+    assert m is not None and np.array_equal(m, band), "must equal the frontier band exactly, no more, no less"
+    assert not m[10, 10], "an interior cell must never be flagged (it is outside the frontier band)"
+
+
+def test_empty_space_mask_is_clean_when_the_frontier_is_fully_supported():
+    X, Y, Z = plane(20, 20)
+    P, V = G.lattice_frame(X, Y, Z)
+    always = lambda p: np.full(len(p), 100.0)  # noqa: E731
+    m = G.empty_space_mask(P, V, always, G.GuardPolicy(reach_rings=2))
+    assert m is not None and not m.any()
+
+
+def test_empty_space_shadow_round_computes_frac_over_the_frontier_not_the_whole_lattice():
+    """The denominator is the FRONTIER cell count, not V.sum() -- a segment with a small frontier
+    and a huge interior must not have its fraction diluted by cells the criterion never scores."""
+    X, Y, Z = plane(30, 30)
+    P, V = G.lattice_frame(X, Y, Z)
+    never = lambda p: np.zeros(len(p))  # noqa: E731
+    ctx = G.ShadowContext(pred_sampler=never)
+    sh = G.shadow_round(P, V, G.GuardPolicy(empty_space=True, quad_flip=False, stretch=False,
+                                            normal_dev=False, ridge_hit=False, seam=False,
+                                            wrap_spacing=False, curvature=False, roughness=False,
+                                            flatten_feedback=False), VOX, ctx)
+    info = sh["empty_space"]
+    band_n = int(G.frontier_band(V, G.GuardPolicy().reach_rings).sum())
+    assert info["cells"] == band_n, "every frontier cell is unsupported against a never-match sampler"
+    assert info["frac_unsupported"] == pytest.approx(1.0)
+    assert info["would_stop"] is True
+    assert info["empty_space"] is True

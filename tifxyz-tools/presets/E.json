@@ -1,0 +1,24 @@
+{
+ "name": "E",
+ "description": "D's policy plus tracer params: surface prediction as -v (pass --volume PRED.zarr --ct CT.zarr) and SPACELINE armed from round 1 (arm E)",
+ "policy": {
+  "enabled": true,
+  "selfcross": true,
+  "selfcross_hairpin_abort_ratio": 0.66,
+  "quad_flip_enforce": true,
+  "stretch_enforce": true,
+  "wrap_spacing_enforce": true,
+  "curvature_enforce": true,
+  "ridge_hit_enforce": true,
+  "seam_enforce": true,
+  "normal_dev_enforce": true,
+  "empty_space_enforce": true,
+  "roughness_enforce": true,
+  "flatten_feedback_enforce": true
+ },
+ "tracer_params": {
+  "space_line_weight": 0.1,
+  "space_line_threshold": 5.0,
+  "space_line_steps": 8
+ }
+}

@@ -19,7 +19,7 @@ This branch also has `growth_guard.py`, stacked on it; other branches carry `fus
 
 | module | what it does |
 |---|---|
-| `tifxyz_tools/growth_guard.py` | **Per-cell growth guard (PROTOTYPE).** Cuts the FRONTIER of a grown sheet where it has run into vacuum (needs a CT sampler), a hairpin, a crease/crumple swamp, or a sheet another segment already holds; keeps regions enclosed by good surface (a hole, not a cut); reports why each cell went; `regrown_fraction` says whether a resumed tracer is growing back into pruned ground. Writes a new tifxyz directory, never the source. |
+| `tifxyz_tools/growth_guard.py` | **Per-cell growth guard** (the version measured in the 2026-09-29 A/B; see `GUARDED_GROW.md`). Cuts the FRONTIER of a grown sheet where it has run into vacuum (needs a CT sampler), a hairpin, a crease/crumple swamp, or a sheet another segment already holds; keeps regions enclosed by good surface (a hole, not a cut); reports why each cell went; `regrown_fraction` says whether a resumed tracer is growing back into pruned ground. Writes a new tifxyz directory, never the source. |
 
 ## Run the tests
 
@@ -44,3 +44,19 @@ Correctness first (no numeric change to anything upstream), determinism (per-seg
 a hash of the segment name), tests included, performance claims carry a command, input and n.
 Portability: pure Python, no OS-specific code. Fleet-specific paths, databases and hosts from the code these
 tools came from were removed, not parameterised.
+
+
+## Guarded growth (2026-09 progress-prize branch)
+
+`guarded-grow` (`tifxyz_tools/guarded_grow.py`) runs `vc_grow_seg_from_seed` round by round with the
+growth guard between rounds. Full write-up, every guard metric with its firing rate, the A/B, figures,
+limitations and how it relates to upstream tools: **`GUARDED_GROW.md`**. Policies: `presets/`.
+Data and the script that recomputes the headline numbers: `ab/`.
+
+```bash
+pip install -e .
+guarded-grow --volume CT.zarr --normal-grids GRIDS/ --seed X Y Z --out OUT/ \
+    --policy presets/D.json [--pred SURFACE_PRED.zarr] [--umbilicus umbilicus.json] [--vc-bin VC3D/bin]
+python ab/metric.py ab/ovn20260929/rows_reaudited.jsonl     # the A/B table
+SELFCROSS_BIN=/path/to/vc_tifxyz_selfcross python -m pytest tests
+```

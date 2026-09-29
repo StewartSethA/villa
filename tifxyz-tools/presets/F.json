@@ -1,0 +1,32 @@
+{
+ "name": "F",
+ "description": "E plus the on-the-fly SURFACE_SDT residual (arm F; sdt_weight 5.0 is a first guess, not swept)",
+ "policy": {
+  "enabled": true,
+  "selfcross": true,
+  "selfcross_hairpin_abort_ratio": 0.66,
+  "quad_flip_enforce": true,
+  "stretch_enforce": true,
+  "wrap_spacing_enforce": true,
+  "curvature_enforce": true,
+  "ridge_hit_enforce": true,
+  "seam_enforce": true,
+  "normal_dev_enforce": true,
+  "empty_space_enforce": true,
+  "roughness_enforce": true,
+  "flatten_feedback_enforce": true
+ },
+ "tracer_params": {
+  "space_line_weight": 0.1,
+  "space_line_threshold": 5.0,
+  "space_line_steps": 8,
+  "sdt_weight": 5.0,
+  "cell_reopt_mode": true,
+  "sdt_threshold": 1.0,
+  "sdt_chunk_size": 64,
+  "sdt_max_move": 20.0,
+  "cell_reopt_tangent_weight": 10.0,
+  "cell_reopt_boundary_weight": 10.0,
+  "cell_reopt_boundary_max": 3.0
+ }
+}

@@ -1,0 +1,10 @@
+{
+ "name": "B",
+ "description": "self-intersection check + crop + hairpin early abort; every other criterion measured, not enforced (arm B)",
+ "source": "scripts/growth_ab/run_arm_batch.py arm_policy_settings(), run ovn20260929 (2026-09-29)",
+ "policy": {
+  "enabled": true,
+  "selfcross": true,
+  "selfcross_hairpin_abort_ratio": 0.66
+ }
+}
