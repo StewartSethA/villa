@@ -2931,6 +2931,48 @@ def _sample_crossing_csr(csr, primaries, maximum, seed):
     }
 
 
+_MULTINOMIAL_MAX_CATEGORIES = 2 ** 24 - 1  # CUDA's multinomial kernel refuses more than
+# 2**24 categories even with replacement=True -- confirmed by direct repro on v100
+# (RuntimeError: "number of categories cannot exceed 2^24"), not merely a replacement=False
+# restriction the docs describe. PHerc0191's 22,757,127-track full-z pool exceeds this.
+
+
+def _multinomial_chunked(probabilities, k, generator=None,
+                          max_categories=_MULTINOMIAL_MAX_CATEGORIES):
+    """torch.multinomial(probabilities, k, replacement=True) with no category-count ceiling.
+
+    Splits `probabilities` into contiguous chunks of at most `max_categories` entries, first
+    draws which CHUNK each of the k samples falls in (a multinomial over the chunks' total
+    masses -- there are few chunks, always well under the limit), then draws the within-chunk
+    index for each chunk's share via an ordinary multinomial over that chunk alone (each chunk
+    is by construction <= max_categories). This is an exact two-level decomposition of sampling
+    from the SAME categorical distribution `probabilities` defines -- not an approximation -- so
+    results are indistinguishable in distribution from a single un-chunked multinomial() call.
+    Falls through to the ordinary call when the ceiling is not exceeded (the common case).
+    """
+    n = probabilities.numel()
+    if n <= max_categories:
+        return torch.multinomial(probabilities, k, replacement=True, generator=generator)
+    device = probabilities.device
+    bounds = list(range(0, n, max_categories)) + [n]
+    chunk_totals = torch.stack([
+        probabilities[bounds[i]:bounds[i + 1]].sum() for i in range(len(bounds) - 1)
+    ])
+    chunk_of_sample = torch.multinomial(chunk_totals, k, replacement=True, generator=generator)
+    counts = torch.bincount(chunk_of_sample, minlength=chunk_totals.numel())
+    out = torch.empty(k, dtype=torch.long, device=device)
+    pos = 0
+    for i, cnt in enumerate(counts.tolist()):
+        if cnt == 0:
+            continue
+        lo, hi = bounds[i], bounds[i + 1]
+        sub = torch.multinomial(probabilities[lo:hi], cnt, replacement=True, generator=generator)
+        out[pos:pos + cnt] = sub + lo
+        pos += cnt
+    # counts came out in chunk order; shuffle so downstream code sees the usual i.i.d. order.
+    return out[torch.randperm(k, device=device, generator=generator)]
+
+
 def _draw_track_sample(
         prepared_tracks, resampled, k, target_points, max_crossings,
         generator=None):
@@ -2943,8 +2985,8 @@ def _draw_track_sample(
         primary_track_idx = torch.randint(
             num_tracks, (k,), device=device, generator=generator)
     else:
-        primary_track_idx = torch.multinomial(
-            sampling_probabilities, k, replacement=True, generator=generator)
+        primary_track_idx = _multinomial_chunked(
+            sampling_probabilities, k, generator=generator)
 
     crossing_partners = prepared_tracks.get('crossing_partners')
     crossing_index = prepared_tracks.get('crossing_index')

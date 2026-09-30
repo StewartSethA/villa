@@ -14,6 +14,7 @@ from tifxyz import Patch
 from transforms import SpiralAndTransform
 from tracks import (
     _grouped_same_radius_loss,
+    _multinomial_chunked,
     _pack_track_points,
     _sample_prepared_track_points,
     configure_prepared_track_sampling,
@@ -1077,6 +1078,54 @@ class CheckpointLoadingTests(unittest.TestCase):
             loaded = load_checkpoint_cpu(path)
             torch.testing.assert_close(loaded['tensor'], torch.arange(8))
             self.assertEqual(loaded['cfg']['value'], 3)
+
+
+class MultinomialChunkedTests(unittest.TestCase):
+    # torch.multinomial's CUDA kernel refuses more than 2**24 categories even with
+    # replacement=True -- reproduced directly on v100 with a 22.76M-category tensor
+    # (RuntimeError: "number of categories cannot exceed 2^24"), which is exactly the
+    # PHerc0191 full-z track pool size (routeB_allscrolls/STATE.md). These tests use a
+    # tiny `max_categories` to exercise the chunking path without needing CUDA or a
+    # multi-million-entry tensor.
+
+    def test_matches_plain_multinomial_below_the_ceiling(self):
+        torch.manual_seed(0)
+        probs = torch.tensor([0.1, 0.2, 0.3, 0.4])
+        gen = torch.Generator().manual_seed(0)
+        chunked = _multinomial_chunked(probs, 5000, generator=gen, max_categories=10)
+        gen2 = torch.Generator().manual_seed(0)
+        plain = torch.multinomial(probs, 5000, replacement=True, generator=gen2)
+        # Below the ceiling this must be the OTHER branch entirely (same call, same seed).
+        torch.testing.assert_close(chunked, plain)
+
+    def test_chunked_draw_has_the_right_shape_and_range(self):
+        torch.manual_seed(1)
+        n = 37
+        probs = torch.rand(n)
+        probs /= probs.sum()
+        out = _multinomial_chunked(probs, 10_000, max_categories=5)
+        self.assertEqual(out.shape, (10_000,))
+        self.assertTrue(bool((out >= 0).all()))
+        self.assertTrue(bool((out < n).all()))
+
+    def test_chunked_draw_reproduces_the_target_distribution(self):
+        torch.manual_seed(2)
+        n = 41
+        probs = torch.rand(n)
+        probs /= probs.sum()
+        k = 200_000
+        out = _multinomial_chunked(probs, k, max_categories=6)
+        empirical = torch.bincount(out, minlength=n).float() / k
+        # A two-level exact decomposition should match the target proportions to well
+        # within sampling noise at this k (max count is ~0.1 at n=41, std ~= 0.0007).
+        self.assertLess(float((empirical - probs).abs().max()), 0.01)
+
+    def test_all_mass_in_one_chunk_still_only_draws_from_it(self):
+        # An edge case a chunking bug could get wrong: all the probability mass sits in
+        # one chunk (the others are legal to visit -- zero times -- but must never be).
+        probs = torch.tensor([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0])
+        out = _multinomial_chunked(probs, 500, max_categories=2)
+        self.assertTrue(bool((out == 3).all()))
 
 
 if __name__ == '__main__':
