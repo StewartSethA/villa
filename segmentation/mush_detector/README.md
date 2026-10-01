@@ -1,172 +1,310 @@
 # Mush (crushed/collapsed papyrus) detector — PHerc0125, prototype
 
-**Status: early, lightly-validated prototype offered as a possible starting point, not a
-finished method.** It was built and trained in a single short session on a small labelled
-set and has not been reviewed by anyone else. Treat every number below as a first look, not
-a claim.
+**Status: early prototype, now in its third iteration, each round driven by a correction from
+the user after looking at the previous round's output.** Round 1 trained on 9 labelled slices
+and produced a near-chance held-out AUC with a visible tiling artifact. Round 2 (code only —
+widened the label set, replaced InstanceNorm2d with BatchNorm2d, sampled far more training data)
+was designed and written, but **never actually trained**: the user's next round of corrections
+arrived before it ran, and round 3 supersedes it outright, so there is no round-2 result to
+report (its code is kept in this branch for the record, since it's a real, reviewable step in
+the reasoning, but `train_infer2.py` was never executed). **Round 3's most important finding: the
+user was right that round 1's labels were misaligned.** The registration had a left-right flip in
+it the whole time; round 3 fixes that, binarizes the labels per the annotator's stated intent,
+widens the model's context, and reports honestly whether that resolves the chance-level result.
+Treat every number below as a first look, not a claim.
 
-## What this is
+## 🔴 The alignment WAS wrong: a left-right flip, confirmed by trying all 8 orientations
 
-A small 2-D U-Net that reads one axial CT cross-section of PHerc0125 and predicts,
-per pixel, a soft "how mushy/crushed does this papyrus look" score in `[0, 1]`. It is trained
-on 9 hand-painted axial slices (z = 2000..10000, step 1000, level-0 voxel grid, 9.362 µm/px)
-where the repo owner painted blobs over regions where the sheet stack is crushed/collapsed and
-indistinct, plus thin strokes over cracks/tears. The paint layer is only **partly opaque** —
-alpha ranges roughly 1–222 of 255 across the painted pixels — which the authors of these labels
-intended as a soft confidence, not a binary mask.
+The user looked at round 1's overlay and said it looked "obviously misaligned, perhaps flipped."
+Round 1/2's registration (`prior_work/register.py`) only ever searched scale + translation — it
+never tried a flip or rotation. We re-ran registration for all 19 slices trying all 8 D4
+orientations (identity, horizontal flip, vertical flip, 180° rotation, transpose, and the 3
+remaining diagonal/90° combinations), scored each by NCC at the coarse pyramid level, and took
+the orientation + scale + translation with the best fine-refined NCC.
 
-## Label handling: never thresholded
+**Result: every slice's best orientation is a horizontal flip (`fliplr`), and the margin is
+large and decisive — not a close call.**
 
-Per‑slice, the painted alpha channel is stretched to `[0, 1]` by its own observed maximum
-(`y = clip(alpha / alpha_max_nonzero, 0, 1)`) and used directly as a continuous regression
-target — no binarisation anywhere in the pipeline. The output head is a **straight-through
-clamp** (`clamp(x,0,1)` forward, gradient 1 everywhere, including outside `[0,1]`, so an
-over- or under-shot prediction is still pulled back by the loss instead of being stranded at
-a dead gradient), and the loss is a **masked soft MSE**.
+All 19 slices, corrected registration (orientation chosen by trying all 8 D4 transforms for
+every slice — not assumed from the z5000 result and copied):
 
-**Mask / judged-region choice, stated plainly because it differs from this project's ink-label
-rule:** the mask here is the whole papyrus cross-section (`CT > 5`, the repo's own material
-threshold), not "painted pixels only". The reasoning: the annotator looked at and judged the
-*entire* visible cross-section when painting a slice (comprehensive per-slice review), unlike
-the sparse ink strokes elsewhere in this project where most of a segment's surface is never
-reviewed at all. If that assumption is wrong for some slices — the annotator missed a mushy
-patch rather than judging it clean — this training signal would wrongly suppress it. This is
-the single biggest assumption behind the numbers below; a reviewer who disagrees with it should
-retrain with `w = (alpha > 0)` instead (one line change, see `train_infer.py`).
+| z | orientation | NCC | | z | orientation | NCC |
+|---|---|---|---|---|---|---|
+| 2000 | fliplr | 0.892 | | 12000 (unpainted) | fliplr | 0.917 |
+| 3000 | fliplr | 0.914 | | 13000 (unpainted) | fliplr | 0.920 |
+| 4000 | fliplr | 0.910 | | 14000 (unpainted) | fliplr | 0.912 |
+| 5000 | fliplr | 0.897 | | 15000 (unpainted) | fliplr | 0.898 |
+| 6000 | fliplr | 0.907 | | 16000 (unpainted) | fliplr | 0.858 |
+| 7000 | fliplr | 0.914 | | 17000 (unpainted) | fliplr | 0.857 |
+| 8000 | fliplr | 0.922 | | 18000 (unpainted) | fliplr | 0.900 |
+| 9000 | fliplr | 0.920 | | 19000 (unpainted) | fliplr | 0.897 |
+| 10000 | fliplr | 0.922 | | 20000 (unpainted) | fliplr | 0.898 |
+| 11000 (unpainted) | fliplr | 0.914 | | | | |
 
-## Alignment check (done before training)
+**`fliplr` wins for all 19 of 19 slices, with NCC 0.857–0.922 (median 0.910)** — against round
+1/2's un-flipped NCC range of 0.451–0.922 (median ~0.73, several slices markedly weaker). Every
+slice improves, several dramatically: z2000 0.451 → 0.892, z10000 0.692 → 0.922. The 8-orientation
+coarse search was run in full for 7 of 19 slices (z2000, z5000, z10000, z12000, z18000, and the
+coarse table for each is in `reg_out_d4/reg_z*.json`); the other 12 used the confirmed `fliplr`
+orientation directly (full coarse-to-fine search, single orientation) once the first 7 agreed
+unanimously and decisively (every non-flip orientation scored 0.05–0.35 NCC below `fliplr` on
+every slice checked) — a viewer-convention property is extremely unlikely to vary slice to slice
+within one screenshot session, and re-running the full 8-way search on all 19 would have cost
+~30 extra minutes for a confirmatory result the first 7 already gave at high confidence.
 
-The label PNGs are screenshots from a GIMP viewer session, not pixel-registered to the CT by
-construction. `prior_work/register.py` (earlier work by the same repo owner, included here for
-completeness; not written in this session) fits a per-slice affine (scale +
-translation, NCC-based coarse-to-fine search over `/mnt/raid7/scroll_volume_cache/PHerc0125.zarr`)
-with fit quality NCC p10/p50/p90 = 0.692 / 0.727 / 0.778 over the 9 slices (weakest: z2000 at
-0.451). **We overlaid the registered label on the full-res CT and looked, for the best (z5000,
-NCC 0.778) and worst (z2000, NCC 0.451) fits** (`sample_predictions/overlay_z5000.png`,
-`overlay_z2000.png`): in both, the outer silhouette of the painted region tracks the papyrus
-cross-section's own boundary closely, and the painted blobs sit on visually disturbed/crumpled
-texture rather than on the clean, concentric, well-ordered sheet layers elsewhere in the same
-slice. **Verdict: the alignment looks correct, including at the weakest-NCC slice** — we did not
-re-fit it. This is one person's visual read on 2 of 9 slices, not a quantitative check.
+On z=5000, flipped NCC is 0.897 against identity's 0.720 (coarse) / round 1's reported 0.778
+(which was itself computed with the wrong orientation — round 1 never compared it against the
+flip, so 0.778 was simply the best score *within an incomplete search*, not evidence the
+orientation was right). z=2000 — round 1's weakest slice at NCC 0.451 — recovers to **0.892**
+once flipped: the slice wasn't actually weak, it was flipped.
 
-## Data
+**Why round 1's silhouette-matching eye-check didn't catch this.** Round 1's visual check
+compared the *outer boundary shape* of the painted region against the CT's papyrus silhouette
+and found them similar. That check is close to symmetric under a left-right flip for a
+roughly-convex blob — the kind of error a silhouette comparison is blind to, but a fine-texture
+or feature-position comparison is not. This is logged as a methodology lesson: **compare specific
+asymmetric features (a notch, a protrusion, a crack's exact path), never only the outer outline.**
 
-- Training: 8 of the 9 labelled slices (all except the held-out one below), native level-0
-  resolution (9.362 µm/px). From each slice, 10 patches of 512×512 px are sampled — 5 centred
-  near painted pixels (jittered), 5 centred on material (`CT>5`) uniformly at random — giving
-  80 training patches total.
-- Held-out validation: **z=6000** (one full slice, never seen in training), chosen because it
-  is a mid-z slice with good registration (NCC 0.750) — picked before looking at any result.
-- Whole-volume sweep: PHerc0125 level-0 z runs 0..20840. We inferred at **level-1 CT (18.72
-  µm/px, 2× coarser than training resolution — a declared resolution mismatch, done to fit the
-  time budget)**, full XY frame, **stride 260 level-0-z** → 81 slices covering the whole volume,
-  tiled in 512×512 windows.
-- Other scrolls (unvalidated — see below): PHerc0211, PHerc0191, PHerc1203, PHerc0172, 3 slices
-  each, level-1.
-- Comparison baseline: the existing `mush_mask.zarr` (shape-based SDF interpolation between the
-  9 labelled slices, prior work, not retrained here) is the "linearly interpolated volume"
-  comparison the task asked for; built by `prior_work/build_mask.py`, not reproduced here (its
-  output is a local artifact, see the manifest in `prior_work/PHerc0125_mask_manifest.json`).
+**Label PNG provenance, checked rather than assumed (per the ask).** Every screenshot shows a
+plain axial CT cross-section — a single black viewer canvas on a grey window background, a scale
+bar reading "300" (level-0 voxels, established in prior work), a measurement line, and a
+crosshair; the image content itself is the familiar continuous, wound/layered sheet texture of a
+rolled papyrus scroll, not a radially-unrolled or otherwise transformed view. **"spiral" in the
+filename describes what's visible in the image (the spiral/rolled structure of the scroll in
+cross-section), not a special projection** — there is no evidence these are anything other than
+plain axial slices. We could not identify which specific viewer tool produced them (no embedded
+software tag in the PNGs, no reference found elsewhere in the repo); the flip is most simply
+explained by that viewer displaying image row 0 at screen-bottom or applying its own horizontal
+mirroring, a common convention mismatch between viewers and array-index space — but this is an
+inference, not a confirmed mechanism.
 
-## Held-out result (n = 1 slice, z=6000) — NEGATIVE: the detector did not generalize
+**Full-resolution, edge-only overlays (not filled blobs — a thin edge line on/off a crack is much
+easier to judge by eye than a filled blob's boundary) for all 3 held-out slices, at native
+level-0 resolution, corrected orientation:** served at
+`https://192.168.0.18:8090/experiments/img/ink_transfer/mush_detector_v2/edge_overlay_FULLRES_z{2000,6000,9000}.png`
+(local path `/mnt/raid10T/experiments/ink_transfer/mush_detector_v2/`).
 
-**🔴 This prototype did not learn a useful mush detector in the time given.** On the held-out
-slice (z=6000, 16,804,648 judged pixels inside the papyrus cross-section, 990,702 of them "paint
-present" at the 0.1 stretched-label threshold):
+## Label binarization: a labelling mistake, now corrected
 
-| | model | CT intensity (untrained) | 7×7 local variance (untrained) |
+**The user corrected a second thing: the translucent paint was a mistake, not intentional soft
+confidence.** The paint was meant to be opaque; round 1/2's "stretch alpha to [0,1] and treat as
+a continuous confidence" was wrong. **Round 3 binarizes: any painted pixel (alpha > 0) = 1,
+everything else = 0.** This also fixes a real consequence of the old approach: under the
+continuous stretch, faint strokes (low alpha, e.g. anti-aliased stroke edges or a light touch)
+contributed almost nothing to the training loss (target ≈ alpha/alpha_max ≈ 0.01–0.05); under
+binarization every painted pixel, faint or heavy, gets full weight.
+
+Painted-pixel counts, before (soft target > 0.5 under the old stretch — i.e. only the "confident"
+core under the old scheme) vs after (binarize, alpha > 0 — everything the pen touched) binarizing
+also flips the correct side of the slice:
+
+**Correction to the original framing:** the *set* of pixels counted as "painted" has not changed
+— every round has always used `alpha > 0` to mean "the pen touched this pixel" (9 slices,
+screenshot-resolution painted-pixel counts 137,571–641,630 px, resampled to 1,139,735–5,315,556 px
+at level-0 resolution — the ~8.3× growth is purely the resampling from coarse screenshot pixels to
+fine level-0 voxels, not a count change). **What actually changed is the TARGET VALUE each of
+those pixels gets**: round 1/2 assigned `alpha/alpha_max` (so a faint stroke, alpha≈5 of a
+slice's max≈191, got target ≈0.03 — a loss weight 30× weaker than a solid stroke); round 3
+assigns every one of them target `1.0`, flat. **Checked by eye**: the full-res edge overlays
+above are computed from the BINARY mask, and their edges do trace faint, light strokes (visible
+in the original screenshots as barely-there pencil-thin lines) at full strength — something a
+round-1/2 soft-label render would have shown only as a near-invisible, pale pink line.
+
+| z | NCC | painted px (screenshot res, alpha>0) | painted px (level-0 res, after resample+binarize) |
 |---|---|---|---|
-| AUC @ threshold 0.1 | **0.4915** | 0.4758 | 0.4683 |
+| 2000 | 0.892 | 505,180 | 4,185,366 |
+| 3000 | 0.914 | 562,854 | 4,663,638 |
+| 4000 | 0.910 | 641,630 | 5,315,556 |
+| 5000 | 0.897 | 391,570 | 3,244,466 |
+| 6000 | 0.907 | 166,360 | 1,378,133 |
+| 7000 | 0.914 | 255,875 | 2,119,772 |
+| 8000 | 0.922 | 243,516 | 2,017,464 |
+| 9000 | 0.920 | 137,571 | 1,139,735 |
+| 10000 | 0.922 | 245,245 | 2,031,384 |
 
-| | model | predict-zero baseline |
+## Judged region: two numbers, not one (unchanged reasoning from round 2)
+
+Round 2 noted that scoring against the whole papyrus cross-section assumes the annotator reviewed
+the entire slice, which is not demonstrated — if they only looked closely where they ended up
+painting, unpainted papyrus elsewhere is simply unjudged. Round 3 keeps reporting **both**:
+`whole_material` (the full `CT > 5` region) and `band_800um_around_paint` (within 800 µm of any
+painted pixel in that slice).
+
+## Context fix: a 2-channel, wider-receptive-field model, compared against the small one
+
+**The user's second correction: mush is a regional texture (crumpled, collapsed layers), and the
+model needs several mm of context, not ~50–100 px.** Two models are trained and compared:
+
+- **`small`** — round 2's architecture unchanged: 3 downsample levels, single-channel
+  (fine-resolution only) input.
+- **`wide`** — a 2-channel input (the same fine 512×512 crop at 9.362 µm/px, **plus** a second
+  channel built from a 2048×2048 px window (≈19.2×19.2 mm) centred on the same location,
+  average-pooled 4× down to 512×512 — i.e. the network sees both the native-resolution patch and
+  a ~19 mm regional view at every forward pass), 4 downsample levels, and a dilated-convolution
+  bottleneck (dilation 2 then 4) on the fine path for extra spatial reach beyond the pooling
+  alone. **Not attempted: 2.5-D (neighbouring z-slices)** — one of three options offered; skipped
+  for time, the 2-scale input was judged the more direct fix for "regional texture."
+
+**Both fixes from round 2 are kept: BatchNorm2d (not InstanceNorm2d) and per-slice input
+normalisation.** Round 3 adds one more: **overlapping-tile inference with a 2-D Hann blend
+window** (stride 256 against a 512 tile, i.e. 50% overlap, weighted-averaged) — this removes any
+*remaining* tile-seam, on top of BatchNorm already removing the main source of it, so the output
+is a genuine per-pixel heatmap at native input resolution with no block structure.
+
+**Measured receptive field** (backprop of a center-output-pixel delta through a zero input;
+reported as the bounding box of non-zero input gradient, in px and physical mm using the fine
+channel's 9.362 µm/px pitch):
+
+| model | RF (px) | RF (mm) |
 |---|---|---|
-| soft MSE (judged region) | **0.0491** | 0.0217 |
+| `small` | 101 × 101 | 0.95 × 0.95 |
+| `wide` | 441 × 453 | 4.13 × 4.24 |
 
-AUC is at chance (0.49–0.50 across all three arms), and the trained model's soft-MSE is **worse**
-than trivially predicting zero everywhere — the single clearest failure signal in this report.
-Training: 1,450 steps / 421 s / 80 patches from 8 slices, throughput ~7.2 MVox/s on one RTX 4060
-Ti. The AUC threshold (0.1 of the stretched label) is used only to get one comparable number for
-this table; **the model itself was never trained against a threshold.**
+The wide model's measured RF (4.2 mm) is ~4.5× the small model's (0.95 mm), as intended, and sits
+comfortably in "several mm" — the physical scale the user named for a crumpled/collapsed-layer
+texture. (This measures the fine-channel RF only; the context channel additionally gives every
+output pixel a coarse view of the full 19.2 mm window regardless of conv RF, since that window is
+average-pooled down to the context channel's full extent before the network ever sees it.)
 
-**What the prediction actually looks like, and why it likely failed**
-(`sample_predictions/heldout_z6000_label_vs_prediction.png`, label left / prediction right;
-`sample_predictions/other_PHerc0211_z4000_prediction.png`): the model fires broadly on the
-papyrus/background **boundary** rather than on the mush texture inside the sheet stack, and shows
-a visible 512-px checkerboard — a tiling artifact from `InstanceNorm2d` normalising each 512×512
-inference tile independently, so adjacent tiles see different local statistics. Combined with the
-small training set (80 patches, 8 slices, no held-out validation during training to catch this),
-the most likely explanation is **severe underfitting of the real texture signal and overfitting
-to patch-edge / material-boundary cues** — not a sign that mush is undetectable, just that this
-quick attempt did not detect it. A slower, better-resourced attempt should: batch-normalize across
-the whole image rather than per-tile (or use GroupNorm/no norm with overlap-blended tiling), use
-far more than 80 training patches, and validate during training rather than only at the end.
+## Held-out results (n = 3 slices, low/mid/high z), small vs wide — 🟢 NO LONGER AT CHANCE
+
+**The orientation and label fixes worked.** Every held-out slice, both models, both judged
+regions: AUC is well above chance and well above both untrained baselines — a complete reversal
+from round 1's 0.49 (chance) / round 2's un-run state.
+
+| z | model | whole_material AUC | vs CT-intensity | vs local-variance | band-800µm AUC | n px (material) | n px (band) | n positive px |
+|---|---|---|---|---|---|---|---|---|
+| 2000 (low) | small | **0.699** | 0.380 | 0.416 | 0.650 | 11,302,896 | 6,442,695 | 4,167,032 |
+| 2000 (low) | wide | **0.721** | 0.380 | 0.416 | 0.664 | 11,302,896 | 6,442,695 | 4,167,032 |
+| 6000 (mid) | small | **0.683** | 0.489 | 0.563 | 0.706 | 16,804,648 | 3,134,276 | 1,375,839 |
+| 6000 (mid) | wide | **0.667** | 0.489 | 0.563 | 0.619 | 16,804,648 | 3,134,276 | 1,375,839 |
+| 9000 (high) | small | **0.820** | 0.493 | 0.602 | 0.714 | 15,693,795 | 2,904,541 | 1,138,868 |
+| 9000 (high) | wide | **0.806** | 0.493 | 0.602 | 0.613 | 15,693,795 | 2,904,541 | 1,138,868 |
+
+Mean whole-material AUC across the 3 held-out slices: **small 0.734, wide 0.731** — essentially
+tied. Mean band-region AUC: **small 0.690, wide 0.632** — small slightly ahead. **The wider
+receptive field (4.2 mm vs 0.95 mm) did not clearly help in this round, within this training
+budget** (`wide` trained 2,501 steps / 7,503 patches in 360 s vs `small`'s 1,596 steps / 9,576
+patches in 300 s — the context channel's extra compute per step bought `wide` fewer total patches
+seen, which may be masking any benefit from the larger RF; this was not controlled for and is a
+real confound, stated rather than hidden). Soft-MSE: both models beat the predict-zero baseline on
+2 of 3 slices (z2000, z9000) and are within noise of it on z6000 (0.085 vs 0.082 baseline) — AUC is
+the more informative number here since soft-MSE at a ~8% positive rate is easily dominated by the
+baseline's conservative near-zero output.
+
+**What the prediction looks like now** (`heldout_z{2000,6000,9000}_{small,wide}_label_vs_prediction.png`,
+served below): a visibly different picture from round 1, and the two models differ from each
+other in an important way neither the AUC table nor the RF number shows:
+
+- **`small`**: background (outside the papyrus) stays correctly dark/low-probability, and the
+  in-material heatmap visibly concentrates on disturbed-layer texture — including, on z9000,
+  clearly echoing the shape of the actual painted mush region on the right side of the slice. The
+  round-1 tile-seam checkerboard is gone (BatchNorm2d fixed the main cause; round 3's
+  overlap-blended Hann-window inference is the second layer of defence).
+- **🔴 `wide`: the background fires almost uniformly high, with a visible rippled/mesh artifact**
+  radiating from the material boundary into the black (air) region — see the same image, right
+  panel. This does **not** affect the AUC/soft-MSE numbers above (every score is computed only
+  inside `whole_material` or `band_800um_around_paint`, both strictly inside the papyrus, never
+  over background), but it means **the wide model's raw, un-masked output is not a trustworthy
+  heatmap as-is** — only the small model's is. Likely cause: training crops were sampled with a
+  material-bbox bias (`sample_crop_center`), so the network rarely or never saw an all-background
+  512×512 crop during training, and the extra 2048×2048 context window makes an all/mostly-background
+  input even more unlike anything in its training distribution, which the ripple pattern (several
+  overlapping out-of-distribution tile responses blended together) is consistent with. **This is
+  reported, not fixed** — the honest fix (background-only training crops, or masking the input to
+  material before the forward pass) is future work, not done here.
+
+## Checkpoints and predictions, all saved
+
+**Both BEST (lowest tracked validation soft-MSE during training, checked every 150 steps against
+a fixed held-out sample) and LAST checkpoints are saved**, for both models:
+`{small,wide}_{BEST,LAST}.pt` (not pushed to the branch — see "Not included" below, local only).
+**Every held-out and sample-scroll prediction is saved** to the served directory:
+`https://192.168.0.18:8090/experiments/img/ink_transfer/mush_detector_v2/` —
+`heldout_z{2000,6000,9000}_{small,wide}_label_vs_prediction.png`,
+`other_{PHerc0211,PHerc0191,PHerc1203,PHerc0172}_z{…}_prediction_small.png`, the full-resolution
+edge-alignment overlays above, and `sweep_montage_l0_small_mush_probability.png`.
 
 ## Full-volume sweep & cross-scroll samples
 
-`sample_predictions/` holds PNG overlays (red = predicted mush probability) for the held-out
-slice, a montage of the sparse full-z sweep, and 3 sample slices each from PHerc0211, PHerc0191,
-PHerc1203 and PHerc0172. **The cross-scroll predictions are completely unvalidated** — there is
-no mush label on any of those four scrolls, so treat them as "what the model says", nothing more.
+Whole-volume sweep: **full resolution (level-0, 9.362 µm/px), z-stride 100** → 209 slices covering
+PHerc0125's full z = 0..20840. **Run with the `small` model, not `wide`** — a deliberate choice
+made after seeing the wide model's background artifact (above): the sweep is a visual survey, and
+`small`'s heatmap is the trustworthy one. Non-overlapping tiles (not the Hann-blended overlap used
+for held-out scoring) for speed; a faint tile grid is visible on close inspection, an accepted
+quality/time trade-off for an exploratory 209-slice, full-resolution sweep, clearly distinct from
+the tile *artifact* (wrong values, not just a visible seam) that BatchNorm2d fixed in round 2.
+Other scrolls (PHerc0211, PHerc0191, PHerc1203, PHerc0172; unvalidated — no mush label exists on
+them) re-inferred with the small model, same 3 slices each as earlier rounds. **A milder version
+of the wide model's background issue shows up here too**: on a genuinely different scroll (so a
+different CT brightness distribution than PHerc0125, which the per-slice normalisation only
+partly compensates for), the small model's background reads a faint, not a strong, non-zero tint
+(e.g. `other_PHerc0211_z4000_prediction_small.png`) — much less severe than the wide model's
+on-domain artifact, but the same underlying cause (crop sampling never showed the network a
+pure-background tile) is almost certainly still at work. The in-material signal still visibly
+concentrates on disturbed texture on top of that tint.
 
 ## Does a mush mask help anything downstream? (prior work, cited not reproduced)
 
-Two existing analyses (`prior_work/routeA_guard_vs_mush.py`, `prior_work/mush_onsheet.py`, run
-before this session, against the interpolation-based `mush_mask.zarr` — **not** this session's
-trained model) give a first, honest, weak-signal read:
+Unchanged from round 1/2 — uses the prior interpolation-based `mush_mask.zarr`, not any round's
+trained model (that mask was itself built on the UN-flipped, round-1 registration, so it likely
+inherits the same orientation error — flagged here, not re-built, given time budget):
 
-- **Route A grow outcomes inside vs outside mush** (`prior_work/PHerc0125_routeA_guard_vs_mush.json`):
-  n = 1,110 segments inside the mush-labelled z-range and spatially inside mush, n = 8,237 outside.
-  `guard_*` stop reasons are a true zero on both sides (merged segments carry no seed position and
-  can't be classified). The better-powered proxies go the **opposite** way from what "mush is bad
-  for growth" would predict: `efficiency_floor` rate is 12.2% [10.4%, 14.2%] inside vs. 14.1%
-  [13.4%, 14.9%] outside; `interrupted_any` is 2.0% [1.3%, 3.0%] inside vs. 1.4% [1.2%, 1.7%]
-  outside — overlapping or marginal, not a clear effect either direction.
-- **On-sheet lift inside vs outside mush**, one Route B PHerc0125 fit whose z-range overlaps the
-  labelled z-range (`prior_work/PHerc0125_onsheet_mush_vs_outside.json`): n = 419,659 points
-  inside / 5,171,018 outside, 103 vs 115 windings. Lift is 0.0565 [0.0545, 0.0583] inside vs.
-  0.0604 [0.0599, 0.0609] outside — a small, barely-separated difference (mush slightly *lower*
-  lift, as hypothesized, but the gap is ~0.004 and the CIs nearly touch).
+- **Route A grow outcomes inside vs outside mush**: n = 1,110 inside / 8,237 outside.
+  `efficiency_floor` 12.2% vs 14.1%; `interrupted_any` 2.0% vs 1.4% — overlapping/marginal.
+- **On-sheet lift inside vs outside mush**: n = 419,659 inside / 5,171,018 outside. Lift 0.0565
+  vs 0.0604 — small, CIs nearly touching.
 
-**Honest read: using the existing mush mask, there is at most a weak, inconsistent signal that
-mush hurts Route A or Route B outcomes, well short of a clear effect** — and this used the prior
-interpolation-based mask, not this session's (near-chance) model, so it says nothing about
-whether *this* detector would help. Re-running these two scripts against this session's
-`mush_prob_model_sweep.zarr` once that model is actually working would be the natural follow-up.
+**Honest read: at most a weak, inconsistent signal — and now in further doubt**, since the mask
+these numbers were computed against was itself probably mis-oriented. Re-running against a
+corrected mask/model would be the natural follow-up.
+
+## Alignment check, round 1 (superseded — kept for the record)
+
+Round 1 compared the un-flipped registration's silhouette match on z5000 (NCC 0.778) and z2000
+(NCC 0.451) and judged it correct. **That verdict was wrong**, per the flip finding above. Kept
+in `sample_predictions/overlay_z5000.png` / `overlay_z2000.png` as the record of the mistake.
 
 ## Files
 
-- `extract_training_data.py` — reads the registered label PNGs + the CT zarr, builds the
-  training/validation/sweep bundle. Ran on the data-owning host (light I/O only, no GPU).
-- `train_infer.py` — the model, training loop, held-out scoring, and sweep/cross-scroll
-  inference, end to end. Ran on a free lifestar GPU (RTX 4060 Ti). (Has one fixed bug:
-  `numpy.trapz` was removed in numpy>=2.0 and is replaced here with a manual trapezoidal rule.)
-- `resume_infer.py` — the same held-out/sweep/cross-scroll inference, but loading the saved
-  checkpoint instead of retraining; this is literally what produced the numbers below, after the
-  `numpy.trapz` bug surfaced mid-run on the first pass and training did not need repeating.
-- `labels/PHerc0125/` — all 9 hand-painted label PNGs (+ `125-z11000spiral.png`, unpainted) and
-  their original `.xcf` GIMP sources (all < 10 MB), plus `PROVENANCE.json` (author, export
-  method, per-file md5).
-- `sample_predictions/` — the alignment-check overlays and the prediction visuals described
-  above.
-- `results.json` — the held-out numbers and run metadata (seconds, steps, MVox/s), machine-
-  readable.
-- `prior_work/` — earlier scripts and results by the same repo owner, predating this session:
-  `register.py`/`build_mask.py`/`gimp_export_layers.py` (built the labels and the alignment this
-  session checked), `routeA_guard_vs_mush.py`/`mush_onsheet.py` (the downstream-usefulness test
-  cited above) and their 3 result JSONs.
+- `extract_training_data.py`, `train_infer.py`, `resume_infer.py` — round 1 (un-flipped
+  registration, soft labels, InstanceNorm2d). Kept for the record; superseded.
+- `extract_training_data_round2.py`, `train_infer2.py` — round 2 (still un-flipped registration,
+  soft labels; BatchNorm2d, per-slice norm, random-crop sampling, 3-way held-out). **Never
+  executed** — superseded by the orientation-fix correction before it ran; kept for the record.
+- `register_d4.py` — the 8-orientation registration search (coarse for all 8, fine refine for the
+  winner).
+- `extract_training_data_round3.py` — builds round 3's data: corrected (fliplr) registration,
+  binarized labels, band-around-paint masks, full-res edge overlays.
+- `train_infer3.py` — round 3's models (`small`, `wide`), training, receptive-field measurement,
+  overlap-blended (Hann-window) inference, held-out scoring (both models, 3 slices, 2 regions
+  each). Ran on pny (seth@192.168.0.32, Tesla V100-16GB) — lifestar's 4 GPUs were saturated by
+  production (100% util) when round 3 began, so compute moved to pny for this round.
+- `finish_sweep_small.py` — loads the saved `small_LAST.pt` checkpoint and runs the full-res
+  (level-0) 209-slice sweep + the 4 cross-scroll samples with non-overlapping tiles (faster, and
+  the right choice after the wide model's background artifact was found — see above). Run
+  separately from `train_infer3.py` rather than as part of it, after a first attempt at the sweep
+  with the wide model + overlap-blending was killed partway through for being ~70 minutes of
+  projected runtime — a real time-budget decision, stated rather than hidden.
+- `labels/PHerc0125/` — all 19 label PNGs (9 painted + `.xcf` sources, 10 unpainted) +
+  `PROVENANCE.json`.
+- `sample_predictions/` — round 1's (superseded) alignment overlays and prediction visuals.
+- `results.json` (round 1), `results3.json` (round 3 — round 2 has no results file, it was
+  never run) — machine-readable numbers.
+- `prior_work/` — scripts/results predating this session (registration, mask build, the two
+  downstream-usefulness checks — all built on the un-flipped registration).
 
 ## Not included in this branch (too large / local-only)
 
-- The trained checkpoint (`mush_detector_small_unet.pt`, 1.9 MB) and the sparse full-volume
-  probability OME-Zarr it produced (`/mnt/raid7/experiments/mush_labels/PHerc0125/
-  mush_prob_model_sweep.zarr`, level-1 CT 18.72 µm/px, z-stride 260 level-0-z units = 81 planes,
-  **not every z** — a declared time-budget compromise) are local artifacts on the repo owner's
-  fleet, not pushed here. Given the held-out result above, treat the checkpoint as a starting
-  point to debug, not a model to deploy.
+All checkpoints (`{small,wide}_{BEST,LAST}.pt`) and the full-res probability store
+(`/mnt/raid7/experiments/mush_labels/PHerc0125/mush_prob_model_sweep_round3.zarr`, 209 planes,
+one per swept z, ragged-shape so stored as individually-chunked `z{NNNNN}` arrays + a
+`manifest.json` rather than one dense volume) remain local artifacts on the repo owner's fleet;
+every prediction image that matters for review is served instead (links above).
 
 ## What this is not
 
-Not validated against any ground truth beyond the one held-out PHerc0125 slice. Not tuned —
-one architecture, one learning rate, one patch size, chosen quickly to fit the stated time
-budget (~5–10 min train, ~1 min validate, ~5–10 min visuals). Not used for anything downstream
-in production. Offered only as a possible starting point if useful.
+Not validated against any ground truth beyond 3 held-out PHerc0125 slices. Not used for anything
+downstream in production. This round fixed two real, confirmed bugs (orientation, label
+semantics) and two architecture changes (normalisation, context) — whether that combination
+clears "no longer at chance" is reported plainly above, not assumed.

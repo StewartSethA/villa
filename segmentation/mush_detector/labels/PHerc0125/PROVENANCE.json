@@ -186,5 +186,20 @@
     }
    }
   }
- ]
+ ],
+ "unpainted_slices_round3_addition": {
+  "note": "z=11000..20000, step 1000 (10 PNGs). Checked pixel-by-pixel: alpha channel is pinned at 255 (no paint layer possible, flat single-layer screenshots, no .xcf source) and the only non-grayscale pixels are pure yellow (255,255,0) / blue (0,0,255) viewer crosshair furniture in a thin cross pattern -- no paint. Registered (fliplr + scale + translation, same method as the painted 9) for completeness per the task ask, but excluded from training/validation: absence of paint here is not confirmed non-mush, only unannotated.",
+  "files": {
+   "11000": {"file": "125-z11000spiral.png", "md5": "8d48d4cf5f58c8b06eb789a173cd8b71", "size_bytes": null},
+   "12000": {"file": "0125-z12000spiral.png", "md5": "8c1dde8de4b449a2b509fdb1bae5860c", "size_bytes": null},
+   "13000": {"file": "0125-z13000spiral.png", "md5": "bc4ccc3b11b4740a79331d2b5925c1dd", "size_bytes": null},
+   "14000": {"file": "0125-z14000spiral.png", "md5": "8834817e3337cb55728a1f9d6f10a2af", "size_bytes": null},
+   "15000": {"file": "0125-z15000spiral.png", "md5": "7cba0d9fb560fc742b57f3cecf156dae", "size_bytes": null},
+   "16000": {"file": "0125-z16000spiral.png", "md5": "0c6db650ce7680bf1f2a926805618120", "size_bytes": null},
+   "17000": {"file": "0125-z17000spiral.png", "md5": "312258577f7dbd656be836adb2984e07", "size_bytes": null},
+   "18000": {"file": "0125-z18000spiral.png", "md5": "0738e578d33b7bbce12900b37bc95c02", "size_bytes": null},
+   "19000": {"file": "0125-z19000spiral.png", "md5": "c17ad224dba213c41ef8da6bc750243e", "size_bytes": null},
+   "20000": {"file": "0125-z20000spiral.png", "md5": "ac435394af7f43366f09fd9178c6a1b6", "size_bytes": null}
+  }
+ }
 }
