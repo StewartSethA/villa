@@ -1,0 +1,98 @@
+{
+ "scroll": "PHerc0125",
+ "mask_z_valid_range_level0": [
+  2000,
+  10000
+ ],
+ "n_segments_total_with_seed": 20087,
+ "n_excluded_outside_z_range": 10740,
+ "note": "ALL 50 guard_* reasons that occur anywhere in PHerc0125's grow attempts (23 guard_roughness, 27 guard_selfcross_nonzero) are on 'PHerc0125_merged_*' segments, which carry no seed_x/y/z metric (merged segments are not re-seeded) and so cannot be spatially classified inside/outside mush at all -- the guard_*/selfcross/guard_nothing_left comparison below is therefore a TRUE ZERO for every normally-seeded segment, not a null result from low power on those specific reasons. efficiency_floor and interrupted_any are reported as better-powered proxies for 'this seed struggled to grow'.",
+ "inside_mush": {
+  "label": "inside_mush",
+  "n_segments": 1110,
+  "any_guard_stop": {
+   "k": 0,
+   "rate": 0.0,
+   "ci95": [
+    -2.160925595630312e-19,
+    0.0034489643769814306
+   ]
+  },
+  "guard_selfcross_nonzero": {
+   "k": 0,
+   "rate": 0.0,
+   "ci95": [
+    -2.160925595630312e-19,
+    0.0034489643769814306
+   ]
+  },
+  "guard_nothing_left": {
+   "k": 0,
+   "rate": 0.0,
+   "ci95": [
+    -2.160925595630312e-19,
+    0.0034489643769814306
+   ]
+  },
+  "efficiency_floor": {
+   "k": 135,
+   "rate": 0.12162162162162163,
+   "ci95": [
+    0.10368721614169132,
+    0.14216605419764594
+   ]
+  },
+  "interrupted_any": {
+   "k": 22,
+   "rate": 0.01981981981981982,
+   "ci95": [
+    0.013124551456800249,
+    0.029827336854787313
+   ]
+  }
+ },
+ "outside_mush": {
+  "label": "outside_mush",
+  "n_segments": 8237,
+  "any_guard_stop": {
+   "k": 0,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.00046616597994068957
+   ]
+  },
+  "guard_selfcross_nonzero": {
+   "k": 0,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.00046616597994068957
+   ]
+  },
+  "guard_nothing_left": {
+   "k": 0,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.00046616597994068957
+   ]
+  },
+  "efficiency_floor": {
+   "k": 1161,
+   "rate": 0.14094937477236857,
+   "ci95": [
+    0.13360192484012828,
+    0.148631579077724
+   ]
+  },
+  "interrupted_any": {
+   "k": 119,
+   "rate": 0.014447007405608838,
+   "ci95": [
+    0.012087115061122042,
+    0.01725959632330743
+   ]
+  }
+ }
+}

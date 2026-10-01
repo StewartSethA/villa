@@ -1,0 +1,190 @@
+{
+ "scroll": "PHerc0125",
+ "label_kind": "mush",
+ "label_kind_note": "filled blobs = crushed/mushy zones where sheets are indistinct; thin strokes = cracks/tears (seen on z10000, applied to all slices)",
+ "author": "Seth Stewart (repo owner, pygosceles@yahoo.com) -- hand-painted in GIMP",
+ "export_method": "GIMP 3.2.2 batch export, scripts/export.py (Gimp.file_load + per-layer Gimp.file_save), run 2026-09-30",
+ "export_note": "xcf file mtimes below are the export-run copy time (2026-09-30), NOT necessarily the original annotation date -- same caveat label_inventory.json already uses for file_date_basis.",
+ "slices": [
+  {
+   "z_level0_nominal": 2000,
+   "source_xcf": "/home/seth/ScrollPrizeTutorial/data/Scrolls/crushed scroll label/0125-z2000spiral.xcf",
+   "source_xcf_md5": "e14342d2d2a3bc73bf66474a93abeeba",
+   "source_xcf_mtime": 1790823471.2577639,
+   "exported_layers": {
+    "label": {
+     "file": "0125-z2000spiral__label.png",
+     "md5": "14150ec10f57c5d830cad6781bc05a2f"
+    },
+    "ct_screenshot": {
+     "file": "0125-z2000spiral__0125-z2000spiral.png.png",
+     "md5": "b1b348880d71974a6c0df6893d730eaf"
+    },
+    "bg": {
+     "file": "0125-z2000spiral__BG.png",
+     "md5": "e196790bf478e558fbd23615e538da32"
+    }
+   }
+  },
+  {
+   "z_level0_nominal": 3000,
+   "source_xcf": "/home/seth/ScrollPrizeTutorial/data/Scrolls/crushed scroll label/0125-z3000spiral.xcf",
+   "source_xcf_md5": "ec050ee39d706aac9f8d5fe0bb0ecf32",
+   "source_xcf_mtime": 1790823481.4682682,
+   "exported_layers": {
+    "label": {
+     "file": "0125-z3000spiral__label.png",
+     "md5": "6317f6166bb404e0553860a5b0356bd8"
+    },
+    "ct_screenshot": {
+     "file": "0125-z3000spiral__0125-z3000spiral.png.png",
+     "md5": "61fec180c4edbaa112758e8a5b0af524"
+    },
+    "bg": {
+     "file": "0125-z3000spiral__BG.png",
+     "md5": "ca72e4b901efb5e332575c96c67bac07"
+    }
+   }
+  },
+  {
+   "z_level0_nominal": 4000,
+   "source_xcf": "/home/seth/ScrollPrizeTutorial/data/Scrolls/crushed scroll label/0125-z4000spiral.xcf",
+   "source_xcf_md5": "cfe0a8d99476a560e9b4b419133368cb",
+   "source_xcf_mtime": 1790823479.053149,
+   "exported_layers": {
+    "label": {
+     "file": "0125-z4000spiral__label.png",
+     "md5": "34a249cb6431f2a758621caad49f3dce"
+    },
+    "ct_screenshot": {
+     "file": "0125-z4000spiral__0125-z4000spiral.png.png",
+     "md5": "58b51cf9d3606b2a14122f709999068a"
+    },
+    "bg": {
+     "file": "0125-z4000spiral__BG.png",
+     "md5": "aa6351ac8017109ef3bbbfe6482786c1"
+    }
+   }
+  },
+  {
+   "z_level0_nominal": 5000,
+   "source_xcf": "/home/seth/ScrollPrizeTutorial/data/Scrolls/crushed scroll label/0125-z5000spiral.xcf",
+   "source_xcf_md5": "407c8ff2e1e35af90e2ad063172c8b7a",
+   "source_xcf_mtime": 1790823472.8726368,
+   "exported_layers": {
+    "label": {
+     "file": "0125-z5000spiral__Label.png",
+     "md5": "469922153da28f5f66a499a3c20b329c"
+    },
+    "ct_screenshot": {
+     "file": "0125-z5000spiral__0125-z5000spiral.png.png",
+     "md5": "0b392c9b46753f5e3ec76b60e9476394"
+    },
+    "bg": {
+     "file": "0125-z5000spiral__BG.png",
+     "md5": "403ce500ed20cd0185e6f61d8939108a"
+    }
+   }
+  },
+  {
+   "z_level0_nominal": 6000,
+   "source_xcf": "/home/seth/ScrollPrizeTutorial/data/Scrolls/crushed scroll label/0125-z6000spiral.xcf",
+   "source_xcf_md5": "1f30dadefa3c49bf3f65569902211a14",
+   "source_xcf_mtime": 1790823485.287457,
+   "exported_layers": {
+    "label": {
+     "file": "0125-z6000spiral__label.png",
+     "md5": "4081c4dbdc485c9df75a0a025ce47579"
+    },
+    "ct_screenshot": {
+     "file": "0125-z6000spiral__0125-z6000spiral.png.png",
+     "md5": "b9485486f9942fd3cc221322e894af49"
+    },
+    "bg": {
+     "file": "0125-z6000spiral__BG.png",
+     "md5": "b62d0676be9121daf1861a5bafad4283"
+    }
+   }
+  },
+  {
+   "z_level0_nominal": 7000,
+   "source_xcf": "/home/seth/ScrollPrizeTutorial/data/Scrolls/crushed scroll label/0125-z7000spiral.xcf",
+   "source_xcf_md5": "16997c9e280742b1e1135bd2434b9403",
+   "source_xcf_mtime": 1790823488.4556134,
+   "exported_layers": {
+    "label": {
+     "file": "0125-z7000spiral__label.png",
+     "md5": "c7e12dafb651b3bbec852aebe769c519"
+    },
+    "ct_screenshot": {
+     "file": "0125-z7000spiral__0125-z7000spiral.png.png",
+     "md5": "3bcfb5d95794515c21751f00706813aa"
+    },
+    "bg": {
+     "file": "0125-z7000spiral__BG.png",
+     "md5": "c0f8824908dea4b60b6a9e142793052e"
+    }
+   }
+  },
+  {
+   "z_level0_nominal": 8000,
+   "source_xcf": "/home/seth/ScrollPrizeTutorial/data/Scrolls/crushed scroll label/0125-z8000spiral.xcf",
+   "source_xcf_md5": "6ff791f5716de01c5b6666fd52ad7a90",
+   "source_xcf_mtime": 1790823469.534679,
+   "exported_layers": {
+    "label": {
+     "file": "0125-z8000spiral__Label.png",
+     "md5": "4c612dbf2ce2b6ee86aa9fd4244555cb"
+    },
+    "ct_screenshot": {
+     "file": "0125-z8000spiral__0125-z8000spiral.png.png",
+     "md5": "90e1089818b4bf43a7901faad28fa81f"
+    },
+    "bg": {
+     "file": "0125-z8000spiral__BG.png",
+     "md5": "d599fba2304b8994c87c4434976ff15d"
+    }
+   }
+  },
+  {
+   "z_level0_nominal": 9000,
+   "source_xcf": "/home/seth/ScrollPrizeTutorial/data/Scrolls/crushed scroll label/0125-z9000spiral.xcf",
+   "source_xcf_md5": "5c0b8da09c0b1425c8050f8310fdab7b",
+   "source_xcf_mtime": 1790823467.5245795,
+   "exported_layers": {
+    "label": {
+     "file": "0125-z9000spiral__Label.png",
+     "md5": "a696addcb9e5bf624a13d4df195def85"
+    },
+    "ct_screenshot": {
+     "file": "0125-z9000spiral__0125-z9000spiral.png.png",
+     "md5": "5529013eba18cd0a77191ea99e1bf5fd"
+    },
+    "bg": {
+     "file": "0125-z9000spiral__BG.png",
+     "md5": "31729c619bf6c4fb084f813238103993"
+    }
+   }
+  },
+  {
+   "z_level0_nominal": 10000,
+   "source_xcf": "/home/seth/ScrollPrizeTutorial/data/Scrolls/crushed scroll label/0125-z10000spiral.xcf",
+   "source_xcf_md5": "497d9a0b7f05725bb7623e88ae060913",
+   "source_xcf_mtime": 1790823475.407969,
+   "exported_layers": {
+    "label": {
+     "file": "0125-z10000spiral__label.png",
+     "md5": "1efb3f513319c72f66b0c22ef657c157"
+    },
+    "ct_screenshot": {
+     "file": "0125-z10000spiral__0125-z10000spiral.png.png",
+     "md5": "c8bd2545929dc0c051ccbf6eb2ea4357"
+    },
+    "bg": {
+     "file": "0125-z10000spiral__BG.png",
+     "md5": "c1c00cedc81a2863a0c9dffe479345ee"
+    }
+   }
+  }
+ ]
+}

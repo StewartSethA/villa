@@ -1,0 +1,19 @@
+{
+  "held_out_z_level0": 6000,
+  "held_out_ncc": 0.7499212670348581,
+  "pixel_count_judged_material": 16804648,
+  "pixel_count_total_slice": 65271816,
+  "positive_px_at_thresh_0.1": 990702,
+  "soft_mse_model": 0.04913143813610077,
+  "soft_mse_baseline_zero": 0.021669872105121613,
+  "auc_thresh_0.1": {
+    "model": 0.49154110978156357,
+    "ct_intensity_baseline": 0.4758115202525624,
+    "local_variance_7x7_baseline": 0.46829564076010477
+  },
+  "train_steps": 1450,
+  "train_seconds": 421.1,
+  "throughput_mvox_s_train": 7.22,
+  "n_train_patches": 80,
+  "patch_px": 512
+}
