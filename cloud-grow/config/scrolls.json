@@ -1,0 +1,319 @@
+{
+ "_doc": "Per-scroll facts for the data pullers, exported from the source fleet's scroll registry (upstream-sourced fields: open-data bucket listing, villa prizeEligibility.json). `null` = unknown, never a guess. Prediction bytes are the upstream zarr size; normal grids are listed at fetch time (their size is NOT in the registry). Umbilicus files are NOT shipped (local, unvetted by a human): supply your own via config.umbilicus_json.",
+ "_source": {
+  "registry_dir": "src/vesuvius_pipeline/scroll_registry",
+  "fleet_repo_head": "b5a3d44a7cb2ef2492da0b23668ff04fd76b1eac",
+  "exported": "2026-10-06"
+ },
+ "bucket": "s3://vesuvius-challenge-open-data (anonymous, us-east-1)",
+ "scrolls": {
+  "PHerc0125": {
+   "volume_id": "20250821151825",
+   "ct_zarr": "20250821151825-9.362um-1.2m-113keV-masked.zarr",
+   "voxel_um": 9.362,
+   "prediction_zarr": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 22770654343,
+   "umbilicus_md5": "854f7397df45b1bc75f2281408a3560b",
+   "roles": [
+    "first_letters_2027",
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0175A": {
+   "volume_id": "20250521115057",
+   "ct_zarr": "20250521115057-8.640um-1.2m-116keV-masked.zarr",
+   "voxel_um": 8.64,
+   "prediction_zarr": "20250521115057-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 20136804251,
+   "umbilicus_md5": "16e0afcfa9e38c44f0b53720b0edcc42",
+   "roles": [
+    "first_letters_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0175B": {
+   "volume_id": "20250521125822",
+   "ct_zarr": "20250521125822-8.640um-1.2m-116keV-masked.zarr",
+   "voxel_um": 8.64,
+   "prediction_zarr": "20250521125822-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 39692246011,
+   "umbilicus_md5": "aa87e89b401406302442dfb979075a19",
+   "roles": [
+    "first_letters_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0191": {
+   "volume_id": "20250821151635",
+   "ct_zarr": "20250821151635-9.362um-1.2m-113keV-masked.zarr",
+   "voxel_um": 9.362,
+   "prediction_zarr": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 29872896351,
+   "umbilicus_md5": "0556262753cbfb966bf96bcbe405d331",
+   "roles": [
+    "first_letters_2027",
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0211": {
+   "volume_id": "20250821151803",
+   "ct_zarr": "20250821151803-9.362um-1.2m-113keV-masked.zarr",
+   "voxel_um": 9.362,
+   "prediction_zarr": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 19215077179,
+   "umbilicus_md5": "b1dd3b76b62ff96079304c3b40a8b944",
+   "roles": [
+    "first_letters_2027",
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0257": {
+   "volume_id": "20250821151750",
+   "ct_zarr": "20250821151750-9.362um-1.2m-113keV-masked.zarr",
+   "voxel_um": 9.362,
+   "prediction_zarr": "20250821151750-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 21466985611,
+   "umbilicus_md5": "51443e9593e6480509009ebd9745a11c",
+   "roles": [
+    "first_letters_2027",
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0268": {
+   "volume_id": "20251110183117",
+   "ct_zarr": "20251110183117-8.640um-1.2m-116keV-masked.zarr",
+   "voxel_um": 8.64,
+   "prediction_zarr": "20251110183117-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 57622260665,
+   "umbilicus_md5": "8bad42ede4ea2563876abeac6ed622f5",
+   "roles": [
+    "first_letters_2027",
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0306B": {
+   "volume_id": "20250521133212",
+   "ct_zarr": "20250521133212-8.640um-1.2m-116keV-masked.zarr",
+   "voxel_um": 8.64,
+   "prediction_zarr": "20250521133212-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 24717464658,
+   "umbilicus_md5": "9c3f6cab394b3de063b163ef8c98471b",
+   "roles": [
+    "first_letters_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0332": {
+   "volume_id": null,
+   "ct_zarr": null,
+   "voxel_um": null,
+   "prediction_zarr": "20251211183505-surface-20260413222639-surface-m7-L2-th0.2.zarr",
+   "prediction_bytes": 2258086174,
+   "umbilicus_md5": "95e2983aa86ee525774c8feeff526f5f",
+   "roles": null,
+   "needs_explicit_names": true
+  },
+  "PHerc0343": {
+   "volume_id": "20250521140437",
+   "ct_zarr": "20250521140437-8.640um-1.2m-116keV-masked.zarr",
+   "voxel_um": 8.64,
+   "prediction_zarr": "20250521140437-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 27416922944,
+   "umbilicus_md5": "58228dbc0ebd314dc536c369e254c8c1",
+   "roles": [
+    "first_letters_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0358": {
+   "volume_id": "20250821151737",
+   "ct_zarr": "20250821151737-9.362um-1.2m-113keV-masked.zarr",
+   "voxel_um": 9.362,
+   "prediction_zarr": "20250821151737-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 18885945395,
+   "umbilicus_md5": "3ba938618337e62bcaba581b237296c3",
+   "roles": [
+    "first_letters_2027",
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0483A": {
+   "volume_id": "20250521140913",
+   "ct_zarr": "20250521140913-8.640um-1.2m-116keV-masked.zarr",
+   "voxel_um": 8.64,
+   "prediction_zarr": "20250521140913-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 21676316321,
+   "umbilicus_md5": "c5bb4a6d3d8d516472ba6d275f2ca9ef",
+   "roles": [
+    "first_letters_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0483B": {
+   "volume_id": "20251124083638",
+   "ct_zarr": "20251124083638-8.640um-1.2m-116keV-masked.zarr",
+   "voxel_um": 8.64,
+   "prediction_zarr": "20251124083638-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 19932937236,
+   "umbilicus_md5": "f3b2bd2759ac21bb8237cedaad66a311",
+   "roles": [
+    "first_letters_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0490A": {
+   "volume_id": "20250521151210",
+   "ct_zarr": "20250521151210-8.640um-1.2m-116keV-masked.zarr",
+   "voxel_um": 8.64,
+   "prediction_zarr": "20250521151210-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 24509129127,
+   "umbilicus_md5": "14dd1de6fe0330bfe91d19d6a7720aef",
+   "roles": [
+    "first_letters_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0490B": {
+   "volume_id": "20250521151215",
+   "ct_zarr": "20250521151215-8.640um-1.2m-116keV-masked.zarr",
+   "voxel_um": 8.64,
+   "prediction_zarr": "20250521151215-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 15807581749,
+   "umbilicus_md5": "9553cca3e2938be53f732e630e44f47a",
+   "roles": [
+    "first_letters_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0800": {
+   "volume_id": "20250521135224",
+   "ct_zarr": "20250521135224-8.640um-1.2m-116keV-masked.zarr",
+   "voxel_um": 8.64,
+   "prediction_zarr": "20250521135224-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 52426981010,
+   "umbilicus_md5": "c563d849b9336adc9b5ece45de2cce48",
+   "roles": [
+    "first_letters_2027",
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0813": {
+   "volume_id": "20250821151723",
+   "ct_zarr": "20250821151723-9.362um-1.2m-113keV-masked.zarr",
+   "voxel_um": 9.362,
+   "prediction_zarr": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 21723664769,
+   "umbilicus_md5": "fb3ab65cae46be4dca8ffaafac370492",
+   "roles": [
+    "first_letters_2027",
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0826": {
+   "volume_id": "20250821151701",
+   "ct_zarr": "20250821151701-9.362um-1.2m-113keV-masked.zarr",
+   "voxel_um": 9.362,
+   "prediction_zarr": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 12054782251,
+   "umbilicus_md5": "fbabdd496dd6e51c1d9cee76892d75a0",
+   "roles": [
+    "first_letters_2027",
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0846A": {
+   "volume_id": "20250728152254",
+   "ct_zarr": "20250728152254-9.362um-1.2m-113keV-masked.zarr",
+   "voxel_um": 9.362,
+   "prediction_zarr": "20250728152254-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 13474359440,
+   "umbilicus_md5": "1c31f626c9bf2533bd9c7ff958bcaa15",
+   "roles": [
+    "first_letters_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc0846B": {
+   "volume_id": "20250804142305",
+   "ct_zarr": "20250804142305-9.362um-1.2m-113keV-masked.zarr",
+   "voxel_um": 9.362,
+   "prediction_zarr": "20250804142305-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 15710634848,
+   "umbilicus_md5": "1310da21dd8376f26a2f73ed0e7ac3cc",
+   "roles": [
+    "first_letters_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc1203": {
+   "volume_id": "20250820131727",
+   "ct_zarr": "20250820131727-9.362um-1.2m-113keV-masked.zarr",
+   "voxel_um": 9.362,
+   "prediction_zarr": "20250820131727-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 18958184427,
+   "umbilicus_md5": "d408a2b9535b24f71d62ca6a29db4d3a",
+   "roles": [
+    "first_letters_2027",
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc1218": {
+   "volume_id": "20250521120456",
+   "ct_zarr": "20250521120456-8.640um-1.2m-116keV-masked.zarr",
+   "voxel_um": 8.64,
+   "prediction_zarr": "20250521120456-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 18771829343,
+   "umbilicus_md5": "5e749dffcfa9e574a3695586508e559e",
+   "roles": [
+    "first_letters_2027",
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc1447": {
+   "volume_id": "20250521151220",
+   "ct_zarr": "20250521151220-8.640um-1.2m-116keV-masked.zarr",
+   "voxel_um": 8.64,
+   "prediction_zarr": "20250521151220-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 26259595768,
+   "umbilicus_md5": "fd01acafc3e993395b2e82392f244e1f",
+   "roles": [
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHerc1545": {
+   "volume_id": "20250821151648",
+   "ct_zarr": "20250821151648-9.362um-1.2m-113keV-masked.zarr",
+   "voxel_um": 9.362,
+   "prediction_zarr": "20250821151648-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "prediction_bytes": 17979807968,
+   "umbilicus_md5": "f2fce1bf3f7b23fde89fbd888279df87",
+   "roles": [
+    "first_letters_2027",
+    "grand_prize_2027"
+   ],
+   "needs_explicit_names": false
+  },
+  "PHercParis4": {
+   "volume_id": null,
+   "ct_zarr": null,
+   "voxel_um": null,
+   "prediction_zarr": "20260411134726-surface-20260413222639-surface-m7-L2-th0.2.zarr",
+   "prediction_bytes": 23304639752,
+   "umbilicus_md5": "2a6194b182adf1be9850c228af5d125c",
+   "roles": null,
+   "needs_explicit_names": true
+  }
+ }
+}
