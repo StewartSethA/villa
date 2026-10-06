@@ -1,0 +1,39 @@
+{
+ "_doc": "Provenance of code copied from the source fleet repo (ScrollPrizeTutorial). source_md5 = md5 of the file at fleet release_sha; shipped_md5 = md5 of the vendored copy (tests fail if it drifts).",
+ "fleet_release_sha": "e1c069a798c2260c3d6bf85844850898d60bff12",
+ "fleet_branch": "pipeline-unblock-2026-09-24",
+ "exported": "2026-10-06",
+ "files": {
+  "growth_guard.py": {
+   "source_path": "src/vesuvius_pipeline/growth_guard.py",
+   "source_md5": "f7d925e5a753d1fa7274d49077543057",
+   "shipped_md5": "efb7e9f9ed0facd0318ce650f85846b9",
+   "patches": [
+    "geomaps import -> local",
+    ".db.pipeline_db -> .state.pipeline_db (self-test item 11)",
+    "comment-only: fleet host names genericised (phiNN, hostP, hostV)"
+   ]
+  },
+  "geomaps.py": {
+   "source_path": "src/vesuvius_pipeline/stages/geomaps.py",
+   "source_md5": "13e67020046b5d4bb7400b0d1bf9ec4d",
+   "shipped_md5": "09d11f143a4830a258019c10e5378ea2",
+   "patches": [
+    "collapsed(): needs fleet artifact_checks; raises in cloud-grow (flatten-side, unused)"
+   ]
+  },
+  "coverage.py": {
+   "source_path": "src/vesuvius_pipeline/coverage.py",
+   "source_md5": "e6793e13b5d6c462bb46784b71d11a1c",
+   "shipped_md5": "5282a3991258f608d7eb7d79cbabe651",
+   "patches": []
+  }
+ },
+ "ported_not_copied": {
+  "runner.py": "stages/grow.py run_round + grow_segment + _selfx_fail_closed + guard_inputs.build",
+  "seeding.py": "stages/seed.py propose + stages/coverage.py",
+  "scoring.py": "scripts/segment_yield.py measure + stages/grow.py score_checkpoint",
+  "data_fetch.py": "data.py (ensure_volume/ensure_normal_grids/ensure_prediction/_write_meta) re-done over plain HTTPS",
+  "tools/make_portable_kit.sh": "scripts/make_portable_kit.sh copied (md5 3b245110fffec4a6a80eb3ae854efb07), comment-only host-name genericisation"
+ }
+}

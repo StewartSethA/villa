@@ -1,0 +1,5 @@
+numpy>=1.26
+scipy>=1.11
+tifffile>=2023.7
+zarr>=2.16,<3   # tested with 2.18.7 (v2 stores); the bucket's zarrs are v2
+pytest>=8

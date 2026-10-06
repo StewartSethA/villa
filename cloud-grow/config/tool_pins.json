@@ -1,0 +1,11 @@
+{
+  "_doc": "Production tool pins (md5 of the binary). A tool whose md5 differs is a DIFFERENT BUILD: the hub AppImage tracer (06f68444...) gives different areas than the fleet kit (1.668 vs 1.638 cm2 on one seed, source docs/experiments/vast_benchmark_2026-10-06/STATE.md s2), so an unpinned box silently changes geometry. The runner refuses to start on a mismatch unless --allow-unpinned is given, and then ANNOUNCES it and records it in the manifest.",
+  "tools": {
+    "vc_grow_seg_from_seed": {"md5": "b747f7658a21aca5bbb05e08c95e192b", "role": "tracer (fleet-wide portable kit)", "source": "vast_benchmark STATE.md s2 (md5 b747f765 on every host of the benchmark)"},
+    "vc_tifxyz_selfcross": {"md5_prefix": "73800e99", "role": "self-intersection census used by the guard", "source": "selfx_2026-10-06 STATE.md line 23: md5 73800e99... identical on all 9 peers. FULL md5 NOT in the repo docs I read: add it by hand after `md5sum` on a kit you trust; until then only the prefix is enforced."}
+  },
+  "known_other_builds": {
+    "06f684441120ae0de85d1dbaf6349574": "vc_grow_seg_from_seed from the hub's VC3D AppImage (different areas)"
+  },
+  "env": {"LD_LIBRARY_PATH": "<kit>/lib", "requires": "GLIBC >= 2.14, libboost 1.84, opencv 4.12 from the kit's lib/"}
+}

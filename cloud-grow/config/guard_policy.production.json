@@ -1,0 +1,32 @@
+{
+  "_doc": "Growth-guard policy: the LIVE production `pipeline_setting` rows grow.guard.* and grow.input.* of the source fleet, exported READ-ONLY from var/pipeline.db on 2026-10-06 (query: SELECT key,value FROM pipeline_setting WHERE key LIKE 'grow.guard.%' OR key LIKE 'grow.input.%'). Keys are the fleet's own, applied through the unmodified growth_guard.policy_from_db() code path. Any GuardPolicy field NOT listed here takes its dataclass default (see cloud_grow/growth_guard.py). UNVALIDATED against human annotation (D6): see README.",
+  "_source": {"db": "var/pipeline.db (read-only)", "exported": "2026-10-06", "n_rows": 20},
+  "settings": {
+    "grow.guard.enabled": "1",
+    "grow.guard.hosts": "",
+    "grow.guard.merge_pause": "0",
+    "grow.guard.selfcross": "1",
+    "grow.guard.selfcross_min_cells": "1",
+    "grow.guard.selfcross_cut_interior": "1",
+    "grow.guard.selfcross_stop_inherited": "0",
+    "grow.guard.selfcross_hairpin_abort_ratio": "0.66",
+    "grow.guard.quad_flip_enforce": "1",
+    "grow.guard.stretch_enforce": "1",
+    "grow.guard.roughness_enforce": "1",
+    "grow.guard.normal_dev_enforce": "1",
+    "grow.guard.ridge_hit_enforce": "1",
+    "grow.guard.seam_enforce": "1",
+    "grow.guard.wrap_spacing_enforce": "1",
+    "grow.guard.curvature_enforce": "1",
+    "grow.guard.empty_space_enforce": "1",
+    "grow.guard.flatten_feedback_enforce": "1",
+    "grow.input.use_prediction": "1",
+    "grow.input.spaceline_always": "1"
+  },
+  "_cloud_notes": {
+    "overlap": "GuardPolicy.overlap defaults True but needs the hub's neighbour feed (cover); with cover=None the criterion is SKIPPED (announced in the round summary), as on a peer without the feed.",
+    "flatten_feedback": "reads flatten attempts; none exist on a cloud box, so it is inert (checked=0).",
+    "selfcross_fail_closed": "dataclass default True; NOT overridden. A round whose selfx check cannot run is held back and the grow pauses.",
+    "merge_pause": "0 in production; needs the hub neighbour feed."
+  }
+}
