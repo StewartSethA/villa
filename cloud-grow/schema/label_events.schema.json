@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "vpipe-label-event/1",
+  "description": "ONE append-only event of the vetting/painting tool. Labels are a log, never a table: current state of (segment, channel, vertex) = the LAST event covering it; undo = a later event. Absence of events = 'unknown' = masked out of every loss, metric, leaderboard and gate. No field anywhere may require a label. Painting one channel never implies or erases another. Nothing here is validated against human annotation until accepted/rejected proposals have been aggregated (D6).",
+  "type": "object",
+  "required": ["schema", "event_id", "t_utc", "who", "tool", "seg", "checkpoint", "channel", "state", "region"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "vpipe-label-event/1"},
+    "event_id": {"type": "string", "description": "uuid; events are never edited or deleted"},
+    "t_utc": {"type": "string"},
+    "who": {"type": "string", "description": "human id, or 'auto:<detector>@<version>' for a PROPOSAL"},
+    "tool": {"type": "object", "required": ["name", "version"], "properties": {"name": {"type": "string"}, "version": {"type": "string"}, "git_sha": {"type": "string"}}},
+    "seg": {"type": "string"},
+    "checkpoint": {"type": "object", "required": ["path_md5_tree"], "description": "the exact lattice labelled; vertex indices are only meaningful against it. Re-grown/trimmed lattices need an index remap, never a silent reuse.", "properties": {"path_md5_tree": {"type": "string"}, "shape": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2}}},
+    "channel": {"enum": ["good_sheet", "self_crossing", "vacuum", "fold", "sheet_skip", "mushy_low_confidence", "unknown"], "description": "independent channels; extend by adding names, never by overloading one. 'unknown' is an explicit 'I looked and cannot tell' (still masked out)."},
+    "state": {"enum": ["yes", "no", "unknown"], "description": "3-state per vertex/cell. 'unknown' erases nothing in other channels and re-masks this one."},
+    "region": {"type": "object", "required": ["kind"], "properties": {
+      "kind": {"enum": ["vertices", "rects", "polygon_uv", "mask_rle", "proposal_ref", "whole_segment"]},
+      "vertices": {"type": "array", "items": {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2}},
+      "rects": {"type": "array", "items": {"type": "array", "items": {"type": "integer"}, "minItems": 4, "maxItems": 4}},
+      "polygon_uv": {"type": "array"},
+      "mask_rle": {"type": "string"},
+      "proposal_ref": {"type": "object", "properties": {"proposal_id": {"type": "string"}, "detector": {"type": "string"}, "round": {"type": "integer"}}}
+    }},
+    "proposal_response": {"enum": ["accept", "reject", "edit"], "description": "set when this event answers a detector proposal; these events ARE the data that measures detector precision/recall per channel"},
+    "note": {"type": "string"}
+  }
+}
