@@ -109,6 +109,17 @@ def support_from_zarrs(ct_zarr: str, pred_zarr: str | None):
     return (p4 > PRED_TH) & (ct4 > CT_MIN), "prediction"
 
 
+def band_support(support_l4: np.ndarray, zmin: int | None, zmax: int | None) -> np.ndarray:
+    """Restrict seeding to the level-0 z band [zmin, zmax) (fleet sharding: boxes of one scroll get disjoint bands so no two
+    boxes seed the same region). Returns a copy; cells outside the band are unsupported. FACTOR = level-4 -> level-0."""
+    out = support_l4.copy()
+    if zmin is not None:
+        out[: max(0, int(zmin) // FACTOR)] = False
+    if zmax is not None:
+        out[max(0, int(zmax) // FACTOR):] = False
+    return out
+
+
 def propose(support_l4: np.ndarray, cov_l4: np.ndarray, shape0, count: int = 1, min_sep: float = 250.0,
             rng_seed: int | None = None, exclude=None, blocked=None, near_sep: float = NEAR_SEP,
             verify=None) -> list[Seed]:

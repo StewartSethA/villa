@@ -10,6 +10,7 @@ Mutation check: `python -u tests/mutants.py` (~10 min; applies one mutant at a t
 | `test_runner_seeding.py` | 2-round grow with the REAL guard code and fake tools: resume continues generations, D3 re-run resumes (never re-seeds), peak RSS recorded, fail-closed on selfx failure (pause + marker + alert), tracer failure surfaced, missing inputs, newest-checkpoint-by-mtime, config typo; seeding: avoids coverage/edges, separation, gap-seed rejection, provenance |
 | `test_export_import.py` | manifest fields, pack (no cache_root, secret refusal), importer PASS/REFUSED: tamper, unlisted file, area overclaim (guard-written), hub selfx contacts, selfx unrunnable (fail closed), skip-selfx never passes, unpinned tool, D3 shrink, tar sha mismatch, path traversal, voxel conflict, `selfx_unverified.json`; dry-run writes nothing; re-import is a no-op; CLI exit codes |
 | `test_data_preflight_cost.py` | level planning (no L0), preview before download, resume of a `.part`, skip of verified files, corrupt/truncated remote never kept nor marked complete, meta.json, preflight per-failure flags, cost arithmetic |
+| `test_provision.py` | fleet plan/shards/cost, interlocks, secret redaction, adapters, watchdog judgement, box probe, collect+checksum+import, deploy loop with a FAKE provider (leftover instance = exit 4, tripwire, abort) |
 | `test_vendored.py` | vendored files unedited (md5), guard API surface, no fleet imports left |
 
 ## Seen failing first (D16)
@@ -27,3 +28,6 @@ Limits: 20 hand-picked mutants on the logic that guards correctness, not a cover
 * `python -m cloud_grow seed|grow|pack` was smoke-run ONCE by hand with the fake tools on a synthetic CT zarr (2 seeds, 2 segments grown, 2 tarballs of ~0.01 MB); it is not a pytest and seeding on real level-4 arrays is untested.
 * Cross-box determinism (same area on another CPU) and resume rounds at a 256 MB grid cache: not measured.
 * Hub integration: registration is JSONL + sidecar files (+ optional INSERT-only sqlite table). Wiring those rows into the fleet's `pipeline_db`/scheduler is NOT done (it lives in the fleet repo).
+
+## provision/ mutation result (2026-10-06)
+15 provision/watchdog/deploy mutants (`python -u tests/mutants.py provision: watchdog: deploy:`): first run 11/15 killed; the 4 survivors were TEST gaps (the two --yes/FLEET_EXECUTE interlock tests passed via the other interlock or the missing-env error; redaction lived in the runners, which the fake bypassed; the dead-man assertion matched an echo line). Tests fixed, all four then killed (interlocks, redaction, dead-man switch re-run: 4/4). The other 11 were killed first time. Fakes only: no provider command has ever run live.

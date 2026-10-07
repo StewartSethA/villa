@@ -90,6 +90,7 @@ def cmd_seed(a) -> int:
     import zarr
     cov_dirs = [os.path.join(r, d) for r in _ckpt_roots(cfg) for d in os.listdir(r)] if os.path.isdir(os.path.join(cfg.workdir, "segments")) else []
     sup, src = SD.support_from_zarrs(cfg.ct_zarr, cfg.prediction_zarr or None)
+    sup = SD.band_support(sup, a.zmin, a.zmax)
     cov = SD.coverage_mask(sup.shape, cov_dirs)
     shape0 = zarr.open(cfg.ct_zarr, mode="r")["0"].shape if os.path.isdir(os.path.join(cfg.ct_zarr, "0")) else tuple(s * SD.FACTOR for s in sup.shape)
     excl = [(r["x"], r["y"], r["z"]) for r in db.execute("SELECT x,y,z FROM seed")]
@@ -176,7 +177,9 @@ def main(argv=None) -> int:
     f.set_defaults(fn=cmd_fetch)
     c = sub.add_parser("check-tools"); c.add_argument("--kit"); c.add_argument("--allow-unpinned", action="store_true"); c.set_defaults(fn=cmd_check_tools)
     s = sub.add_parser("seed"); s.add_argument("--config", required=True); s.add_argument("--count", type=int, default=8)
-    s.add_argument("--min-sep", type=float, default=250.0); s.add_argument("--rng-seed", type=int, default=None); s.set_defaults(fn=cmd_seed)
+    s.add_argument("--min-sep", type=float, default=250.0)
+    s.add_argument("--zmin", type=int, default=None, help="level-0 z band start (fleet shard)"); s.add_argument("--zmax", type=int, default=None, help="level-0 z band end (exclusive)")
+    s.add_argument("--rng-seed", type=int, default=None); s.set_defaults(fn=cmd_seed)
     g = sub.add_parser("grow"); g.add_argument("--config", required=True); g.add_argument("--parallel", type=int, default=1)
     g.add_argument("--segs", nargs="*"); g.add_argument("--allow-unpinned", action="store_true")
     g.add_argument("--regrow-resume", action="store_true", help="re-enter segments that already have an outcome (resumes, D3)")

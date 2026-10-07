@@ -1,0 +1,17 @@
+{
+  "_doc": "Copy OUTSIDE git, edit. Holds NO secrets and (outside git) your real hosts. $/h and passmark are YOUR numbers: check live prices.",
+  "name": "grow358-a",
+  "provider": "aws",
+  "region": "us-east-2",
+  "scrolls": [{"scroll": "PHerc0358", "boxes": 2, "z_extent": [0, 14000], "seeds_per_batch": 16}],
+  "box": {"cores": 96, "grows": 96, "ram_gb": 384, "disk_gb": 400, "passmark_st": 2696, "usd_per_hour": 2.5, "grid_cache_bytes": 17179869184},
+  "spend_cap_usd": 120,
+  "deadline_utc": "2026-10-20T00:00:00Z",
+  "aws": {"ami": "ami-REPLACE", "instance_type": "c7a.48xlarge", "key_name": "REPLACE", "security_group_id": "sg-REPLACE", "vcpus": 192},
+  "ssh_user": "ubuntu",
+  "ssh_key_path": "~/.ssh/REPLACE",
+  "upload": {"kind": "s3", "dest": "s3://REPLACE-bucket/grow358-a", "env_vars": {"AWS_ACCESS_KEY_ID": "CG_WRITE_KEY_ID", "AWS_SECRET_ACCESS_KEY": "CG_WRITE_KEY_SECRET"}, "read_env_vars": ["AWS_ACCESS_KEY_ID"]},
+  "code": {"url": "https://example.invalid/cloud-grow.tgz", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "release_sha": ""},
+  "kit": {"url": "https://example.invalid/vc_kit.tgz", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
+  "import": {"registry": "./remote_registry", "kit_bin": "/path/to/hub/kit/bin"}
+}

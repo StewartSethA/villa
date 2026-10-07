@@ -9,6 +9,8 @@ Cut from the ScrollPrizeTutorial pipeline (fleet release `e1c069a7`, 2026-10-06;
 4. **pulls the data** resume-safely with a size preview (`data_fetch.py`, `scripts/fetch_data.sh`) and checks the box (`scripts/preflight.sh`);
 5. **hub side:** `hub/import_remote_grow.py` verifies an export, RE-MEASURES it and registers it as append-only sidecar rows.
 
+**Fleet of boxes:** `provision/README.md` (push-button deploy, dry-run only, untested live).
+
 ## Quick start (one scroll, one box)
 ```
 pip install -r cloud-grow/requirements.txt                       # numpy scipy tifffile zarr<3 pytest

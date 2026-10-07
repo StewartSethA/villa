@@ -31,6 +31,22 @@ MUTANTS = [
     ("seeding ignores edge margin", "cloud_grow/seeding.py", "if not (EDGE_MARGIN_VOX <= z", "if False and not (EDGE_MARGIN_VOX <= z"),
     ("seeding coverage not dilated by RADIUS_L4", "cloud_grow/seeding.py", "return ndimage.binary_dilation(cov, iterations=RADIUS_L4) if cov.any() else cov", "return cov"),
     ("preflight ram check off", "cloud_grow/preflight.py", "ok = ram_gb is not None and ram_gb >= need_ram", "ok = True"),
+    # ---- provision/ (fleet orchestrator, watchdog, deploy)
+    ("provision: spend cap not required", "provision/plan.py", 'p["spend_cap_usd"] > 0)', "True)"),
+    ("provision: --yes interlock off", "provision/fleet.py", "    if not args.yes:\n        raise FleetError", "    if False:\n        raise FleetError"),
+    ("provision: FLEET_EXECUTE interlock off", "provision/fleet.py", 'if os.environ.get("FLEET_EXECUTE") != "1":\n        raise FleetError', "if False:\n        raise FleetError"),
+    ("provision: secrets not redacted", "provision/fleet.py", 's = s.replace(v, "<REDACTED>")', "s = s"),
+    ("provision: z bands not disjoint", "provision/plan.py", "int(z0 + j * w)", "int(z0)"),
+    ("provision: leftover instances not detected", "provision/fleet.py", "if not ad.verify_empty(o):", "if False:"),
+    ("provision: bootstrap dead-man switch missing", "provision/bootstrap.sh.tmpl", 'shutdown -P +"$HOURS_MIN"', 'true +"$HOURS_MIN"'),
+    ("watchdog: cost tripwire off", "provision/watchdog.py", "if usd >= cap:", "if usd >= cap * 100:"),
+    ("watchdog: restarts on tool drift", "provision/watchdog.py", ' and not pb.get("tool_md5_drift"):\n            if row["restarts"]', ':\n            if row["restarts"]'),
+    ("watchdog: unlimited restarts", "provision/watchdog.py", 'if row["restarts"] < MAX_RESTARTS:', "if True:"),
+    ("watchdog: failure-rate trouble off", "provision/watchdog.py", "failed / tot > FAIL_RATE_TROUBLE:", "False:"),
+    ("deploy: bad checksum imported", "provision/deploy.py", "            if got != want:", "            if False:"),
+    ("deploy: registers without dry-run PASS", "provision/deploy.py", 'if v.get("status") == "PASS":\n            v = import_fn(tar, scroll, False)', "if True:\n            v = import_fn(tar, scroll, False)"),
+    ("deploy: read key == write key allowed", "provision/deploy.py", 'in wk:', "in []:"),
+    ("deploy: quota not checked", "provision/deploy.py", "if have < need:", "if False:"),
 ]
 
 

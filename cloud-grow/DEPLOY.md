@@ -14,3 +14,6 @@ GPU not needed (flatten/render/ink stay on the hub). Linux x86-64, glibc >= 2.14
 
 Failure policy: a failure rate above a few per cent is a stop signal (read the `why` strings in `rounds.jsonl` first). A round whose self-crossing check could not run PAUSES that grow and reverts to the last verified surface (never ships unverified cells); `selfx_unverified.json` marks a raw surface the importer refuses.
 Resume: re-run `grow`; a segment with earlier rounds resumes from its newest checkpoint (by mtime), never re-grows (D3). Cloud resumes of segments grown elsewhere need the checkpoint copied in (hub push), then `--resume`-style by placing it under `segments/<seg>/r<N>/<ckpt>/`.
+
+## Push-button fleet (provision/, 2026-10-06, DRY-RUN-ONLY, untested live)
+Steps 1-7 above for a whole fleet in one command: `provision/deploy.sh PLAN.json --checklist | --dry-run | --smoke --yes | --yes | --abort` (real calls need `--yes` and `FLEET_EXECUTE=1`). Read `provision/README.md` (the honest time/cost answer, what can break, result path) and `provision/RUNBOOK.md`. Run `--smoke` (ONE box, ONE hour) and read the importer's REFUSED reasons (self-crossing rate) before scaling.

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# cloud-grow box bootstrap, rendered by provision/fleet.py (double-at placeholders). Idempotent: re-running resumes.
+# No `set -e` / pipefail (D28): each step reports, later steps check their own prerequisites.
+# Contains NO hub token and NO ssh key to the hub. The only secret is the WRITE-ONLY upload credential (env file, mode 0600).
+BOX=@@BOX@@; SCROLL=@@SCROLL@@; HOURS_MIN=@@MINUTES@@
+LOG=/var/log/cloud-grow-bootstrap.log; mkdir -p /var/log; exec >>"$LOG" 2>&1
+echo "[bootstrap] $(date -u +%FT%TZ) box=$BOX scroll=$SCROLL horizon=${HOURS_MIN}min"
+export DEBIAN_FRONTEND=noninteractive
+ROOT=/opt/cloud-grow; DATA=/data/vol; WORK=/data/cloud-grow/run1; mkdir -p "$ROOT" "$DATA" "$WORK" /data/cloud-grow/export
+
+# 0. dead-man's switch FIRST: the box ends itself at the spend/deadline horizon even if the watchdog is gone.
+if [ "$(id -u)" = 0 ] && [ -d /run/systemd/system ]; then shutdown -P +"$HOURS_MIN" "cloud-grow horizon"; echo "[bootstrap] shutdown -P +$HOURS_MIN armed";
+else nohup sh -c "sleep $((HOURS_MIN*60)); touch /data/cloud-grow/STOP" >/dev/null 2>&1 & echo "[bootstrap] no systemd/root: STOP file at horizon only (billing continues until 'fleet.py down'!)"; fi
+
+# 1. deps
+if command -v apt-get >/dev/null; then apt-get update -qq; apt-get install -y -qq python3 python3-pip python3-venv tmux rsync curl file ca-certificates >/dev/null; fi
+python3 -m pip install --quiet --break-system-packages awscli 2>/dev/null || python3 -m pip install --quiet awscli
+
+# 2. code + kit, verified by sha256 (never run unverified downloads)
+fetch() { curl -fsSL --retry 5 -o "$1" "$2" && echo "$3  $1" | sha256sum -c - ; }
+fetch /tmp/code.tgz "@@CODE_URL@@" @@CODE_SHA@@ && tar -xzf /tmp/code.tgz -C "$ROOT" || { echo "[bootstrap] FATAL code download/verify failed"; touch /data/cloud-grow/BOOTSTRAP_FAILED; exit 1; }
+fetch /tmp/kit.tgz "@@KIT_URL@@" @@KIT_SHA@@ && mkdir -p /opt/vc_kit && tar -xzf /tmp/kit.tgz -C /opt/vc_kit || { echo "[bootstrap] FATAL kit download/verify failed"; touch /data/cloud-grow/BOOTSTRAP_FAILED; exit 1; }
+CG="$ROOT/cloud-grow"; [ -d "$CG" ] || CG="$ROOT"
+python3 -m pip install --quiet --break-system-packages -r "$CG/requirements.txt" 2>/dev/null || python3 -m pip install --quiet -r "$CG/requirements.txt"
+
+# 3. credentials: write-only upload key only. Never the hub token or any key to the hub.
+umask 077
+cat > /etc/cloud-grow.env <<'ENVEOF'
+@@UPLOAD_ENV@@
+ENVEOF
+umask 022
+
+# 4. tool pin gate + data (only this scroll's prediction+grids+CT levels 1..5; level 0 NOT fetched)
+cd "$CG"
+PYTHONPATH="$CG" python3 -m cloud_grow check-tools --kit /opt/vc_kit/bin || { echo "[bootstrap] FATAL tool pin gate"; touch /data/cloud-grow/BOOTSTRAP_FAILED; exit 1; }
+PYTHONPATH="$CG" python3 -m cloud_grow fetch --scroll "$SCROLL" --dest "$DATA" --what all --yes ; echo "[bootstrap] fetch rc=$?"
+
+# 5. run.json (paths resolved by the data fetch's meta; override-able in /data/cloud-grow/run.override.json)
+cat > /data/cloud-grow/run.json <<'RUNEOF'
+@@RUN_JSON@@
+RUNEOF
+PYTHONPATH="$CG" python3 -m cloud_grow.preflight --config /data/cloud-grow/run.json --grows @@PARALLEL@@ ; PF=$?
+echo "[bootstrap] preflight rc=$PF"
+[ "$PF" = 0 ] || { touch /data/cloud-grow/BOOTSTRAP_FAILED; echo "[bootstrap] preflight FAILED: not starting the runner"; exit 1; }
+
+# 6. runner + uploader under systemd with MemoryMax (tmux/nohup fallback). Restart=on-failure: preemption/reboot resumes (D3).
+cp "$ROOT/provision/box_loop.sh" /usr/local/bin/cg-box-loop.sh 2>/dev/null || cp "$CG/provision/box_loop.sh" /usr/local/bin/cg-box-loop.sh
+cp "$CG/provision/box_probe.py" /usr/local/bin/cg-box-probe.py
+chmod +x /usr/local/bin/cg-box-loop.sh
+if [ -d /run/systemd/system ]; then
+cat > /etc/systemd/system/cloud-grow.service <<UNIT
+[Unit]
+Description=cloud-grow runner ($BOX)
+[Service]
+EnvironmentFile=/etc/cloud-grow.env
+Environment=CG=$CG BOX=$BOX CLOUD_GROW_ALERT_LOG=/data/cloud-grow/alerts.jsonl
+ExecStart=/usr/local/bin/cg-box-loop.sh
+Restart=on-failure
+RestartSec=30
+MemoryMax=@@MEMORY_MAX@@
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload; systemctl enable --now cloud-grow.service; echo "[bootstrap] systemd runner started rc=$?"
+else
+CG="$CG" BOX="$BOX" CLOUD_GROW_ALERT_LOG=/data/cloud-grow/alerts.jsonl nohup /usr/local/bin/cg-box-loop.sh >>/data/cloud-grow/runner.out 2>&1 &
+echo "[bootstrap] nohup runner started (NO MemoryMax: no systemd)"
+fi
+echo "[bootstrap] done $(date -u +%FT%TZ)"
