@@ -3,7 +3,7 @@
 # height on the scrolls the main run has completed (user 2026-10-08: "The box should automatically start narrower stripes if idle").  Reuses the tested box8 scheduler:
 # each pass is an ordinary `routeB_run.sh --mode box8` in its OWN home (<main>_alt_h<H>) with the main run's environment symlinked in, so nothing in the main run is touched.
 # Mutual exclusion with the main run is box8's own foreign-VRAM check: a GPU that holds another process's fit is skipped (and the main run skips alt's).
-#   env: ROUTEB_HOME (main, default /workspace/routeB)  KB_HEIGHTS ("4500 2800")  KB_IDLE_S (180)  KB_POLL (30)  KB_MAX_HOURS (8, per pass)  KB_SOFT/KB_HARD (170/190)
+#   env: ROUTEB_HOME (main, default /workspace/routeB)  KB_HEIGHTS ("4500 2800")  KB_IDLE_S (180)  KB_POLL (30)  KB_MAX_HOURS (30, box lifetime - the budget clock starts at box start)  KB_SOFT/KB_HARD (170/190)
 #        KB_DEADLINE_H (24: no new pass after this many hours since BUDGET_BOX_START)  KB_SCROLLS (default: every scroll the main STATUS.json calls complete)  KB_DRY=1 KB_ONCE=1
 #   stop:  touch <main>_alt/keepbusy.STOP      status:  bash routeB_keepbusy.sh status
 # No `set -e` (repo convention): each step is checked.
@@ -13,7 +13,7 @@ ALT=${KB_HOME:-${MAIN}_alt}
 HEIGHTS=${KB_HEIGHTS:-"4500 2800"}
 IDLE_S=${KB_IDLE_S:-180}
 POLL=${KB_POLL:-30}
-MAXH=${KB_MAX_HOURS:-8}
+MAXH=${KB_MAX_HOURS:-30}   # box-LIFETIME cap (routeB budget clock counts from box start), not per pass
 SOFT=${KB_SOFT:-170}
 HARD=${KB_HARD:-190}
 DEADLINE_H=${KB_DEADLINE_H:-24}
