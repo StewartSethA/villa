@@ -24,7 +24,7 @@ nvidia-smi --query-gpu=index,name,memory.total,memory.used,driver_version,comput
 if [ ! -s gpus.csv ]; then nvidia-smi --query-gpu=index,name,memory.total,memory.used,driver_version --format=csv,noheader | tee gpus.csv; fi
 NG=$(wc -l < gpus.csv)
 CAP=$(head -1 gpus.csv | awk -F', ' '{print $6}')
-DRV_CUDA=$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: *\([0-9.]*\).*/\1/p' | head -1)
+DRV_CUDA=$(nvidia-smi 2>/dev/null | grep -o 'CUDA Version: *[0-9.]*' | head -1 | grep -o '[0-9.]*$')
 say "GPUs: $NG   compute_cap(first): ${CAP:-unknown}   driver CUDA: ${DRV_CUDA:-unknown}"
 FOREIGN=$(awk -F', ' '{gsub(/ MiB/,"",$4); if ($4+0 > 1500) n++} END{print n+0}' gpus.csv)
 [ "$FOREIGN" -gt 0 ] && { say "WARNING: $FOREIGN GPU(s) already hold >1500 MiB (a foreign process, e.g. llama-server)"; }
@@ -32,19 +32,26 @@ FOREIGN=$(awk -F', ' '{gsub(/ MiB/,"",$4); if ($4+0 > 1500) n++} END{print n+0}'
 say "=== 2. LINK (started now) ==="
 URL=https://dl.ash2txt.org/datasets/spiral_datasets/PHerc0191/20250821151635/tracks/PHerc0191_20250821151635_surface_m7_L0_th0.2.dbm
 URL2=https://github.com/StewartSethA/villa/releases/download/routeA-kit-94be1eae/routeA-kit-94be1eae.tar.xz
-T1=$(date +%s.%N)
-for i in 0 1 2 3 4 5 6 7; do
-  S=$(( i * 1000000000 )); E=$(( S + 99999999 ))
-  curl -s -r "$S-$E" --max-time 20 -o "dl/p$i" "$URL" &
-done
-wait
-T2=$(date +%s.%N)
-BYTES=$(cat dl/p* 2>/dev/null | wc -c)
-SEC=$(awk -v a="$T1" -v b="$T2" 'BEGIN{printf "%.2f", b-a}')
-MBS=$(awk -v b="$BYTES" -v s="$SEC" 'BEGIN{printf "%.1f", b/1e6/(s>0?s:1)}')
-say "data host (dl.ash2txt.org): ${BYTES} bytes in ${SEC}s with 8 parallel ranges = $MBS MB/s"
-rm -f dl/p*
-B2=$(curl -sL -o /dev/null -w "%{speed_download}" --max-time 12 "$URL2")
+probe() { # streams, bytes per stream -> prints MB/s (aggregate bytes / wall seconds)
+  rm -f dl/p* 2>/dev/null
+  local n=$1 len=$2 t1 t2 b i S E
+  t1=$(date +%s.%N)
+  for i in $(seq 0 $(( n - 1 ))); do
+    S=$(( i * 120000000 )); E=$(( S + len - 1 ))
+    curl -s -r "$S-$E" --max-time 20 -o "dl/p$i" "$URL" &
+  done
+  wait
+  t2=$(date +%s.%N)
+  b=$(cat dl/p* 2>/dev/null | wc -c)
+  rm -f dl/p* 2>/dev/null
+  awk -v b="$b" -v a="$t1" -v c="$t2" 'BEGIN{d=c-a; if (d<=0) d=1; printf "%.1f", b/1e6/d}'
+}
+M8=$(probe 8 100000000)
+say "data host (dl.ash2txt.org), 8 parallel ranges: $M8 MB/s"
+M64=$(probe 64 40000000)
+say "data host (dl.ash2txt.org), 64 parallel ranges (the real fetcher uses 128 connections): $M64 MB/s"
+MBS=$(awk -v a="$M8" -v b="$M64" 'BEGIN{printf "%.1f", (a>b?a:b)}')
+B2=$(curl -sL -o /dev/null -w "%{speed_download}" --max-time 12 "$URL2")  # one stream: informational only (github is slow on many routes)
 MBS2=$(awk -v b="$B2" 'BEGIN{printf "%.1f", b/1e6}')
 say "second host (github release, 1 stream): $MBS2 MB/s"
 if awk -v m="$MBS" -v min="$MIN" 'BEGIN{exit !(m+0 < min+0)}'; then bad=1; why="$why link $MBS MB/s < $MIN;"; fi
@@ -59,9 +66,24 @@ PY=python3
 $PY -m venv venv >/dev/null 2>&1 || { say "python3 -m venv failed; trying virtualenv/uv"; command -v uv >/dev/null 2>&1 && uv venv venv >/dev/null 2>&1; }
 if [ -x venv/bin/python ]; then PIP="venv/bin/python -m pip"; command -v uv >/dev/null 2>&1 && PIP="uv pip install --python venv/bin/python"; else PIP="$PY -m pip"; fi
 T3=$(date +%s)
-case "$PIP" in uv*) $PIP torch --index-url https://download.pytorch.org/whl/$CU 2>&1 | tail -2 ;; *) $PIP install -q torch --index-url https://download.pytorch.org/whl/$CU 2>&1 | tail -2 ;; esac
-say "torch install took $(( $(date +%s) - T3 )) s (it is also a throughput test: ~2.5 GB)"
-PYV=$PWD/venv/bin/python; [ -x "$PYV" ] || PYV=$PY
+IDX=https://download.pytorch.org/whl/$CU
+tryinst() { say "torch install attempt: $*"; "$@" >> torch_install.log 2>&1; venv/bin/python -c "import torch" >/dev/null 2>&1; }
+: > torch_install.log
+OKT=0
+if command -v uv >/dev/null 2>&1; then
+  tryinst uv pip install --python venv/bin/python torch --index-url "$IDX" && OKT=1
+  [ "$OKT" = 0 ] && tryinst uv pip install --native-tls --python venv/bin/python torch --index-url "$IDX" && OKT=1
+  [ "$OKT" = 0 ] && tryinst uv pip install --system-certs --python venv/bin/python torch --index-url "$IDX" && OKT=1
+fi
+[ "$OKT" = 0 ] && [ -x venv/bin/python ] && tryinst venv/bin/python -m pip install -q torch --index-url "$IDX" && OKT=1
+[ "$OKT" = 0 ] && tryinst $PY -m pip install -q --break-system-packages torch --index-url "$IDX" && { OKT=1; PYV=$PY; }
+say "torch install took $(( $(date +%s) - T3 )) s, success=$OKT (also a throughput test: ~2.5 GB)"
+if [ "$OKT" = 0 ]; then
+  say "TORCH INSTALL FAILED (this is NOT a GPU result). Last lines of torch_install.log:"; tail -12 torch_install.log
+  echo "VERDICT: UNKNOWN for GPUs (torch would not install: see $W/torch_install.log). Link: ${MBS} MB/s (8 streams ${M8}, 64 streams ${M64}). total $(( $(date +%s) - T0 )) s"
+  exit 3
+fi
+[ -n "$PYV" ] || PYV=$PWD/venv/bin/python; [ -x "$PYV" ] || PYV=$PY
 cat > smoke.py <<'PYEOF'
 import sys, time, json
 import torch
