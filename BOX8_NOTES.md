@@ -20,7 +20,7 @@ Box prerequisites (installed by hand once; `routeB_run.sh` fails loud naming whi
 | `assets/<scroll>/dataset/{tracks,lasagna_inputs}` | tracks .dbm 3.9-13.2 GB (MEASURED upstream sizes) + lasagna nx/ny/grad_mag (z-slab 0.25 GB for a smoke; whole z range up to ~7-20 GB) | ~20-30 GB per scroll -> ~0.6 TB for 21 scrolls |
 | `runs/<scroll>/<tag>/fit/` | fit outputs: meshes ~0.56 GB for a full fit (MEASURED, f0211_full), checkpoints (<= ~15 MB each), `cache/` (UNMEASURED) | ~1-2 GB per fit |
 | `runs/<scroll>/<tag>/tiled/` | tile tifxyz | 0.22 GB for a full fit (MEASURED) |
-| `box8/payload/<scroll>/` | hardlinks of the payload files (no extra space) + `PAYLOAD.json` md5 manifest + `DONE` | = the payload (~0.8 GB per full fit) |
+| `out/<scroll>/<tag>/` | ONE directory for everything downloadable: hardlinks of the payload files (no extra space) + `PAYLOAD.json` md5 manifest + `DONE`, written when each stripe finishes; `out/<scroll>/{SCROLL.json,DONE}`, `out/routeA/...`, `STATUS.json`, `ALLDONE.json` (`box8/payload` is a symlink to it) | = the payload (~0.8 GB per full fit) |
 | `box8/{state,logs,budget,events.jsonl}` | resumable state + ledgers | MB |
 Total expected < 1 TB; 12 TB leaves a large margin, so the only disk guard is `--min-free-gb` (default 200): no new fit is admitted below it. Ink/flatten/render are NOT part of box8 mode (render layers are 3.1 GB per tile, plan doc risk 1).
 
@@ -37,14 +37,16 @@ No flatten/render/ink (that is the shakedown's stage 3 and the fleet's job), no 
 Precedence: built-in defaults < `--budget-config FILE.json` < `BUDGET_*` env < CLI flags.
 | setting | default | CLI flag | env | file key |
 |---|---|---|---|---|
-| machine $/h | 2.33 (8xV100) | `--hour-usd` | BUDGET_HOUR_USD | hour_usd |
+| machine $/h | 4.276 (8xA100 40 GB) | `--hour-usd` | BUDGET_HOUR_USD | hour_usd |
+| allocated disk, $ per 16 GB per hour (billed the WHOLE run) | 0.009 | `--disk-usd-per-16gb-hour` | BUDGET_DISK_USD_PER_16GB_HOUR | disk_usd_per_16gb_hour |
+| allocated disk GB | 934 (= $0.525/h; effective rate $4.801/h, soft $45 = 9.4 h, $50 = 10.4 h) | `--disk-gb` | BUDGET_DISK_GB | disk_gb |
 | soft stop (no new fits when the projection reaches it) | $45 | `--soft` | BUDGET_SOFT_USD | soft_usd |
 | hard stop | $49 | `--hard` | BUDGET_HARD_USD | hard_usd |
 | MAX RUN TIME (h since rental start; no launch whose projected end passes it, running fits finish, then the run winds down; 0 = unlimited) | 12 | `--max-run-hours` | BUDGET_MAX_RUN_HOURS | max_run_hours |
 | ingress, box downloads from the web, $/TB | 2.70 | `--ingress-per-tb` | BUDGET_INGRESS_PER_TB | ingress_per_tb |
 | egress, box uploads to us, $/TB | 4.00 | `--egress-per-tb` | BUDGET_EGRESS_PER_TB | egress_per_tb |
 | swap the two directions | off | `--swap-directions` | BUDGET_SWAP_DIRECTIONS=1 | swap_directions |
-RAM/disk guards: `--ram-need-gb` (40), `--ram-floor-gb` (12), `--min-free-gb` (200). Max run time is a launch gate, not a kill: a fit already running is never killed for it.
+RAM/disk guards: `--ram-need-gb` (40), `--ram-floor-gb` (12), `--min-free-gb` (60). Max run time is a launch gate, not a kill: a fit already running is never killed for it.
 
-## Computed stripe height (adaptive fallback) -- model + helpers; NOT yet called by the box8 scheduler
-`routeB/ladder.py`: `computed_height(vram_gib, margin_gib=1.5, span=...)`, `shrink_height()` (0.75x on OOM, grid 100, floor 1000), `record_height()/start_height()` (per-scroll success memory in a json). Model: peak VRAM = 3.97 + 0.00208 GiB x z_slices, a 2-point line (2,800-slice 0191 stripes on a 4060 Ti: 9.6-10.2 GiB, n = 4; 13,000-slice 0211 on a V100-32: ~31 GiB). Cross-check: 13,000 slices OOMed a 15.58 GiB card at iteration 61-77 in 4/4 runs. Per z-slice, not per track, until a third point exists. Wiring into `Scheduler` (replace the fixed `sw2800` rung by start_height -> shrink on OOM -> record on success) is the remaining step.
+## Computed stripe height (adaptive ladder) -- WIRED into the scheduler
+`routeB/ladder.py`: `computed_height(vram_gib, margin_gib=1.5)`, `start_height_for()` (min of span, VRAM model, 2^24-track limit, `--max-height`; a recorded success wins), `decide()` (OOM after its retry -> 0.75x the failed height, grid 100, floor 1000; multinomial -> the track-limit height), `record_height()` -> `box8/heights.json`. Model: peak VRAM = 3.97 + 0.00208 GiB x z_slices, a 2-point line (2,800-slice 0191 stripes on a 4060 Ti: 9.6-10.2 GiB, n = 4; 13,000-slice 0211 on a V100-32: ~31 GiB). On a 40 GB A100 the model allows 16,600 slices, so the whole 13,000-slice scroll goes to one GPU. See `SCHEDULING.md` for the policy, cost model and the parallel-vs-serial answer.

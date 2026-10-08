@@ -47,6 +47,52 @@ marker exists; delete the marker (or the directory) to redo it.
 
 **Tests.** `python -m py_compile` of every module and `bash -n routeB_run.sh` are the floor; the real test is `./routeB_run.sh --scrolls PHerc0211 --smoke` (z 9000-9500) on a GPU box -- watch every stage's log.
 
+## Box8 scheduler (Route B on a rented multi-GPU box) -- tool-neutral guide for any agent or human
+
+**What it is.** `./routeB_run.sh --mode box8` is ONE Python process (`routeB/box8.py`) that plans, then runs a work-stealing scheduler: one worker thread per GPU, each job a
+subprocess (`python -m routeB.box8 job`, `CUDA_VISIBLE_DEVICES=<gpu>`) running `fit_spiral` (resumable checkpoint chain, `routeB/fit.py`) then `tile_windings.py`. Route A grows
+(`routeA_run.sh`) run as a second process tree on the spare cores. Nothing is bound to a GPU; no database; all state is files under `$ROUTEB_HOME`.
+
+**Modules.** `routeB/planner.py` (pure: cost model, simulation, SPT order, LPT tail split, admission/deferral, plan printing), `routeB/ladder.py` (pure: failure classes, retry/descend
+decisions, computed stripe height, 0.75x shrink, `fit_hours`), `routeB/box8.py` (Scheduler: stager, claim/tail split, watchdog, RAM guard, units, monitor, Route A thread),
+`routeB/routea_side.py` (Route A slots/scroll pick/publishing), `deploy_common/budget.py` (governor: ledger, projection, soft/hard caps, disk term), `pull_box8.py` (our side).
+
+**Run it.** Plan only: `ROUTEB_HOME=<dir> ./routeB_run.sh --mode box8 --dry-run` (writes nothing; exit 0 = the plan fits, 3 = nothing fits). Real: same without `--dry-run`. Useful flags:
+`--scrolls A,B` (default: every runnable), `--gpus 0,1`, `--gpu-speed X`, `--no-routea`, `--no-plan`, `--legacy-ladder`, `--smoke`, `--max-height`, `--fetch-files-per-s`, `--free-inputs-on`.
+Stop cleanly: `touch $ROUTEB_HOME/box8/STOP`. Resume: re-run the same command (state in `box8/state/<scroll>.json`; running jobs are re-queued and resume from their last autosave).
+
+**Verify each stage from ARTIFACTS, not exit codes** (a stage worked when its counter/file says so):
+| stage | artifact that proves it | command |
+|---|---|---|
+| env | `$ROUTEB_HOME/env/bin/python -c "import torch,vc_spiral.spiral_sampling"` ok; log line `native vc_spiral importable from the fit cwd` | `tail $ROUTEB_HOME/bootstrap.log` |
+| plan | `PLAN host/budget/limit/scrolls/p50/p90/timeline` lines; every deferral has a reason | `--dry-run` |
+| fetch | `assets/.fetched/_totals.json` bytes_net grows; `events.jsonl` has `stage` then `fetched` per scroll | `grep -c fetched $ROUTEB_HOME/box8/events.jsonl` |
+| GPUs busy | `nvidia-smi --query-gpu=utilization.gpu --format=csv` over a minute (not a process list); `box8/events.jsonl` `launch` rows | |
+| fit | `runs/<s>/<tag>/fit/fit.log` `PROGRESS Optimizing ... it/s`; `.done.fit.json` with `satisfied_track_points` | |
+| tiles | `runs/<s>/<tag>/tiled/manifest.json` n_tiles > 0 | |
+| payload | `out/<s>/<tag>/DONE` + `PAYLOAD.json`; `python3 pull_box8.py --verify-only --dest <copy of out>` | |
+| pull | `PULLED.json` in the unit on the box; `events.jsonl` `released` (inputs deleted, free disk rises) | |
+| budget | `python3 deploy_common/budget.py status $ROUTEB_HOME/box8/budget` (spent, projected, eff $/h) | |
+| Route A | `box8/logs/routeA.log`; `out/routeA/*/DONE` | |
+Flow, not state: compare `out/STATUS.json` job counts across two reads a few minutes apart.
+
+**Failure catalogue (class -> what the scheduler does -> what you do).**
+| class (from fit.log / exit) | scheduler | you |
+|---|---|---|
+| `multinomial` (2^24 tracks; detected in ~5 min from `loaded N tracks`) | kills, re-covers at the track-limit height (never a memory retry) | nothing; check `descended_to` in the state |
+| `oom` (CUDA) | one memory-lean retry (fewer tracks/step), then 0.75x height descent, floor 1,000 slices | if it reaches the floor the scroll is `failed` with reason: smaller `--max-height`, or a bigger card |
+| `host_oom` (RSS guard / SIGKILL) | as oom | lower concurrent fits: raise `--ram-need-gb` |
+| `stall` (no log growth 40 min) | kill, resume once, then descend | `nvidia-smi`, `dmesg`, disk full? |
+| `env` (module/GLIBCXX/no space/driver) | TERMINAL for the job (descending cannot fix the machine) | fix the box, re-run (resumes) |
+| `unknown` | one plain resume then terminal | read `box8/logs/<job>.log` |
+| fetch failed (3 attempts) | the scroll's jobs are `failed`, other scrolls go on | network, `--fetch-parallel`, disk |
+| `STAGING <s> BLOCKED by disk` | waits; announced once per change | pull payloads (`PULLED.json` frees inputs) or `--free-inputs-on done` |
+| `HARD BUDGET STOP` | SIGTERM running fits, finished units stay pullable | pull; raise `--hard` only with the owner's approval |
+| exit code | 0 all done, 1 something failed loudly, 3 plan fits nothing, 4 budget left work unlaunched | |
+
+**Rules for changing it.** Pure logic goes in `planner.py`/`ladder.py` with a unit test using fake GPUs/disks/RAM (`routeB/tests/test_planner.py`); a new constant is a named parameter with
+a source line; run `python -m pytest routeB/tests deploy_common/tests tests` and `python3 deploy_common/branch_scan.py .` before every commit; never `set -e`; never push (the owner does).
+
 ## Route A (guarded grow) -- fragment from its owner
 
 ## Route A (grow) -- agent guide fragment

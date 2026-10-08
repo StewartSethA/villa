@@ -268,7 +268,7 @@ def start_height(path: Path | str, scroll: str, vram_gib: float, span: int, marg
 # GPU-hours of ONE fit_spiral job (30,000 steps) as a function of its z height.  Anchors (all MEASURED, on different cards, so this is a model, not a fit):
 #   full 13,000 slices: PHerc0125 5.99 GPU-h, PHerc0211 7.49 GPU-h (V100 32 GB, n = 1 each; the plan's n=3 range 5.99-13.27 incl. a gap-only run)
 #   2,800-slice stripes: 1.76 h p50 (p10 1.30 / p90 2.54), n = 26 completed fits on the contended 8xV100 box (0125, 5 stripes); and 3.6-3.8 ks = 1.03 h each,
-#     8.6-9.8 it/s, 9.6-10.2 GiB, 0 OOM, n = 4 PHerc0191 stripes on an RTX 4060 Ti 16 GB (lifestar, uncontended) -- a faster-than-V100 per-stripe figure.
+#     8.6-9.8 it/s, 9.6-10.2 GiB, 0 OOM, n = 4 PHerc0191 stripes on an RTX 4060 Ti 16 GB (4060 Ti fleet box, uncontended) -- a faster-than-V100 per-stripe figure.
 # height exponent alpha: t(h) = t_full * (h/13000)^alpha; alpha = ln(7.49/1.88)/ln(13000/2800) = 0.90 from 0125 (5.99 full vs 9.41/5 = 1.88 per stripe).
 # Consequence (printed in the doc): total GPU-h of a split scroll is ~(1+overlap)*5*(2800/13000)^0.9 / 1 = ~1.25x the full-height GPU-h, but wall-clock drops ~5x.
 FULL_SPAN = 13000

@@ -28,3 +28,13 @@ First: read the last 30 lines of the failing stage's log (`routeA_work/logs/`, `
 | `cuModuleLoadData failed with 222` (render) | NVRTC newer than the driver supports | lock pins `nvidia-cuda-nvrtc-cu12==12.6.*`; do not upgrade |
 | `INK FAIL <family>: weights missing` | `models/var/models/<ckpt>` absent | `md5sum -c models/MODELS.md5` |
 | `flatten: collapsed flat` | lasagna flatten did not converge on a degenerate tile | tile is skipped, others continue; inspect `tilework/<tile>/tile.log` |
+| `PLAN: NOTHING FITS` / `DEFERRED <scroll>: p90 plan ...` | the 80 %-of-budget p90 test; the A100 speed is UNMEASURED (assumed = V100) | time one stripe on the box, re-plan with `--gpu-speed X --dry-run`; or `--plan-frac 1.0` / `--no-plan` knowingly |
+| `STAGING <s> BLOCKED by disk` forever, GPUs idle | high-water reached, nothing pulled | run the pull loop; `PULLED.json` releases inputs; or `--free-inputs-on done`, `--disk-high-water 0.9` |
+| GPUs idle for the first hour | the whole-range lasagna fetch (241 k objects per scroll, 58 files/s measured on a loaded host) | `grep fetch box8.log`; raise `ROUTEB_FETCH_WORKERS` (128 default; 256 was slower on pny), or restrict with `--z0/--z1` |
+| `TAIL SPLIT ...` lines | working as designed: fewer jobs than GPUs, scroll split into z-stripes | none |
+| `UNIT PAYLOAD FAILED` | disk full / hardlink across filesystems fails over to copy | free disk; the unit is retried at scroll finalize |
+| `Route A NOT started: 0 slots (...)` | cores/RAM formula leaves nothing | `--routea-slots N`, `--routea-ram-per-grow-gb`, `--no-routea` |
+| `Route A EXITED rc=...` | kit download (GitHub release) or its env failed | `box8/logs/routeA.log`; Route B is unaffected; `KIT_URL=... ./routeA_run.sh` |
+| `budget: REFUSE ... projected $X` | soft cap, or the projected end passes `--max-run-hours` | expected; defers the job (exit 4); raise the cap only with the owner's approval |
+| pull: `VERIFICATION FAILED` | partial/corrupt copy | the pull re-syncs with `--checksum` once; run again; unit is never marked pulled |
+| `ssh` pull `Permission denied` | the box does not have your key | add your public key to the box; the box never needs a key for our side |

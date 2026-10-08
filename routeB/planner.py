@@ -59,7 +59,7 @@ class Host:
     fetch_parallel: int = 8                    # concurrent scroll fetches
     fetch_ahead: int = 2                       # fetched-but-unstarted scrolls kept ready beyond the free GPUs
     pull_latency_h: float = 0.15               # DONE -> pulled+verified (poll interval + transfer) before the inputs are deleted
-    ram_per_fit_gb: float = 40.0               # host RSS per fit 22-40 GB (lifestar/V100 measured)
+    ram_per_fit_gb: float = 40.0               # host RSS per fit 22-40 GB (measured on a 4060 Ti box and a V100 box)
     ram_reserve_gb: float = 30.0
     reserve_cores: int = 4
 
