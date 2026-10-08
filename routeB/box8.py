@@ -128,6 +128,14 @@ def atomic_json(p: Path, obj) -> None:
 
 
 # ------------------------------------------------------------------------------------------------ scheduler
+def real_disk_fn(H):
+    """(total, FREE) bytes of the volume holding H.  NOT shutil.disk_usage()[:2]: that is (total, USED), which made a 24 GB-used 1 TB box read as 24 GB free and block all staging."""
+    def fn():
+        u = shutil.disk_usage(H)
+        return u.total, u.free
+    return fn
+
+
 class Scheduler:
     def __init__(self, a, cfg, gov, fetch_fn=None, job_cmd=None, box_home: Path | None = None):
         self.a, self.cfg, self.gov = a, cfg, gov
@@ -164,7 +172,7 @@ class Scheduler:
         self.priority: list[str] = []
         self.replan_log: list[str] = []
         self._warned_unknown_gpus: set[str] = set()
-        self.disk_fn = (lambda: (10e12, 10e12)) if a.fake_gpus else (lambda: tuple(shutil.disk_usage(self.H)[:2]))
+        self.disk_fn = (lambda: (10e12, 10e12)) if a.fake_gpus else real_disk_fn(self.H)
         self.cv = threading.Condition()
         self.save_lock = threading.RLock()
         self.jobs: dict[str, dict] = {}

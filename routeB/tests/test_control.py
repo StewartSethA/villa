@@ -289,3 +289,11 @@ def test_ctl_script_commands(tmp_path):
     r = ctl(tmp_path, "status")
     assert r.returncode == 0 and "gpus file" in r.stdout and "drain: ['1']" in r.stdout
     assert ctl(tmp_path / "nowhere", "status").returncode == 2
+
+
+def test_runtime_disk_fn_returns_total_and_free_not_used(tmp_path, monkeypatch):
+    """Regression: disk_fn used shutil.disk_usage()[:2] = (total, USED): a 24 GB-used 1 TB volume read as 24 GB free and staging BLOCKED."""
+    import collections
+    DU = collections.namedtuple("usage", "total used free")
+    monkeypatch.setattr(B8.shutil, "disk_usage", lambda p: DU(1000 * 10**9, 24 * 10**9, 976 * 10**9))
+    assert B8.real_disk_fn(tmp_path)() == (1000 * 10**9, 976 * 10**9)
