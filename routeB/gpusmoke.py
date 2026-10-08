@@ -144,8 +144,9 @@ def reason(d: dict) -> str:
     sm = "sm_" + cc.replace(".", "") if cc != "?" else "sm_?"
     if "no kernel image" in err or "no kernel" in err.lower():
         blackwell = " (Blackwell)" if cc != "?" and float(cc) >= 12.0 else ""
-        return (f"no kernel image for {sm}: this torch build ({d.get('torch')}, arch list {d.get('arch_list')}) does not support {d.get('device', 'this GPU')}{blackwell}. "
-                f"Use --torch-cuda cu129 (or cu128).")
+        old_card = cc != "?" and float(cc) < 7.5
+        fix = "Use --torch-cuda cu126 (the cu128+ builds dropped pre-Turing cards)." if old_card else "Use --torch-cuda cu129 (or cu128)."
+        return (f"no kernel image for {sm}: this torch build ({d.get('torch')}, arch list {d.get('arch_list')}) does not support {d.get('device', 'this GPU')}{blackwell}. {fix}")
     return f"{t['name']} failed: {err}"
 
 

@@ -50,7 +50,7 @@ def test_bootstrap_accept_slow_link_and_good_link(tmp_path):
     assert r.returncode == 0 and "SLOW LINK ACCEPTED" in r.stdout
     r = boot(tmp_path, 9000000, "linkcheck")
     assert r.returncode == 0 and "VERDICT: GOOD" in r.stdout
-    r = boot(tmp_path, 100000, "linkcheck", "--min-link-mb-s", "1")        # the gate is configurable
+    r = boot(tmp_path, 30000, "linkcheck", "--min-link-mb-s", "1")         # the gate is configurable
     assert r.returncode == 0 and "VERDICT: MARGINAL" in r.stdout
 
 
@@ -444,6 +444,8 @@ def test_gpu_smoke_reports_per_gpu_and_blackwell_failure(monkeypatch, capsys):
     assert "FAIL" in cap.out and "no kernel image for sm_120" in cap.out and "Blackwell" in cap.out and "--torch-cuda cu129" in cap.out
     assert "torch 2.13.0+cu126" in cap.out and "arch list: sm_80 sm_90" in cap.out and "NVIDIA GeForce RTX 5090" in cap.out
     assert "nothing was fetched" in cap.err
+    v100 = dict(bad, cc="7.0", device="Tesla V100")
+    assert "--torch-cuda cu126" in G.reason(v100) and "sm_70" in G.reason(v100)
     hang = {"gpu": "2", "tests": [{"name": "timeout", "ok": False, "err": "no answer within 1 s"}]}
     assert "timeout failed" in G.reason(hang)
 
@@ -571,3 +573,28 @@ def test_48gb_blackwell_cards_hold_full_height_and_use_the_cu128_path():
     go = (ROOT / "go").read_text()
     assert "cu128" in go and "gpu_step" in go and go.index("link_check\ngpu_step") < go.index("install_os\nfetch_tree")
     assert "torch==2.11.0+cu128" in (ROOT / "routeB" / "pins" / "requirements.cu128.lock").read_text()
+
+
+def test_auto_gpu_speed_from_the_smoke_tests_fp32_and_budget_env_passthrough(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("ROUTEB_HOME", str(tmp_path))
+    (tmp_path / "box8").mkdir()
+    (tmp_path / "box8" / "gpusmoke.json").write_text(json.dumps([{"fp32_tflops": 40.7}, {"fp32_tflops": 40.1}, {"fp32_tflops": 41.0}, {"fp32_tflops": 40.9}]))
+    a = B8.build_parser().parse_args(["--scrolls", "PHerc0211"])
+    B8.auto_speed(a)
+    assert a.gpu_speed == 2.0 and "AUTO --gpu-speed 2.0" in capsys.readouterr().out            # 40.7/15.7 = 2.6, capped at 2.0
+    (tmp_path / "box8" / "gpusmoke.json").write_text(json.dumps([{"fp32_tflops": 13.7}]))
+    a = B8.build_parser().parse_args(["--scrolls", "PHerc0211"])
+    B8.auto_speed(a)
+    assert a.gpu_speed == 0.87
+    a = B8.build_parser().parse_args(["--scrolls", "PHerc0211", "--gpu-speed", "1.3"])
+    B8.auto_speed(a)
+    assert a.gpu_speed == 1.3                                                                  # an explicit value is never overridden
+    a = B8.build_parser().parse_args(["--scrolls", "PHerc0211", "--no-auto-speed"])
+    B8.auto_speed(a)
+    assert a.gpu_speed == 1.0
+    go = (ROOT / "go").read_text()
+    assert "BUDGET_|ROUTEB_" in go and "seq 0 63" in go                                          # BUDGET_* reaches the tmux run; 64 streams in the probe
+    from routeB import linkcheck as LK
+    seen = []
+    LK.measure_hosts("PHerc0211", lambda url, b: (seen.append(url), (50.0, "x"))[1])
+    assert len(seen) == 2 and "__down" in seen[1]

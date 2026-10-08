@@ -65,7 +65,7 @@ def data_url(scroll: str) -> str:
 
 def measure_hosts(scroll: str, fn=None) -> dict:
     """Both probes, sequential (they would split the link if concurrent).  fn(url, budget_s) -> (MB/s | None, why); default measure_link."""
-    fn = fn or (lambda url, budget_s: measure_link(url, budget_s=budget_s))
+    fn = fn or (lambda url, budget_s: measure_link(url, n_conn=64 if "__down" not in url else 8, chunk=4 << 20, budget_s=budget_s))
     out = {"t": time.time()}
     for key, url, b in (("data", None, DATA_TIME_S), ("second", SECOND_URL, SECOND_TIME_S)):
         try:

@@ -39,9 +39,9 @@ MBS_AWK='{s=0; for(i=1;i<=NF-2;i++) s+=$i; d=$NF-$(NF-1);
 probe_range() {
   local url=$1 secs=$2 i lo t0 t1 tot
   t0=$(date +%s.%N)
-  tot=$(for i in 0 1 2 3 4 5 6 7; do
-    lo=$((i * 8388608))
-    curl -s -m "$secs" -r "$lo-$((lo + 8388607))" -o /dev/null -w '%{size_download}\n' "$url" &
+  tot=$(for i in $(seq 0 63); do
+    lo=$((i * 4194304))
+    curl -s -m "$secs" -r "$lo-$((lo + 4194303))" -o /dev/null -w '%{size_download}\n' "$url" &
   done; wait)
   t1=$(date +%s.%N)
   echo $tot $t0 $t1 | awk "$MBS_AWK"
@@ -73,7 +73,7 @@ link_check() {
     else print "data host slow, CDN not much faster: link or source, re-probe later" }')
   echo "+$(printf '%0.s-' $(seq 1 96))+"
   row "LINK CHECK   VERDICT: $verdict   (gate: data host >= $MIN_MBS MB/s)"
-  row "data host  dl.ash2txt.org   : $d MB/s   (8 parallel range reads, 8 s)"
+  row "data host  dl.ash2txt.org   : $d MB/s   (64 parallel range reads, 8 s)"
   row "2nd host   speed.cloudflare : $c MB/s   (8 parallel reads, 5 s)"
   row "diagnosis: $diag"
   row "~$plan_gb GB to fetch -> $hours h of pure transfer; box time idling for it: about \$$usd"
@@ -174,7 +174,7 @@ fetch_tree() {
   chmod +x "$DEST"/*.sh 2>/dev/null
 }
 start_run() {
-  local H T Q CMD MIN_BEFORE
+  local H T Q CMD MIN_BEFORE PASS
   H=$(box_home)
   T=$(box_start)
   mkdir -p "$H" || fail "cannot create $H"
@@ -189,7 +189,8 @@ start_run() {
   fi
   Q=$(printf '%q ' "$@")
   CMD="cd $DEST && ./routeB_run.sh --mode box8 $Q 2>&1 | tee -a $H/box8.log"
-  tmux new-session -d -s routeb "env ROUTEB_HOME=$H BUDGET_BOX_START=$T bash -c '$CMD'" \
+  PASS=$(env | grep -E '^(BUDGET_|ROUTEB_)' | grep -v '^ROUTEB_HOME=' | tr '\n' ' ')
+  tmux new-session -d -s routeb "env ROUTEB_HOME=$H BUDGET_BOX_START=$T $PASS bash -c '$CMD'" \
     || fail "tmux could not start the session"
   say "run started detached in tmux session routeb"
   say "commit $(git -C "$DEST" rev-parse --short HEAD)"

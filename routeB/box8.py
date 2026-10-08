@@ -1501,6 +1501,7 @@ def build_parser():
                     help="start Route A (and its input fetch) only once the first Route B fit is running: auto = on when the link is below --min-link-mb-s")
     ap.add_argument("--no-stripe-staging", action="store_true",
                     help="stage a scroll's inputs as ONE unit (default: per stripe; a stripe fit starts as soon as the tracks file and ITS lasagna z-range have landed)")
+    ap.add_argument("--no-auto-speed", action="store_true", help="do not derive --gpu-speed from the GPU smoke test's measured fp32 TFLOPs")
     ap.add_argument("--fake-gpus", type=int, default=0, help="TEST ONLY: N logical workers, no nvidia-smi, no RAM guard")
     ap.add_argument("--order", default="spt", choices=["given", "spt", "lpt"], help="queue order: shortest expected first (default; most scrolls finished per $) | as listed | longest first")
     ap.add_argument("--legacy-ladder", action="store_true", help="old static ladder (full -> sw2800), no planner/admission/tail split; also implied by --ladder")
@@ -1695,12 +1696,35 @@ def all_scroll_names() -> list[str]:
     return sorted(p.stem for p in (ROOT / "routeB" / "scrolls").glob("PHerc*.json"))
 
 
+V100_FP32_TFLOPS = 15.7          # the cost model's basis card
+AUTO_SPEED_CAP = 2.0
+
+
+def auto_speed(a) -> None:
+    """--gpu-speed from the smoke test's measured fp32 matmul TFLOPs relative to a V100 (the GPU-hour model's basis), when the user did not set it.  A matmul is a PROXY (the fit is
+    memory/CPU-bound in places): the ratio is capped at AUTO_SPEED_CAP and announced; --gpu-speed X or --no-auto-speed overrides."""
+    if a.no_auto_speed or a.gpu_speed != 1.0 or a.fake_gpus:
+        return
+    try:
+        res = json.loads((home() / "box8" / "gpusmoke.json").read_text())
+        fl = sorted(d["fp32_tflops"] for d in res if d.get("fp32_tflops"))
+    except (OSError, ValueError, TypeError, KeyError):
+        return
+    if not fl:
+        return
+    ratio = fl[len(fl) // 2] / V100_FP32_TFLOPS
+    a.gpu_speed = round(max(0.5, min(AUTO_SPEED_CAP, ratio)), 2)
+    say(f"AUTO --gpu-speed {a.gpu_speed}: measured fp32 {fl[len(fl) // 2]:.1f} TFLOPs (median of {len(fl)} GPU(s)) = x{ratio:.2f} a V100's {V100_FP32_TFLOPS} "
+        f"(capped at {AUTO_SPEED_CAP}; a matmul proxy, UNVALIDATED for fit speed; pass --gpu-speed to override)", "box8")
+
+
 def main(argv=None) -> int:
     a = build_parser().parse_args(argv)
     if a.smoke:
         a.no_plan = True                                 # a smoke is not priced by the full-fit planner
     legacy = bool(a.legacy_ladder or a.ladder)
     cfg = L.load_config(a.ladder_config, a.ladder)
+    auto_speed(a)
     cfg["gpu_speed"] = a.gpu_speed
     if not legacy:
         cfg["dynamic"] = True
