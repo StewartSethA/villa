@@ -1,0 +1,9 @@
+{
+  "note": "Scrolls withdrawn from production runs (Route A and Route B 'auto' scroll sets). Delete an entry to re-admit. An explicit --scrolls list still runs whatever it names.",
+  "scrolls": {
+    "PHerc0343": {
+      "reason": "First Letters Prize ($50,000) awarded 2026-10-08 for PHerc 343 (text found: pa tou ginomenon); no longer eligible for the prize. Told by the user 2026-10-08.",
+      "source": "https://scrollprize.substack.com/p/50k-first-letters-prize-awarded-for"
+    }
+  }
+}

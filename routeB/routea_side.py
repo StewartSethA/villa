@@ -26,7 +26,12 @@ def pick_scrolls(pins_path: Path, budget_gb: float, prefer: list[str]) -> list[t
         d = json.loads(Path(pins_path).read_text())["scrolls"]
     except (OSError, ValueError, KeyError):
         return []
-    size = {k: (v["prediction_bytes"] + v["grids_bytes"]) / 1e9 for k, v in d.items() if isinstance(v, dict) and "prediction_bytes" in v and "grids_bytes" in v}
+    try:
+        bad = json.loads((Path(pins_path).parent / "ineligible.json").read_text()).get("scrolls", {})
+    except (OSError, ValueError):
+        bad = {}
+    size = {k: (v["prediction_bytes"] + v["grids_bytes"]) / 1e9 for k, v in d.items()
+            if isinstance(v, dict) and "prediction_bytes" in v and "grids_bytes" in v and k not in bad}
     order = [s for s in prefer if s in size] + sorted((s for s in size if s not in prefer), key=lambda s: size[s])
     # smallest first within the preferred set too: more scrolls per GB
     pref = sorted((s for s in order if s in prefer), key=lambda s: size[s])

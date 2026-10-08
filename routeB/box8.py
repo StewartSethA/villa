@@ -1705,8 +1705,19 @@ def build_host(a, H: Path, gpus=None, allowed=None) -> PL.Host:
     return h
 
 
+def ineligible_scrolls() -> dict:
+    """{scroll: {reason, source}} from pins/ineligible.json; an unreadable file is announced, never silently ignored."""
+    p = ROOT / "pins" / "ineligible.json"
+    try:
+        return json.loads(p.read_text()).get("scrolls", {}) if p.exists() else {}
+    except (OSError, ValueError) as e:
+        say(f"WARNING: {p} unreadable ({e}); NO scroll is excluded", "plan")
+        return {}
+
+
 def all_scroll_names() -> list[str]:
-    return sorted(p.stem for p in (ROOT / "routeB" / "scrolls").glob("PHerc*.json"))
+    bad = ineligible_scrolls()
+    return sorted(p.stem for p in (ROOT / "routeB" / "scrolls").glob("PHerc*.json") if p.stem not in bad)
 
 
 V100_FP32_TFLOPS = 15.7          # the cost model's basis card
