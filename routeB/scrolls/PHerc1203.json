@@ -1,0 +1,31 @@
+{
+ "scroll": "PHerc1203",
+ "voxel_um": 9.362,
+ "volume_id": "20250820131727",
+ "volume_zarr": "20250820131727-9.362um-1.2m-113keV-masked.zarr",
+ "volume_s3_prefix": "PHerc1203/volumes/20250820131727-9.362um-1.2m-113keV-masked.zarr",
+ "roles": [
+  "first_letters_2027",
+  "grand_prize_2027"
+ ],
+ "tracks": null,
+ "lasagna": {
+  "prefix": "PHerc1203/representations/predictions/lasagna/20250820131727-lasagna-20260419180421",
+  "fields": {
+   "cos": "PHerc1203/representations/predictions/lasagna/20250820131727-lasagna-20260419180421/PHerc1203_cos.ome.zarr",
+   "grad_mag": "PHerc1203/representations/predictions/lasagna/20250820131727-lasagna-20260419180421/PHerc1203_grad_mag.ome.zarr",
+   "nx": "PHerc1203/representations/predictions/lasagna/20250820131727-lasagna-20260419180421/PHerc1203_nx.ome.zarr",
+   "ny": "PHerc1203/representations/predictions/lasagna/20250820131727-lasagna-20260419180421/PHerc1203_ny.ome.zarr"
+  },
+  "json": [
+   "PHerc1203/representations/predictions/lasagna/20250820131727-lasagna-20260419180421/PHerc1203.lasagna.json"
+  ]
+ },
+ "spiral_outward_sense": null,
+ "spiral_outward_sense_source": "UNKNOWN: pass --sense CW|ACW; run an A/B",
+ "shell_outer_winding_idx": 200,
+ "shell_source": "ASSUMED 200 (no fit yet; pass --shell N)",
+ "umbilicus_registry_path": "tools/umbilicus_auto/output/PHerc1203/umbilicus.json",
+ "umbilicus_status": "local-unvalidated",
+ "umbilicus_file": "routeB/umbilicus/PHerc1203/umbilicus.json"
+}

@@ -1,0 +1,28 @@
+{
+ "scroll": "PHercParis4",
+ "voxel_um": null,
+ "volume_id": null,
+ "volume_zarr": null,
+ "volume_s3_prefix": null,
+ "roles": null,
+ "tracks": null,
+ "lasagna": {
+  "prefix": "PHercParis4/representations/predictions/lasagna/20260411134726-lasagna-20260419180421-L2",
+  "fields": {
+   "cos": "PHercParis4/representations/predictions/lasagna/20260411134726-lasagna-20260419180421-L2/PHercParis4-20260411134726-las-sd2-5b17ff6c_cos.ome.zarr",
+   "grad_mag": "PHercParis4/representations/predictions/lasagna/20260411134726-lasagna-20260419180421-L2/PHercParis4-20260411134726-las-sd2-5b17ff6c_grad_mag.ome.zarr",
+   "nx": "PHercParis4/representations/predictions/lasagna/20260411134726-lasagna-20260419180421-L2/PHercParis4-20260411134726-las-sd2-5b17ff6c_nx.ome.zarr",
+   "ny": "PHercParis4/representations/predictions/lasagna/20260411134726-lasagna-20260419180421-L2/PHercParis4-20260411134726-las-sd2-5b17ff6c_ny.ome.zarr"
+  },
+  "json": [
+   "PHercParis4/representations/predictions/lasagna/20260411134726-lasagna-20260419180421-L2/PHercParis4-20260411134726-las-sd2-5b17ff6c.lasagna.json"
+  ]
+ },
+ "spiral_outward_sense": null,
+ "spiral_outward_sense_source": "UNKNOWN: pass --sense CW|ACW; run an A/B",
+ "shell_outer_winding_idx": 200,
+ "shell_source": "ASSUMED 200 (no fit yet; pass --shell N)",
+ "umbilicus_registry_path": "tools/umbilicus_auto/output/PHercParis4/umbilicus.human-trace.json",
+ "umbilicus_status": "authoritative",
+ "umbilicus_file": "routeB/umbilicus/PHercParis4/umbilicus.json"
+}

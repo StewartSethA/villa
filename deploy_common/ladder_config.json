@@ -1,0 +1,131 @@
+{
+ "version": 1,
+ "_doc": "Fallback ladder for box8 mode (deploy/routeB_cloud/routeB/ladder.py reads this; the plan agent and the budget governor share it). A failed fit interval is re-covered by the NEXT rung that is narrower than the failed interval (or is flagged same_span). width: 'full' = whole requested z range | integer = stripe height in z slices, tiled with `overlap` (stripe starts every width-overlap). tag: segment-name stem, tiles are <scroll>_<tag>_wNNN_zRRxC exactly as tile_windings.py/register_tiles.py/postwindow.sh name them (q-series = 4500/1500, sw-series = 2800/200: production names PHerc0125_q4500v1_w010..., PHerc0125_sw4500_w010...). gpuh_factor = expected GPU-h of ONE stripe of this rung as a fraction of the scroll's full-width fit (base 5.99 GPU-h x shell/125 from f0125_res_flowonly, n = 1; quarter p50 2.5 h / 5.99 = 0.42 from 30 converged quarter fits; 2800 factor 0.30 is an EXTRAPOLATION, unmeasured). p_complete is for the plan agent to fill from history (null = unknown, the governor does not use it). expected_gpuh_override: {scroll: {rung: hours}} replaces the formula.",
+ "limits": {
+  "multinomial_categories": 16777216,
+  "tracks_per_gb": 2000000,
+  "tracks_per_gb_source": "plan agent: ~2.0 M tracks/GB ASSUMED (1.5-2.5) for unfit scrolls; PHerc0191 22.76M in 9.9 GB = 2.3"
+ },
+ "full_span_z": 13000,
+ "rungs": [
+  {
+   "name": "full",
+   "width": "full",
+   "overlap": 0,
+   "tag": "full",
+   "gpuh_factor": 1.0,
+   "fit_overrides": {},
+   "p_complete": null,
+   "note": "fit.overrides() already sets model_flow_voxel_resolution 32 above 6000 slices"
+  },
+  {
+   "name": "w13000",
+   "width": 13000,
+   "overlap": 0,
+   "tag": "full13k",
+   "gpuh_factor": 1.0,
+   "same_span": true,
+   "p_complete": null,
+   "fit_overrides": {
+    "sample_count_tracks_per_step": 16000,
+    "model_flow_voxel_resolution": 48
+   },
+   "note": "ASSUMED reading of the coordinator's '13,000' rung: same span as full with a leaner memory profile (fewer tracks/step, coarser flow grid). Edit here if a different meaning was intended."
+  },
+  {
+   "name": "q4500",
+   "width": 4500,
+   "overlap": 1500,
+   "tag": "q{z0}",
+   "gpuh_factor": 0.42,
+   "fit_overrides": {},
+   "p_complete": null
+  },
+  {
+   "name": "sw2800",
+   "width": 2800,
+   "overlap": 200,
+   "tag": "sw{z0}",
+   "gpuh_factor": 0.3,
+   "fit_overrides": {},
+   "p_complete": null
+  }
+ ],
+ "oom_steps": [
+  {
+   "sample_count_tracks_per_step": 16000
+  },
+  {
+   "sample_count_tracks_per_step": 12000,
+   "model_flow_voxel_resolution": 48
+  }
+ ],
+ "scrolls": {
+  "PHerc0125": {
+   "n_tracks": 13780000,
+   "n_tracks_source": "measured (BOX8_PLAN), z-roi 4500-17500"
+  },
+  "PHerc0191": {
+   "n_tracks": 22760000,
+   "n_tracks_source": "measured"
+  },
+  "PHerc0211": {
+   "n_tracks": 14360000,
+   "n_tracks_source": "measured"
+  },
+  "PHerc0257": {
+   "n_tracks": 15900000,
+   "n_tracks_source": "measured"
+  },
+  "PHerc0268": {
+   "n_tracks": 48000000,
+   "n_tracks_source": "EST (sum of quarters x 0.75)"
+  },
+  "PHerc0343": {
+   "n_tracks": 19000000,
+   "n_tracks_source": "EST"
+  },
+  "PHerc0358": {
+   "n_tracks": 12600000,
+   "n_tracks_source": "EST"
+  },
+  "PHerc0800": {
+   "n_tracks": 25800000,
+   "n_tracks_source": "EST"
+  },
+  "PHerc0813": {
+   "n_tracks": 17000000,
+   "n_tracks_source": "EST"
+  },
+  "PHerc0826": {
+   "n_tracks": 8400000,
+   "n_tracks_source": "EST"
+  }
+ },
+ "expected_gpuh_override": {},
+ "payload_gb": {
+  "full": 0.8,
+  "w13000": 0.8,
+  "q4500": 0.25,
+  "sw2800": 0.15,
+  "_source": "PHerc0211 f0211_full: meshes 563 MB + tiled 224 MB = 0.79 GB (n = 1); narrower rungs scaled by span, ASSUMED"
+ },
+ "watchdog": {
+  "stall_minutes": 40
+ },
+ "attempts": {
+  "oom_retries_in_rung": 1,
+  "unknown_retries": 1,
+  "stall_retries": 1,
+  "max_attempts_per_interval": 8
+ },
+ "default_ladder": [
+  "full",
+  "sw2800"
+ ],
+ "_ladder_doc": "Default ladder full -> sw2800 (plan agent: 2800 stripes are cheapest per area, 4500 is dominated by 2800). Pass --ladder full,w13000,q4500,sw2800 (or --ladder all) to keep the other rungs.",
+ "plan_data": "box8_rungs.json",
+ "plan_data_source": "docs/experiments/readerB_2026-10-08/data/box8_rungs.json (plan agent ad2d01716e65a8118, 2026-10-08): per scroll and rung gpu_h_p10/p50/p90 for the WHOLE rung (n_stripes stripes), p_complete per stripe. Per-stripe expected hours = quantile / n_stripes.",
+ "expected_quantile": "p50",
+ "detect_early": "fit.log line 'loaded N tracks within z-roi' (appears ~3-5 min in): N > multinomial_categories kills the job at once and descends (class multinomial)"
+}

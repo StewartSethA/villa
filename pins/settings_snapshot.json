@@ -1,0 +1,60 @@
+{
+ "_note": "Production settings snapshot (pipeline_setting rows grow.* at export time) + code defaults of the guards that run on the box. Exported 2026-10-08 from the fleet DB; no hosts, tokens or paths.",
+ "degeneracy": {
+  "CREASE_DEG": 165.0,
+  "DUP_VOX": 0.5,
+  "EDGE_HI": 3.0,
+  "EDGE_LO": 0.2,
+  "JUMP_REL": 0.5,
+  "NORMAL_REV_DEG": 90.0,
+  "TURN_DEG": 120.0,
+  "ZERO_AREA_FRAC": 0.05
+ },
+ "grow_settings": {
+  "grow.guard.curvature_enforce": "1",
+  "grow.guard.cut_interior": "1",
+  "grow.guard.empty_space_enforce": "1",
+  "grow.guard.enabled": "1",
+  "grow.guard.flatten_feedback_enforce": "1",
+  "grow.guard.merge_pause": "0",
+  "grow.guard.normal_dev_enforce": "1",
+  "grow.guard.quad_flip_enforce": "1",
+  "grow.guard.ridge_hit_enforce": "1",
+  "grow.guard.roughness_enforce": "1",
+  "grow.guard.seam_enforce": "1",
+  "grow.guard.selfcross": "1",
+  "grow.guard.selfcross_cut_interior": "1",
+  "grow.guard.selfcross_hairpin_abort_ratio": "0.66",
+  "grow.guard.selfcross_min_cells": "1",
+  "grow.guard.selfcross_scrub": "1",
+  "grow.guard.selfcross_stop_inherited": "0",
+  "grow.guard.stretch_enforce": "1",
+  "grow.guard.wrap_spacing_enforce": "1",
+  "grow.input.spaceline_always": "1",
+  "grow.input.use_prediction": "1",
+  "grow.self_collision": "1"
+ },
+ "guard_policy_defaults_that_apply": {
+  "segment_abort_as_flag": true,
+  "selfcross": true,
+  "selfcross_scrub": true,
+  "selfcross_scrub_max_iter": 8,
+  "stop_policy": "legacy"
+ },
+ "resume_gate": {
+  "GATE_FOLD_FRAC": 0.021,
+  "GATE_HAIRPIN_FRAC": 0.005,
+  "GATE_MIN_CELLS": 400,
+  "GATE_NORMAL_REV_FRAC": 0.072,
+  "GATE_PROX_FRAC": 0.045,
+  "GATE_TRANSVERSE_CELLS": 0
+ },
+ "selfcontact": {
+  "COINCIDENT_VOX": 0.5,
+  "LATTICE_EXCL": 3,
+  "LOCAL_CELLS": 12,
+  "MAXEDGE_VOX": 60.0,
+  "MIN_SEP_VOX": 5.0,
+  "PARALLEL_DEG": 20.0
+ }
+}

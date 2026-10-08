@@ -1,0 +1,102 @@
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import budget as B  # noqa: E402
+
+
+class Clk:
+    def __init__(self, t=1_000_000.0):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+    def adv_h(self, h):
+        self.t += h * 3600.0
+
+
+def mk(tmp_path, **kw):
+    c = Clk()
+    g = B.Governor(tmp_path, B.Rates(**kw), clock=c, box_start=c.t, say=lambda *_: None)
+    return g, c
+
+
+def test_spent_formula(tmp_path):
+    g, c = mk(tmp_path)
+    c.adv_h(10)
+    g.transfer(box_download_gb=500, box_upload_gb=100)
+    # 10 h x 2.33 + 500 GB x 2.70/TB + 100 GB x 4/TB
+    assert abs(g.spent() - (23.3 + 1.35 + 0.4)) < 1e-9
+
+
+def test_soft_cap_stops_new_fits_and_running_finish(tmp_path):
+    g, c = mk(tmp_path)
+    launched = []
+    for i in range(8):
+        ok, _ = g.may_launch(f"f{i}", expected_h=5.0, payload_gb=1.0)
+        if ok:
+            g.fit_start(f"f{i}", 5.0, 1.0)
+            launched.append(i)
+    assert len(launched) == 8                       # 5 h x 2.33 = 11.65 + payload: fine; parallel fits share one clock
+    c.adv_h(15)                                      # spent 34.95; the running fits are overrunning (25 % more = 1.25 h)
+    ok, why = g.may_launch("late", expected_h=5.0)
+    assert not ok and "REFUSE" in why               # 34.95 + 5 h x 2.33 = 46.6 > 45
+    ok, _ = g.may_launch("short", expected_h=3.0)   # horizon = max(running remaining 1.25, 3.0) -> 34.95 + 6.99 = 41.9 + payload
+    assert ok
+    assert not g.hard_stop()                         # running fits are never killed by the soft cap
+    rows = [json.loads(x) for x in (tmp_path / "budget.jsonl").read_text().splitlines()]
+    assert sum(1 for r in rows if r["kind"] == "decision" and not r["ok"]) == 1   # refusals are logged
+
+
+def test_hard_stop_at_49(tmp_path):
+    g, c = mk(tmp_path)
+    c.adv_h(20.9)                                    # 48.7
+    assert not g.hard_stop()
+    c.adv_h(0.2)                                     # 49.17
+    assert g.hard_stop()
+
+
+def test_hard_stop_counts_unpulled_payload(tmp_path):
+    g, c = mk(tmp_path)
+    g.fit_start("a", 1.0, payload_gb=100.0)
+    c.adv_h(20.8)                                    # 48.46 + 100 GB x $4/TB (0.4) = 48.86 -> not yet
+    g.fit_end("a", True, payload_gb=100.0)
+    assert not g.hard_stop()
+    g.fit_start("b", 1.0, payload_gb=200.0)
+    g.fit_end("b", True, payload_gb=200.0)          # +0.8 -> 48.46 + 1.2 = 49.66
+    assert g.hard_stop()
+
+
+def test_ledger_replay_continues_account(tmp_path):
+    c = Clk()
+    g = B.Governor(tmp_path, B.Rates(), clock=c, box_start=c.t, say=lambda *_: None)
+    c.adv_h(2)
+    g.transfer(box_download_gb=1000)
+    g.fit_start("x", 4.0, 5.0)
+    s1 = g.spent()
+    g2 = B.Governor(tmp_path, B.Rates(), clock=c, say=lambda *_: None)   # restart: no box_start given
+    assert abs(g2.spent() - s1) < 1e-9 and "x" in g2.running
+
+
+def test_progress_drives_remaining(tmp_path):
+    g, c = mk(tmp_path)
+    g.fit_start("p", 10.0)
+    c.adv_h(2)
+    g.progress("p", 0.5)                             # half done after 2 h -> 2 h more (expected said 8 more)
+    assert abs(g.projected()["horizon_h"] - 2.0) < 1e-9
+
+
+def test_swap_directions_and_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("BUDGET_SWAP_DIRECTIONS", "1")
+    monkeypatch.setenv("BUDGET_SOFT_USD", "10")
+    r = B.Rates.from_env()
+    assert (r.ingress_per_tb, r.egress_per_tb, r.soft_usd) == (4.0, 2.7, 10.0)
+
+
+def test_scaled_clock():
+    c = B.ScaledClock(scale=3600.0, t0=0.0)
+    import time as _t
+    _t.sleep(0.05)
+    assert 100 < c() < 400                           # 0.05 s real = ~180 simulated s

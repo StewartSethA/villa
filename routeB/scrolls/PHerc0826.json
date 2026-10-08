@@ -1,0 +1,39 @@
+{
+ "scroll": "PHerc0826",
+ "voxel_um": 9.362,
+ "volume_id": "20250821151701",
+ "volume_zarr": "20250821151701-9.362um-1.2m-113keV-masked.zarr",
+ "volume_s3_prefix": "PHerc0826/volumes/20250821151701-9.362um-1.2m-113keV-masked.zarr",
+ "roles": [
+  "first_letters_2027",
+  "grand_prize_2027"
+ ],
+ "tracks": {
+  "ts": "20250821151701",
+  "base_url": "https://dl.ash2txt.org/datasets/spiral_datasets/PHerc0826/20250821151701/tracks/",
+  "files": {
+   "PHerc0826_20250821151701_surface_m7_L0_th0.2.dbm": 5422211072,
+   "PHerc0826_20250821151701_surface_m7_L0_th0.2.dbm.crossings.npz": 1453225316,
+   "PHerc0826_20250821151701_surface_m7_L0_th0.2.extract.json": 1121
+  }
+ },
+ "lasagna": {
+  "prefix": "PHerc0826/representations/predictions/lasagna/20250821151701-lasagna-20260419180421",
+  "fields": {
+   "cos": "PHerc0826/representations/predictions/lasagna/20250821151701-lasagna-20260419180421/PHerc0826_cos.ome.zarr",
+   "grad_mag": "PHerc0826/representations/predictions/lasagna/20250821151701-lasagna-20260419180421/PHerc0826_grad_mag.ome.zarr",
+   "nx": "PHerc0826/representations/predictions/lasagna/20250821151701-lasagna-20260419180421/PHerc0826_nx.ome.zarr",
+   "ny": "PHerc0826/representations/predictions/lasagna/20250821151701-lasagna-20260419180421/PHerc0826_ny.ome.zarr"
+  },
+  "json": [
+   "PHerc0826/representations/predictions/lasagna/20250821151701-lasagna-20260419180421/PHerc0826.lasagna.json"
+  ]
+ },
+ "spiral_outward_sense": "ACW",
+ "spiral_outward_sense_source": "registry (upstream catalog/volume properties)",
+ "shell_outer_winding_idx": 217,
+ "shell_source": "fitted/pre-fit estimate (readerB plan)",
+ "umbilicus_registry_path": "tools/umbilicus_auto/output/PHerc0826/umbilicus.json",
+ "umbilicus_status": "local-unvalidated",
+ "umbilicus_file": "routeB/umbilicus/PHerc0826/umbilicus.json"
+}

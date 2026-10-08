@@ -1,0 +1,19 @@
+{
+ "scroll": "PHerc0846B",
+ "voxel_um": 9.362,
+ "volume_id": "20250804142305",
+ "volume_zarr": "20250804142305-9.362um-1.2m-113keV-masked.zarr",
+ "volume_s3_prefix": "PHerc0846B/volumes/20250804142305-9.362um-1.2m-113keV-masked.zarr",
+ "roles": [
+  "first_letters_2027"
+ ],
+ "tracks": null,
+ "lasagna": null,
+ "spiral_outward_sense": "CW",
+ "spiral_outward_sense_source": "registry (upstream catalog/volume properties)",
+ "shell_outer_winding_idx": 200,
+ "shell_source": "ASSUMED 200 (no fit yet; pass --shell N)",
+ "umbilicus_registry_path": "tools/umbilicus_auto/output/PHerc0846B/umbilicus.consensus-v2.json",
+ "umbilicus_status": "local-unvalidated",
+ "umbilicus_file": "routeB/umbilicus/PHerc0846B/umbilicus.json"
+}

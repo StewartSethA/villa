@@ -1,0 +1,219 @@
+{
+ "bucket": "vesuvius-challenge-open-data",
+ "note": "Public (anonymous) open-data bucket. prediction = surface-prediction zarr = the tracer's -v volume; grids = normal grids. voxel_um from the scroll registry (upstream value; PHerc0332: the scan-level voxel of the L2 prediction, registry local meta 9.596, local-unvalidated). *_objects/_bytes = S3 listing at pin time (rclone size 2026-10-08); a differing listing is an error (re-pin deliberately).",
+ "scrolls": {
+  "PHerc0125": {
+   "prediction": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250821151825-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 9.362,
+   "prediction_objects": 73369,
+   "prediction_bytes": 22770654343,
+   "grids_objects": 37799,
+   "grids_bytes": 16828381883
+  },
+  "PHerc0175A": {
+   "prediction": "20250521115057-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250521115057-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 8.64,
+   "prediction_objects": 68543,
+   "prediction_bytes": 20136804251,
+   "grids_objects": 31639,
+   "grids_bytes": 14409751441
+  },
+  "PHerc0175B": {
+   "prediction": "20250521125822-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250521125822-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 8.64,
+   "prediction_objects": 108982,
+   "prediction_bytes": 39692246011,
+   "grids_objects": 35309,
+   "grids_bytes": 25197779261
+  },
+  "PHerc0191": {
+   "prediction": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250821151635-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 9.362,
+   "prediction_objects": 80861,
+   "prediction_bytes": 29872896351,
+   "grids_objects": 35940,
+   "grids_bytes": 19826822460
+  },
+  "PHerc0211": {
+   "prediction": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250821151803-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 9.362,
+   "prediction_objects": 61038,
+   "prediction_bytes": 19215077179,
+   "grids_objects": 35494,
+   "grids_bytes": 14417147599
+  },
+  "PHerc0257": {
+   "prediction": "20250821151750-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250821151750-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 9.362,
+   "prediction_objects": 59406,
+   "prediction_bytes": 21466985611,
+   "grids_objects": 35834,
+   "grids_bytes": 14645646311
+  },
+  "PHerc0268": {
+   "prediction": "20251110183117-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20251110183117-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 8.64,
+   "prediction_objects": 150114,
+   "prediction_bytes": 57622260665,
+   "grids_objects": 39328,
+   "grids_bytes": 35418857889
+  },
+  "PHerc0306B": {
+   "prediction": "20250521133212-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250521133212-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 8.64,
+   "prediction_objects": 75811,
+   "prediction_bytes": 24717464658,
+   "grids_objects": 33778,
+   "grids_bytes": 16902907592
+  },
+  "PHerc0332": {
+   "prediction": "20251211183505-surface-20260413222639-surface-m7-L2-th0.2.zarr",
+   "grids": "20251211183505-surface-20260413222639-surface-m7-L2-th0.2.normal-grids",
+   "voxel_um": 9.596,
+   "prediction_objects": 9419,
+   "prediction_bytes": 2258086174,
+   "grids_objects": 16358,
+   "grids_bytes": 1525632451
+  },
+  "PHerc0343": {
+   "prediction": "20250521140437-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250521140437-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 8.64,
+   "prediction_objects": 83617,
+   "prediction_bytes": 27416922944,
+   "grids_objects": 35382,
+   "grids_bytes": 18721459672
+  },
+  "PHerc0358": {
+   "prediction": "20250821151737-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250821151737-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 9.362,
+   "prediction_objects": 54352,
+   "prediction_bytes": 18885945395,
+   "grids_objects": 30470,
+   "grids_bytes": 12483829558
+  },
+  "PHerc0483A": {
+   "prediction": "20250521140913-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250521140913-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 8.64,
+   "prediction_objects": 68785,
+   "prediction_bytes": 21676316321,
+   "grids_objects": 33793,
+   "grids_bytes": 15998981485
+  },
+  "PHerc0483B": {
+   "prediction": "20251124083638-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20251124083638-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 8.64,
+   "prediction_objects": 53755,
+   "prediction_bytes": 19932937236,
+   "grids_objects": 28710,
+   "grids_bytes": 12549635758
+  },
+  "PHerc0490A": {
+   "prediction": "20250521151210-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250521151210-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 8.64,
+   "prediction_objects": 70835,
+   "prediction_bytes": 24509129127,
+   "grids_objects": 30070,
+   "grids_bytes": 16732148143
+  },
+  "PHerc0490B": {
+   "prediction": "20250521151215-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250521151215-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 8.64,
+   "prediction_objects": 49006,
+   "prediction_bytes": 15807581749,
+   "grids_objects": 27496,
+   "grids_bytes": 11687348586
+  },
+  "PHerc0800": {
+   "prediction": "20250521135224-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250521135224-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 8.64,
+   "prediction_objects": 147594,
+   "prediction_bytes": 52426981010,
+   "grids_objects": 44265,
+   "grids_bytes": 32759211498
+  },
+  "PHerc0813": {
+   "prediction": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250821151723-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 9.362,
+   "prediction_objects": 59743,
+   "prediction_bytes": 21723664769,
+   "grids_objects": 33060,
+   "grids_bytes": 14597765729
+  },
+  "PHerc0826": {
+   "prediction": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250821151701-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 9.362,
+   "prediction_objects": 54836,
+   "prediction_bytes": 12054782251,
+   "grids_objects": 33467,
+   "grids_bytes": 11356592716
+  },
+  "PHerc0846A": {
+   "prediction": "20260319102732-surface-20260413222639-surface-m7-L2-th0.2.zarr",
+   "grids": "20260319102732-surface-20260413222639-surface-m7-L2-th0.2.normal-grids",
+   "voxel_um": 9.362,
+   "prediction_objects": 14473,
+   "prediction_bytes": 4610610146,
+   "grids_objects": 18661,
+   "grids_bytes": 3140095935
+  },
+  "PHerc0846B": {
+   "prediction": "20250804142305-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250804142305-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 9.362,
+   "prediction_objects": 52443,
+   "prediction_bytes": 15710634848,
+   "grids_objects": 29799,
+   "grids_bytes": 11075803094
+  },
+  "PHerc1203": {
+   "prediction": "20260319130212-surface-20260413222639-surface-m7-L2-th0.2.zarr",
+   "grids": "20260319130212-surface-20260413222639-surface-m7-L2-th0.2.normal-grids",
+   "voxel_um": 9.362,
+   "prediction_objects": 9151,
+   "prediction_bytes": 3319280146,
+   "grids_objects": 17104,
+   "grids_bytes": 2180180694
+  },
+  "PHerc1218": {
+   "prediction": "20250521120456-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250521120456-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 8.64,
+   "prediction_objects": 65888,
+   "prediction_bytes": 18771829343,
+   "grids_objects": 38655,
+   "grids_bytes": 15184447393
+  },
+  "PHerc1447": {
+   "prediction": "20250521151220-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250521151220-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 8.64
+  },
+  "PHerc1545": {
+   "prediction": "20250821151648-surface-20260413222639-surface-m7-L0-th0.2.zarr",
+   "grids": "20250821151648-surface-20260413222639-surface-m7-L0-th0.2.normal-grids",
+   "voxel_um": 9.362
+  },
+  "PHercParis4": {
+   "prediction": "20260411134726-surface-20260413222639-surface-m7-L2-th0.2.zarr",
+   "grids": "20260411134726-surface-20260413141734-surface-recto-2um-ps256-L0-th0.45.normal-grids",
+   "voxel_um": 9.6
+  }
+ }
+}

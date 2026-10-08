@@ -1,0 +1,830 @@
+{
+ "PHerc0125": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.6,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~13.78 M, shell 125; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.6,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~13.78 M, shell 125; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.92,
+   "gpu_h_p50": 11.73,
+   "gpu_h_p90": 13.59,
+   "p_complete": 0.97,
+   "p_all_stripes": 0.885,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [4, 4]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.01,
+   "gpu_h_p50": 9.41,
+   "gpu_h_p90": 10.94,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0175A": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.03,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~17.6 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.03,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~17.6 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.91,
+   "gpu_h_p50": 11.73,
+   "gpu_h_p90": 13.57,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.0,
+   "gpu_h_p50": 9.43,
+   "gpu_h_p90": 10.93,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0175B": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.03,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~22.0 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.03,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~22.0 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.91,
+   "gpu_h_p50": 11.73,
+   "gpu_h_p90": 13.61,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.01,
+   "gpu_h_p50": 9.41,
+   "gpu_h_p90": 10.95,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0191": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.02,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~22.76 M, shell 146; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.02,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~22.76 M, shell 146; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.91,
+   "gpu_h_p50": 11.73,
+   "gpu_h_p90": 13.58,
+   "p_complete": 0.97,
+   "p_all_stripes": 0.885,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [4, 4]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.02,
+   "gpu_h_p50": 9.43,
+   "gpu_h_p90": 10.95,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0211": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.35,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~14.36 M, shell 115; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.35,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~14.36 M, shell 115; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.9,
+   "gpu_h_p50": 11.73,
+   "gpu_h_p90": 13.6,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.02,
+   "gpu_h_p50": 9.42,
+   "gpu_h_p90": 10.95,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0257": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~15.9 M, shell 214; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~15.9 M, shell 214; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.9,
+   "gpu_h_p50": 11.71,
+   "gpu_h_p90": 13.57,
+   "p_complete": 0.97,
+   "p_all_stripes": 0.885,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [4, 4]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.02,
+   "gpu_h_p50": 9.43,
+   "gpu_h_p90": 10.97,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0268": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.01,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~48.1 M, shell 408; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.01,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~48.1 M, shell 408; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 7.18,
+   "gpu_h_p50": 8.8,
+   "gpu_h_p90": 10.45,
+   "p_complete": 0.0,
+   "p_all_stripes": 0.0,
+   "n_stripes": 3,
+   "basis": "3 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 4]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 6.26,
+   "gpu_h_p50": 7.55,
+   "gpu_h_p90": 8.94,
+   "p_complete": 0.35,
+   "p_all_stripes": 0.015,
+   "n_stripes": 4,
+   "basis": "4 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0306B": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.03,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~18.0 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.03,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~18.0 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.91,
+   "gpu_h_p50": 11.73,
+   "gpu_h_p90": 13.6,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.01,
+   "gpu_h_p50": 9.42,
+   "gpu_h_p90": 10.93,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0343": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.03,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~19.0 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.03,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~19.0 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.89,
+   "gpu_h_p50": 11.71,
+   "gpu_h_p90": 13.58,
+   "p_complete": 0.97,
+   "p_all_stripes": 0.885,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [4, 4]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.02,
+   "gpu_h_p50": 9.42,
+   "gpu_h_p90": 10.93,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0358": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~12.6 M, shell 252; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~12.6 M, shell 252; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 7.19,
+   "gpu_h_p50": 8.8,
+   "gpu_h_p90": 10.42,
+   "p_complete": 0.97,
+   "p_all_stripes": 0.913,
+   "n_stripes": 3,
+   "basis": "3 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [4, 4]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 6.27,
+   "gpu_h_p50": 7.54,
+   "gpu_h_p90": 8.93,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.849,
+   "n_stripes": 4,
+   "basis": "4 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0483A": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~14.9 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~14.9 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.89,
+   "gpu_h_p50": 11.69,
+   "gpu_h_p90": 13.6,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.01,
+   "gpu_h_p50": 9.41,
+   "gpu_h_p90": 10.95,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0483B": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.3,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~12.0 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.3,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~12.0 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.89,
+   "gpu_h_p50": 11.71,
+   "gpu_h_p90": 13.6,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.02,
+   "gpu_h_p50": 9.41,
+   "gpu_h_p90": 10.95,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0490A": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.3,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~13.1 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.3,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~13.1 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.91,
+   "gpu_h_p50": 11.73,
+   "gpu_h_p90": 13.59,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.03,
+   "gpu_h_p50": 9.41,
+   "gpu_h_p90": 10.93,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0490B": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.45,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~7.8 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.45,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~7.8 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.89,
+   "gpu_h_p50": 11.71,
+   "gpu_h_p90": 13.56,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.02,
+   "gpu_h_p50": 9.41,
+   "gpu_h_p90": 10.97,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0800": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.01,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~25.7 M, shell 275; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.01,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~25.7 M, shell 275; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.91,
+   "gpu_h_p50": 11.74,
+   "gpu_h_p90": 13.58,
+   "p_complete": 0.5,
+   "p_all_stripes": 0.062,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [2, 4]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.01,
+   "gpu_h_p50": 9.4,
+   "gpu_h_p90": 10.94,
+   "p_complete": 0.8,
+   "p_all_stripes": 0.328,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0813": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.03,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~17.0 M, shell 197; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.03,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~17.0 M, shell 197; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.92,
+   "gpu_h_p50": 11.73,
+   "gpu_h_p90": 13.6,
+   "p_complete": 0.97,
+   "p_all_stripes": 0.885,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [4, 4]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.0,
+   "gpu_h_p50": 9.42,
+   "gpu_h_p90": 10.93,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0826": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.45,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~8.4 M, shell 217; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.45,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: measured full-range ~8.4 M, shell 217; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.89,
+   "gpu_h_p50": 11.73,
+   "gpu_h_p90": 13.6,
+   "p_complete": 0.97,
+   "p_all_stripes": 0.885,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [4, 4]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.02,
+   "gpu_h_p50": 9.42,
+   "gpu_h_p90": 10.94,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0846A": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.45,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~8.8 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.45,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~8.8 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.91,
+   "gpu_h_p50": 11.74,
+   "gpu_h_p90": 13.6,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.02,
+   "gpu_h_p50": 9.43,
+   "gpu_h_p90": 10.98,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc0846B": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~15.7 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~15.7 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.91,
+   "gpu_h_p50": 11.76,
+   "gpu_h_p90": 13.57,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.02,
+   "gpu_h_p50": 9.42,
+   "gpu_h_p90": 10.98,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc1203": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~15.7 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~15.7 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.9,
+   "gpu_h_p50": 11.75,
+   "gpu_h_p90": 13.59,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.02,
+   "gpu_h_p50": 9.42,
+   "gpu_h_p90": 10.94,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc1218": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~15.7 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~15.7 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.87,
+   "gpu_h_p50": 11.71,
+   "gpu_h_p90": 13.56,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.02,
+   "gpu_h_p50": 9.41,
+   "gpu_h_p90": 10.95,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc1447": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~15.7 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~15.7 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.93,
+   "gpu_h_p50": 11.73,
+   "gpu_h_p90": 13.61,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.03,
+   "gpu_h_p50": 9.42,
+   "gpu_h_p90": 10.95,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ },
+ "PHerc1545": {
+  "13000": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~15.7 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "full": {
+   "gpu_h_p10": 5.99,
+   "gpu_h_p50": 7.49,
+   "gpu_h_p90": 13.27,
+   "p_complete": 0.15,
+   "n_stripes": 1,
+   "basis": "n=3 completed full fits (0125 5.99 h, 0211 7.49 h, 0125-gaponly 13.27 h; min/median/max not percentiles); p_complete: history-anchored judgement, tracks in z-roi: ASSUMED 2.0M/GB full-range ~15.7 M, shell 200; fail cost 1.3 GPU-h"
+  },
+  "4500": {
+   "gpu_h_p10": 9.9,
+   "gpu_h_p50": 11.73,
+   "gpu_h_p90": 13.6,
+   "p_complete": 0.9,
+   "p_all_stripes": 0.656,
+   "n_stripes": 4,
+   "basis": "4 stripes x per-stripe wall of n=30 completed quarter fits on 142 (p10/50/90 2.05/2.91/3.81 h, includes failed-chunk time, contended cards); p_complete is PER STRIPE; history {'done/arms': [0, 0]}; fail cost 0.45 GPU-h"
+  },
+  "2800": {
+   "gpu_h_p10": 8.02,
+   "gpu_h_p50": 9.42,
+   "gpu_h_p90": 10.94,
+   "p_complete": 0.96,
+   "p_all_stripes": 0.815,
+   "n_stripes": 5,
+   "basis": "5 stripes (2,800 wide, 200 overlap) x per-stripe wall of n=26 completed 2,600/2,800 fits (p10/50/90 1.30/1.76/2.54 h); p_complete PER STRIPE; fail cost 0.45 GPU-h"
+  }
+ }
+}

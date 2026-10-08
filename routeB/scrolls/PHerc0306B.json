@@ -1,0 +1,27 @@
+{
+ "scroll": "PHerc0306B",
+ "voxel_um": 8.64,
+ "volume_id": "20250521133212",
+ "volume_zarr": "20250521133212-8.640um-1.2m-116keV-masked.zarr",
+ "volume_s3_prefix": "PHerc0306B/volumes/20250521133212-8.640um-1.2m-116keV-masked.zarr",
+ "roles": [
+  "first_letters_2027"
+ ],
+ "tracks": {
+  "ts": "20250521133212",
+  "base_url": "https://dl.ash2txt.org/datasets/spiral_datasets/PHerc0306B/20250521133212/tracks/",
+  "files": {
+   "PHerc0306B_20250521133212_surface_m7_L0_th0.2.dbm": 9000394752,
+   "PHerc0306B_20250521133212_surface_m7_L0_th0.2.dbm.crossings.npz": 2462948764,
+   "PHerc0306B_20250521133212_surface_m7_L0_th0.2.extract.json": 1123
+  }
+ },
+ "lasagna": null,
+ "spiral_outward_sense": "ACW",
+ "spiral_outward_sense_source": "registry (upstream catalog/volume properties)",
+ "shell_outer_winding_idx": 200,
+ "shell_source": "ASSUMED 200 (no fit yet; pass --shell N)",
+ "umbilicus_registry_path": "tools/umbilicus_auto/output/PHerc0306B/umbilicus.consensus-v2.json",
+ "umbilicus_status": "local-unvalidated",
+ "umbilicus_file": "routeB/umbilicus/PHerc0306B/umbilicus.json"
+}
