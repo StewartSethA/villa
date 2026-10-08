@@ -38,8 +38,10 @@ def tracer_cmd(kit, vol, tgt, params_json, resume=None, seed=None):
 
 
 def grow_seed(kit, vol, grids, scroll, seed, out, rounds, gens, voxel_um, threads=1, rng=1, pol=None, self_collision=True, round_timeout=6 * 3600, run=subprocess.run,
-              deadline=None, gate_override=None):
-    """One seed, `rounds` rounds, geometry guards between rounds. Returns the export dict (also written to disk)."""
+              deadline=None, gate_override=None, extend=False):
+    """One seed, `rounds` rounds, geometry guards between rounds. Returns the export dict (also written to disk).
+    extend=True: if this seed already has a finished export (status grown/deadline) with FEWER than `rounds` rounds, CONTINUE it from its last checkpoint
+    (round k0 = done+1 ... rounds) instead of regrowing (D3: resumes only expand).  A held (gate_held) or failed seed is never extended."""
     from . import growth_guard as GG, resume_gate as RG
     out = Path(out)
     seg = f"{scroll}_c{hashlib.md5(('%s:%s:%s:%s' % ((scroll,) + tuple(seed))).encode()).hexdigest()[:7]}"
@@ -49,8 +51,24 @@ def grow_seed(kit, vol, grids, scroll, seed, out, rounds, gens, voxel_um, thread
                VC_GRID_CACHE_BYTES=str(256 * 1024 * 1024), VC_GROWPATCH_RNG_SEED=str(rng))
     pol = pol or GG.GuardPolicy(selfcross=True, selfcross_bin=os.path.join(kit, "bin", "vc_tifxyz_selfcross"), selfcross_env={"LD_LIBRARY_PATH": os.path.join(kit, "lib")}, selfcross_threads=2)
     cur, status, rr = None, "grown", []
+    k0, prior_wall = 1, 0.0
+    exj = sd / "export.json"
+    if extend and exj.is_file():
+        try:
+            prev = json.loads(exj.read_text())
+        except ValueError:
+            prev = {}
+        pr = prev.get("rounds") or []
+        if (prev.get("run") or {}).get("status") in ("grown", "deadline") and 0 < len(pr) < rounds and pr[-1].get("checkpoint"):
+            cur, info0 = GG.selfx_scrub(str(sd / pr[-1]["checkpoint"]), pol, voxel_um)      # re-scrub the last checkpoint: idempotent when already clean
+            if cur is not None:
+                rr, k0, prior_wall = list(pr), len(pr) + 1, float((prev.get("run") or {}).get("wall_s_total") or 0.0)
+            else:
+                return prev                                                                   # the last checkpoint could not be scrubbed: leave the export as it was
+        else:
+            return prev                                                                       # held / failed / already at `rounds`: extending changes nothing
     t_all = time.time()
-    for k in range(1, rounds + 1):
+    for k in range(k0, rounds + 1):
         if deadline is not None and time.time() >= deadline:
             status = "deadline"                                                      # --hours budget reached: stop between rounds (checkpoint kept, exported)
             break
@@ -99,7 +117,8 @@ def grow_seed(kit, vol, grids, scroll, seed, out, rounds, gens, voxel_um, thread
         libs[n] = _md5(fp) if fp.exists() else None
     ex = {"schema": SCHEMA, "identity": {"seg": seg, "scroll": scroll, "seed_xyz": list(seed), "rng_seed": rng},
           "tool": {"md5": _md5(Path(kit) / "bin" / "vc_grow_seg_from_seed"), "kit_libs_md5": libs, "selfcross_md5": _md5(Path(kit) / "bin" / "vc_tifxyz_selfcross")},
-          "run": {"host": os.uname().nodename, "threads": threads, "status": status, "wall_s_total": round(time.time() - t_all, 1)}, "rounds": rr,
+          "run": {"host": os.uname().nodename, "threads": threads, "status": status, "wall_s_total": round(prior_wall + time.time() - t_all, 1),
+                  **({"extended_from_round": k0 - 1} if k0 > 1 else {})}, "rounds": rr,
           "guards_on_box": ["in-solve self_collision" if self_collision else "none", "selfx_scrub (transverse -> 0)", "resume_gate (degeneracy, fail closed)"],
           "guards_NOT_on_box": ["CT-dependent criteria (vacuum/ridge/seam/curvature): hub re-scores"]}
     (sd / "export.json").write_text(json.dumps(ex, indent=1))

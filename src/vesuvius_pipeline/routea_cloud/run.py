@@ -19,11 +19,12 @@ from . import bootstrap, net, seedprop, settings
 
 
 def _grow_job(args):
-    (kit, pred, grids, scroll, seed, out, rounds, gens, vox, threads, rng, deadline) = args
+    (kit, pred, grids, scroll, seed, out, rounds, gens, vox, threads, rng, deadline, *rest) = args
+    extend = bool(rest[0]) if rest else False
     from .. import cloud_box
     pol = settings.policy(kit, threads=2)
     return cloud_box.grow_seed(kit, pred, grids, scroll, seed, out, rounds, gens, vox, threads=threads, rng=rng, pol=pol,
-                               self_collision=settings.self_collision_on(), deadline=deadline, gate_override=settings.gate_override)   # the CALLABLE: re-read every round
+                               self_collision=settings.self_collision_on(), deadline=deadline, gate_override=settings.gate_override, extend=extend)   # the CALLABLE: re-read every round
 
 
 def _newest_area(sd: Path):
@@ -52,6 +53,8 @@ def main(argv=None) -> int:
     ap.add_argument("--workdir", default=os.environ.get("ROUTEA_WORK", "routeA_work"))
     ap.add_argument("--kit-url", default=None, help=f"HTTPS URL of the kit tarball (else ${bootstrap.KIT_URL_ENV}); sha256-pinned in pins/kit.json")
     ap.add_argument("--rng", type=int, default=1); ap.add_argument("--stage-only", action="store_true", help="download + verify inputs, then stop")
+    ap.add_argument("--extend-only", action="store_true", help="no new seeds: CONTINUE every finished (grown/deadline) segment of these scrolls that has fewer than --rounds rounds, "
+                    "from its last checkpoint (held segments are never extended)")
     ap.add_argument("--no-verify", action="store_true", help="skip the self-verify of the export trees (NOT recommended)")
     a = ap.parse_args(argv)
     work = Path(a.workdir).resolve()
@@ -82,6 +85,17 @@ def main(argv=None) -> int:
     jobs = []
     root = bootstrap.package_root()
     for sc in scrolls:
+        if a.extend_only:                                   # the seeds come from the existing exports (identity.seed_xyz), not from the seed proposer
+            for exj in sorted((work / "export" / sc).glob("*/export.json")):
+                try:
+                    pe = json.loads(exj.read_text())
+                except ValueError:
+                    continue
+                xyz = (pe.get("identity") or {}).get("seed_xyz")
+                if (pe.get("run") or {}).get("status") in ("grown", "deadline") and len(pe.get("rounds") or []) < a.rounds and xyz:
+                    jobs.append((sc, {"x": xyz[0], "y": xyz[1], "z": xyz[2]}))
+            rep["scrolls"][sc]["extend_candidates"] = sum(1 for j in jobs if j[0] == sc)
+            continue
         sf = work / "seeds" / f"{sc}.json"
         if sf.is_file() and len(json.loads(sf.read_text())) >= a.seeds:
             seeds = json.loads(sf.read_text())[:a.seeds]
@@ -105,13 +119,13 @@ def main(argv=None) -> int:
     for sc, s in jobs:
         seg = f"{sc}_c{hashlib.md5(('%s:%s:%s:%s' % (sc, s['x'], s['y'], s['z'])).encode()).hexdigest()[:7]}"
         exp = work / "export" / sc / seg / "export.json"
-        if exp.is_file():
+        if exp.is_file() and not a.extend_only:
             results.append(json.loads(exp.read_text())); log(f"resume: {seg} already exported ({results[-1]['run']['status']})"); continue
         todo.append((sc, s))
     log(f"grow: {len(todo)} seeds to grow, {len(results)} already done, {min(workers, max(1, len(todo)))} parallel, budget {a.hours} h")
     with ProcessPoolExecutor(max_workers=min(workers, max(1, len(todo)))) as ex:
         futs = {ex.submit(_grow_job, (str(kdir), str(inputs[sc]["pred"]), str(inputs[sc]["grids"]), sc, (s["x"], s["y"], s["z"]), str(work / "export" / sc), a.rounds, a.gens,
-                                      inputs[sc]["voxel_um"], a.threads, a.rng, deadline)): (sc, s) for sc, s in todo}
+                                      inputs[sc]["voxel_um"], a.threads, a.rng, deadline, a.extend_only)): (sc, s) for sc, s in todo}
         for f in as_completed(futs):
             ex_ = f.result()                                              # a crashed job raises: fail loud
             results.append(ex_)
