@@ -12,6 +12,8 @@ FETCH
   PHerc0257  fetching         3.3/9.7 GB  108 MB/s  ETA 1 min  nx 6000/8573 obj
   PHerc0813  BLOCKED by disk  
 ROUTE A  slots 27   segments published 0   area grown so far 0.0 cm2   
+  A: STARTING  no tracers yet (kit / inputs / seeds phase) cpu 50% busy
+  A: seeds 0/? done, 0 running | 0 cm2 | ok/deadline 0 | held 0
 
 PAYLOAD  2 unit(s) DONE, 0.70 GB, 1 pulled
   PHerc0125/full                      0.300 GB   120 files  pulled: yes

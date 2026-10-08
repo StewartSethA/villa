@@ -132,6 +132,19 @@ def pull_lines(home: Path, env=None, full: bool = False) -> list[str]:
     ]
 
 
+def _routea_summary(H: Path, slots):
+    """Route A state (GROWING / WAITING / UNDERBOOKED / STALLED / IDLE / FINISHED) + guard counts, from <home>/routeA_work (routea_cloud/status.py)."""
+    try:
+        src = str(Path(__file__).resolve().parents[1] / "src")
+        if src not in sys.path:
+            sys.path.insert(0, src)
+        from vesuvius_pipeline.routea_cloud import status as RS
+        d = RS.summarize(H / "routeA_work", slots=slots)
+        return d, RS.render_lines(d)
+    except Exception as e:  # noqa: BLE001 - a monitor must never crash on one panel
+        return None, [f"A: status unavailable ({type(e).__name__}: {str(e)[:60]})"]
+
+
 def newest_area(sd: Path):
     best = None
     for m in sd.glob("r*/*/meta.json"):
@@ -293,6 +306,7 @@ def collect(home: Path, now: float | None = None, gpus=None, log_path: Path | No
     ra["segments"] = len(list((H / "out" / "routeA").glob("*/DONE")))
     for sd in (H / "routeA_work" / "export").glob("*/*"):
         ra["area"] += newest_area(sd)
+    ra["summary"], ra["lines"] = _routea_summary(H, ra["slots"])
     snap["routea"] = ra
     # payload
     units = []
@@ -364,6 +378,9 @@ def alerts(snap: dict) -> list[tuple[str, str]]:
     for a in snap["alerts_file"]:
         age = snap["now"] - a.get("since", snap["now"])
         out.append((a.get("sev", "red"), f"{a['text']}   [{age:.0f} s]"))
+    ras = (snap.get("routea") or {}).get("summary")
+    if ras and ras.get("state") in ("IDLE", "FINISHED", "STALLED", "UNDERBOOKED"):
+        out.append(("red", f"ROUTE A {ras['state']}: {ras['why']}"))          # idle cores beside a live box are a fault (Rule Zero)
     fails = {}
     for e in snap["events"]:
         if e.get("kind") == "failure":
@@ -446,6 +463,8 @@ def render(snap: dict, color: bool = False, stream_n: int = 16) -> str:
         P("  (no scrolls yet)")
     ra = snap["routea"]
     P(f"ROUTE A  slots {ra['slots'] if ra['slots'] is not None else '-'}   segments published {ra['segments']}   area grown so far {ra['area']:.1f} cm2   {'; '.join(ra['events'])}")
+    for ln in ra.get("lines") or []:
+        P("  " + ln)
     P("")
     npull = sum(1 for x in snap["units"] if x["pulled"])
     P(f"PAYLOAD  {len(snap['units'])} unit(s) DONE, {sum(x['gb'] for x in snap['units']):.2f} GB, {npull} pulled")
@@ -521,8 +540,10 @@ def render_compact(snap: dict, color: bool = False, brief: bool = False) -> str:
         L.append(clip(f"f +{max(0, len(act) - 4)} more | {sum(1 for x in fr if x['state'] == 'done')} scroll(s) fully staged"))
     ra = snap["routea"]
     units = snap["units"]
-    L.append(clip(f"A: {ra['slots'] if ra['slots'] is not None else '-'} slots, {ra['segments']} seg, {ra['area']:.1f} cm2 {'; '.join(ra['events'])[:30]} | "
-                  f"P: {len(units)} units {sum(x['gb'] for x in units):.2f} GB, {sum(1 for x in units if x['pulled'])} pulled"))
+    for ln in (ra.get("lines") or [f"A: {ra['slots'] if ra['slots'] is not None else '-'} slots, {ra['segments']} seg, {ra['area']:.1f} cm2"]):
+        col = RED if any(w in ln for w in ("IDLE", "STALLED", "UNDERBOOKED", "FINISHED")) and ln.startswith("A: ") and ln.split()[1] in ("IDLE", "STALLED", "UNDERBOOKED", "FINISHED") else None
+        L.append(c(clip(ln), col, color) if col else clip(ln))
+    L.append(clip(f"P: {len(units)} units {sum(x['gb'] for x in units):.2f} GB, {sum(1 for x in units if x['pulled'])} pulled"))
     al = alerts(snap)
     for sev, txt in al[:3]:
         L.append(c(clip("! " + txt), RED if sev == "red" else YEL, color))

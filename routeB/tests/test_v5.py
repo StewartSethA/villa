@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HERE))
@@ -242,6 +244,9 @@ def golden_snap(H):
 
 
 def test_dashboard_golden_snapshot(tmp_path, monkeypatch):
+    from vesuvius_pipeline.routea_cloud import status as _RS          # live /proc readings must not leak into the golden text
+    monkeypatch.setattr(_RS, "cpu_busy_pct", lambda *a, **k: 50.0)
+    monkeypatch.setattr(_RS, "tracer_count", lambda: 0)
     monkeypatch.setenv("TZ", "UTC")
     time.tzset()
     H = fixture_home(tmp_path)

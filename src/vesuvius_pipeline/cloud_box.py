@@ -83,8 +83,10 @@ def grow_seed(kit, vol, grids, scroll, seed, out, rounds, gens, voxel_um, thread
             status = "scrub_failed"
             break
         cur = path
-        gate = RG.check(cur, pol, gate_override)                                    # degeneracy gate, fail closed
-        rr[-1]["gate"] = {"pass": gate.get("pass"), "reasons": gate.get("reasons"), "fractions": gate.get("fractions")}
+        go = gate_override() if callable(gate_override) else gate_override           # callable = re-read every round (control file)
+        gate = RG.check(cur, pol, go)                                               # degeneracy gate, fail closed
+        rr[-1]["gate"] = {"pass": gate.get("pass"), "reasons": gate.get("reasons"), "fractions": gate.get("fractions"),
+                          "thresholds": {k: RG.tun(k, go) for k in RG.TUNABLES}}      # the thresholds IN EFFECT for this round (status.py near-miss sweep)
         if not gate.get("pass"):
             status = "gate_held"
             break

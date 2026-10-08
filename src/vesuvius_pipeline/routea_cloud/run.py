@@ -23,7 +23,7 @@ def _grow_job(args):
     from .. import cloud_box
     pol = settings.policy(kit, threads=2)
     return cloud_box.grow_seed(kit, pred, grids, scroll, seed, out, rounds, gens, vox, threads=threads, rng=rng, pol=pol,
-                               self_collision=settings.self_collision_on(), deadline=deadline, gate_override=settings.gate_override())
+                               self_collision=settings.self_collision_on(), deadline=deadline, gate_override=settings.gate_override)   # the CALLABLE: re-read every round
 
 
 def _newest_area(sd: Path):
@@ -56,6 +56,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     work = Path(a.workdir).resolve()
     work.mkdir(parents=True, exist_ok=True)
+    os.environ["ROUTEA_WORK"] = str(work)          # worker processes inherit it: the guard control file is <work>/control/guards.json
     rep = {"started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "args": vars(a), "phases": {}, "scrolls": {}}
     log = lambda m: print(f"[{time.strftime('%H:%M:%S')}] {m}", flush=True)
 
