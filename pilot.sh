@@ -29,6 +29,38 @@ say "GPUs: $NG   compute_cap(first): ${CAP:-unknown}   driver CUDA: ${DRV_CUDA:-
 FOREIGN=$(awk -F', ' '{gsub(/ MiB/,"",$4); if ($4+0 > 1500) n++} END{print n+0}' gpus.csv)
 [ "$FOREIGN" -gt 0 ] && { say "WARNING: $FOREIGN GPU(s) already hold >1500 MiB (a foreign process, e.g. llama-server)"; }
 
+say "=== 1b. CPU / RAM / DISK ==="
+CPUMODEL=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | sed 's/.*: *//')
+NPROC=$(nproc 2>/dev/null || echo 1)
+PHYS=$(lscpu -p=CORE,SOCKET 2>/dev/null | grep -v '^#' | sort -u | wc -l)
+CGCPU=""
+if [ -r /sys/fs/cgroup/cpu.max ]; then CGCPU=$(awk '{ if ($1=="max") print "none"; else printf "%.1f", $1/$2 }' /sys/fs/cgroup/cpu.max); fi
+RAMGB=$(awk '/MemTotal/{printf "%d", $2/1048576}' /proc/meminfo)
+RAMAV=$(awk '/MemAvailable/{printf "%d", $2/1048576}' /proc/meminfo)
+CGMEM=""
+if [ -r /sys/fs/cgroup/memory.max ]; then CGMEM=$(awk '{ if ($1=="max") print "none"; else printf "%d", $1/1073741824 }' /sys/fs/cgroup/memory.max); fi
+DISKDIR=${ROUTEB_HOME:-$W}
+mkdir -p "$DISKDIR" 2>/dev/null
+DFLINE=$(df -P -BG "$DISKDIR" 2>/dev/null | tail -1)
+DISKFREE=$(echo "$DFLINE" | awk '{gsub(/G/,"",$4); print $4+0}')
+DISKTOT=$(echo "$DFLINE" | awk '{gsub(/G/,"",$2); print $2+0}')
+say "CPU: ${CPUMODEL:-unknown}; usable threads (nproc) $NPROC; physical cores visible ~${PHYS:-?}; container CPU limit: ${CGCPU:-n/a}"
+say "RAM: ${RAMGB} GiB total, ${RAMAV} GiB available now; container memory limit: ${CGMEM:-n/a} GiB"
+say "DISK: $DISKDIR is on $(echo "$DFLINE" | awk '{print $1}'): ${DISKTOT} GB total, ${DISKFREE} GB free"
+EFFCPU=$NPROC
+if [ -n "$CGCPU" ] && [ "$CGCPU" != none ]; then EFFCPU=$(awk -v a="$CGCPU" -v b="$NPROC" 'BEGIN{printf "%d", (a<b?a:b)}'); fi
+EFFRAM=$RAMGB
+if [ -n "$CGMEM" ] && [ "$CGMEM" != none ]; then EFFRAM=$(awk -v a="$CGMEM" -v b="$RAMGB" 'BEGIN{printf "%d", (a<b?a:b)}'); fi
+NEED_RAM=$(( 30 + 40 * NG ))
+NEED_CPU=$(( 2 * NG + 8 ))
+NEED_DISK=${PILOT_MIN_DISK_GB:-400}
+RASLOTS=$(awk -v c="$EFFCPU" -v g="$NG" -v r="$EFFRAM" 'BEGIN{a=c-2*g-4; b=(r-30-g*40)/6; m=(a<b?a:b); if (m<0) m=0; printf "%d", m}')
+say "needs for $NG GPU(s): RAM >= ${NEED_RAM} GiB (30 + 40/fit), threads >= ${NEED_CPU}, free disk >= ${NEED_DISK} GB (plan peak ~330 GB for 5 scrolls)"
+say "Route A slots the planner would pick: min(threads - 2 x GPUs - 4 = $(( EFFCPU - 2*NG - 4 )), RAM-bound) = $RASLOTS"
+if [ "$EFFRAM" -lt "$NEED_RAM" ]; then bad=1; why="$why RAM ${EFFRAM} GiB < ${NEED_RAM};"; fi
+if [ "$EFFCPU" -lt "$NEED_CPU" ]; then bad=1; why="$why threads $EFFCPU < ${NEED_CPU};"; fi
+if [ "$DISKFREE" -lt "$NEED_DISK" ]; then bad=1; why="$why free disk ${DISKFREE} GB < ${NEED_DISK};"; fi
+
 say "=== 2. LINK (started now) ==="
 URL=https://dl.ash2txt.org/datasets/spiral_datasets/PHerc0191/20250821151635/tracks/PHerc0191_20250821151635_surface_m7_L0_th0.2.dbm
 URL2=https://github.com/StewartSethA/villa/releases/download/routeA-kit-94be1eae/routeA-kit-94be1eae.tar.xz
@@ -133,7 +165,7 @@ say "=== 5. VERDICT ==="
 if [ "$bad" = 0 ]; then
   say "GO: link $MBS MB/s >= $MIN, $NG GPU(s) usable. Hints for the main run:  --gpu-speed ${SPD:-1.0}   --max-height ${HMAX:-13000}"
   [ "$MBS" != "" ] && awk -v m="$MBS" 'BEGIN{ if (m<60) print "NOTE: link under 60 MB/s: use --gpus " (m<30?"2":"4") " rather than all cards"}'
-  echo "VERDICT: GO   (link ${MBS} MB/s, ${NG} GPUs, torch wheel ${CU:-skipped}, total $(( $(date +%s) - T0 )) s)"
+  echo "VERDICT: GO   (link ${MBS} MB/s, ${NG} GPUs, ${EFFCPU} threads, ${EFFRAM} GiB RAM, ${DISKFREE} GB free, Route A slots ~${RASLOTS}, torch wheel ${CU:-skipped}, total $(( $(date +%s) - T0 )) s)"
   exit 0
 else
   echo "VERDICT: CUT   (${why}) -- destroy this box. total $(( $(date +%s) - T0 )) s"
