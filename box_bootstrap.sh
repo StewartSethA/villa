@@ -199,6 +199,8 @@ watch_now() {
   local H
   H=$(box_home)
   if [ -t 1 ] && [ -z "$ROUTEB_NO_WATCH" ]; then
+    say "PULL COMMANDS for YOUR machine (direct + vast.ai proxy):"
+    ROUTEB_HOME=$H bash "$DEST/routeB_watch.sh" --pull 2>/dev/null | sed "s/^/    /"
     say "attaching the dashboard: Ctrl-C detaches only the watcher"
     say "reattach any time: bash $DEST/routeB_watch.sh"
     ROUTEB_HOME=$H exec bash "$DEST/routeB_watch.sh"

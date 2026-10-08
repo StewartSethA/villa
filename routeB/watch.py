@@ -88,7 +88,8 @@ def _repo_raw_base() -> str:
             return ""
     url, br = g("config", "--get", "remote.origin.url"), g("rev-parse", "--abbrev-ref", "HEAD")
     m = re.search(r"github\.com[:/]+([^/]+/[^/.]+?)(?:\.git)?$", url)
-    return f"https://raw.githubusercontent.com/{m.group(1)}/{br}" if (m and br and br != "HEAD") else "https://raw.githubusercontent.com/<OWNER>/<REPO>/<BRANCH>"
+    repo = m.group(1) if m else "StewartSethA/villa"                  # the deploy repo; the branch name is what matters
+    return f"https://raw.githubusercontent.com/{repo}/{br if br and br != 'HEAD' else 'routeAB-deploy-v5.1'}"
 
 
 def pull_lines(home: Path, env=None, full: bool = False) -> list[str]:
@@ -603,6 +604,9 @@ def main(argv=None) -> int:
     ap.add_argument("--brief", action="store_true", help="compact AND without the event stream (<= 28 lines)")
     ap.add_argument("--full", action="store_true", help="the long dashboard / the long diagnostic snapshot (default is ONE SCREEN: <= 40 lines x 100 columns)")
     a = ap.parse_args(argv)
+    if a.pull:
+        print("\n".join(pull_lines(Path(a.home or os.environ.get('ROUTEB_HOME') or '/workspace/routeB'), full=True)))
+        return 0
     if not a.home:
         print("routeB_watch: set ROUTEB_HOME or pass --home", file=sys.stderr)
         return 2

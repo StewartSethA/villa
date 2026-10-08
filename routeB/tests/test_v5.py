@@ -611,3 +611,12 @@ def test_watch_once_default_is_one_screen(tmp_path):
     lines = r.stdout.rstrip("\n").split("\n")
     assert len(lines) <= 40, len(lines)
     assert max(len(x) for x in lines) <= 100, max(len(x) for x in lines)
+
+
+def test_pull_block_full_has_direct_proxy_and_fallback(tmp_path):
+    L = W.pull_lines(tmp_path, {"PUBLIC_IPADDR": "9.9.9.9", "VAST_TCP_PORT_22": "40022", "VAST_CONTAINERLABEL": "C.12345", "USER": "root"}, full=True)
+    txt = "\n".join(L)
+    assert L[0] == "H=root@9.9.9.9" and L[1] == "P=40022"
+    assert "curl -fsSL $B/pull_box8.py" in txt and "vastai ssh-url 12345" in txt and "H=root@sshN.vast.ai" in txt and "rsync -aH" in txt
+    assert "<OWNER>" not in txt and all(len(x) <= 140 for x in L)
+    assert W.pull_lines(tmp_path, {"USER": "root"})[0] == "H=root@<BOX-IP>" and len(W.pull_lines(tmp_path, {"USER": "root"})) == 5      # the compact form is unchanged
