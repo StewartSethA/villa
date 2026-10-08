@@ -20,6 +20,20 @@ CKPT_STEP_PY = ("import sys,torch;ck=torch.load(sys.argv[1],map_location='cpu',w
                 "print(int(ck.get('completed_iterations',-1)))")
 
 
+
+# fit_spiral.py lives beside a SOURCE dir vc_spiral/ (python only, no compiled extension). Running it with
+# cwd/script-dir = spiral-fitting put that dir first on sys.path and shadowed the installed vc_spiral, so the fit ran
+# its whole length and died at finalization ("Packed satisfaction requires PatchSatisfactionAtlas"). The installed
+# package is imported FIRST (it is then in sys.modules and cannot be shadowed), the script runs from a neutral cwd.
+_LAUNCH = ("import sys, runpy; import vc_spiral.spiral_sampling as m; "
+           "assert hasattr(m, 'PatchSatisfactionAtlas'), 'vc_spiral native extension missing: ' + m.__file__; "
+           "sf, *rest = sys.argv[1:]; sys.path.insert(0, sf); sys.argv = [sf + '/fit_spiral.py'] + rest; "
+           "runpy.run_path(sf + '/fit_spiral.py', run_name='__main__')")
+
+
+def fit_cmd(sf, ds, cache):
+    return [env_python(), "-c", _LAUNCH, str(sf), "--dataset", str(ds), "--cache", str(cache)]
+
 def overrides(sp: dict, z0: int, z1: int, steps: int, shell: int, extra: dict | None) -> dict:
     o = {"z_begin": z0, "z_end": z1, "input_disable_patches": True, "loss_weight_shell_outer": 0, "loss_weight_shell_patch_radius": 0,
          "dense_spacing_mode": "grad_mag", "loss_weight_dense_spacing": 12.0, "input_use_outer_shell": False, "input_use_fibers": False,
@@ -128,7 +142,7 @@ def run_fit(scroll: str, tag: str, z0: int, z1: int, steps: int, sense: str | No
             break
         say(f"   chunk {chunk} from step {got}", "fit")
         t0 = time.time()
-        rc = run([env_python(), "fit_spiral.py", "--dataset", ds, "--cache", env["FIT_SPIRAL_CACHE_DIR"]], log=log, env=env, cwd=sf)
+        rc = run(fit_cmd(sf, ds, env["FIT_SPIRAL_CACHE_DIR"]), log=log, env=env, cwd=run_dir)
         now = ckpt_step(ckpt) if ckpt.exists() else 0
         say(f"   chunk {chunk} exited rc={rc} after {time.time() - t0:.0f} s, checkpoint at step {now}", "fit")
         if rc == 0:
