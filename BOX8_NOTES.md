@@ -50,3 +50,20 @@ RAM/disk guards: `--ram-need-gb` (40), `--ram-floor-gb` (12), `--min-free-gb` (6
 
 ## Computed stripe height (adaptive ladder) -- WIRED into the scheduler
 `routeB/ladder.py`: `computed_height(vram_gib, margin_gib=1.5)`, `start_height_for()` (min of span, VRAM model, 2^24-track limit, `--max-height`; a recorded success wins), `decide()` (OOM after its retry -> 0.75x the failed height, grid 100, floor 1000; multinomial -> the track-limit height), `record_height()` -> `box8/heights.json`. Model: peak VRAM = 3.97 + 0.00208 GiB x z_slices, a 2-point line (2,800-slice 0191 stripes on a 4060 Ti: 9.6-10.2 GiB, n = 4; 13,000-slice 0211 on a V100-32: ~31 GiB). On a 40 GB A100 the model allows 16,600 slices, so the whole 13,000-slice scroll goes to one GPU. See `SCHEDULING.md` for the policy, cost model and the parallel-vs-serial answer.
+
+## Runtime control directory (`$ROUTEB_HOME/box8/control/`, re-read every `--control-poll-s` = 10 s)
+| file | meaning | written by |
+|---|---|---|
+| `gpus` | comma list of allowed GPU indices (absent = `--gpus` / all usable GPUs). Indices that are not usable GPUs of the box are ignored with a warning | `routeB_ctl.sh gpus 0,1,2` (also deletes `drain.N` for the listed N) |
+| `drain.N` | finish GPU N's current fit, then do not use it | `drain N`; also created by a kill |
+| `kill.N` | SIGTERM GPU N's fit process group now; the job goes back to `pending` (class `ctl_kill`, no ladder attempt charged) and resumes from its last autosave (`FIT_SPIRAL_AUTOSAVE_INTERVAL`, 1000 steps; anything newer is recomputed). Consumed as `kill.N.done`; GPU N stays drained | `kill N` |
+| `STOP` | graceful: no new launches; when the running fits finish the workers end and ALLDONE is written (pending work stays in `box8/state`; re-running resumes, a leftover `STOP` is removed at start) | `stop` |
+| `PAUSE` / `RESUME` | no launches while `PAUSE` exists; `RESUME` (consumed) removes `PAUSE` and `STOP` | `pause` / `resume` |
+| `PLAN.txt` | the latest REPLAN printout (written by the scheduler) | scheduler |
+`box8/STOP` (outside `control/`) is unchanged: HARD stop, kills running fits.
+
+**Re-plan (`Scheduler.replan` -> `planner.replan`)** runs on every change of allowed GPUs / pause / stop / kill and at no other time. Inputs: remaining hours of the running fits (from their iteration progress), spent $ and hours, pending payload, the plan priority. Committed scrolls (something already ran or was retried) always stay. Uncommitted scrolls are admitted greedily in priority order while the **p90** case keeps `spent + makespan x effective $/h + payload egress <= plan_frac x soft` and `now + makespan <= plan_frac x max_run_hours`; the first that does not fit and all after it are `deferred` (status `deferred`, `replan_deferred`) with the numbers in `fail_why`; a later re-plan with more GPUs restores them to `pending`. The LPT tail split is re-armed for the new count; Route A is restarted (resumable) with the new `--workers` when the slot count moved by >= max(2, 20 %). Not modelled in a re-plan: lasagna fetch time for scrolls not yet staged (inputs already on disk are assumed). Budget behaviour is unchanged: the governor still only stops launching, kills nothing before the hard cap.
+
+**Foreign processes.** At start every GPU with `memory.used > --foreign-mib` (1500 MiB) is skipped with a warning (`--force-gpus` overrides); if all requested GPUs are held the run fails loudly. A foreign process that appears later blocks launches on that GPU for 60 s at a time (checked just before each launch) and is announced.
+
+**Disk measurement.** `ROUTEB_HOME` is created first and `statvfs` is taken on that path itself (never its parent: an overlay root next to a separate `/workspace` volume read 13 GB free on a box with 918 GB free). The planner prints the `df` line it used (`PLAN disk: ...`), clamps the base use to the volume, and counts the env only when `--disk-free-gb` is overridden (a real df already includes it). `--disk-total-gb` / `--disk-free-gb` still override and are announced.

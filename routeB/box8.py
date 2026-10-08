@@ -18,6 +18,7 @@ import gzip
 import hashlib
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -148,6 +149,21 @@ class Scheduler:
         self.released: set[str] = set()
         self.heights_path = self.D / "heights.json"
         self.routea_proc = None
+        self.routea_slots = None
+        self.routea_expected_exit = False
+        self.routea_launch_fn = None
+        self.control = self.D / "control"
+        self.allowed_init = None                         # set by main(): the --gpus subset; None = every worker GPU
+        self.allowed = None                              # live allowed set (control dir); None = allowed_init / all
+        self.paused = False
+        self.stop_launch = False                         # control STOP: no new launches, running fits finish, then the run ends
+        self.kill_req: set[str] = set()
+        self.foreign_skip: dict[str, float] = {}
+        self.gpu_mem_fn = None                           # tests: gpu -> memory.used MiB
+        self._mem_cache = (0.0, {})
+        self.priority: list[str] = []
+        self.replan_log: list[str] = []
+        self._warned_unknown_gpus: set[str] = set()
         self.disk_fn = (lambda: (10e12, 10e12)) if a.fake_gpus else (lambda: tuple(shutil.disk_usage(self.H)[:2]))
         self.cv = threading.Condition()
         self.save_lock = threading.RLock()
@@ -213,8 +229,11 @@ class Scheduler:
         steps at 0.7-1.5 it/s, all MEASURED on pny); other step counts: linear in steps + 0.25 h fixed (ASSUMED)."""
         if self.a.smoke:
             j["expected_h"] = 0.9
+            j["p90_h"] = 1.4
         elif self.a.steps != 30000:
             j["expected_h"] = j["expected_h"] * self.a.steps / 30000.0 + 0.25
+            if "p90_h" in j:
+                j["p90_h"] = j["p90_h"] * self.a.steps / 30000.0 + 0.25
 
     def add_scroll(self, scroll: str, z0: int, z1: int, first_rung: str | None):
         sp = spec(scroll)
@@ -303,15 +322,18 @@ class Scheduler:
         while not self.done_evt.is_set() and not self.stop_reason:
             time.sleep(min(1.0, self.a.poll_s))
             with self.cv:
-                todo = [s for s in self.order_scrolls() if not self.scrolls[s]["fetched"] and not self.scrolls[s]["fetching"] and not self.scrolls[s].get("fetch_failed")]
+                todo = [s for s in self.order_scrolls() if not self.scrolls[s]["fetched"] and not self.scrolls[s]["fetching"] and not self.scrolls[s].get("fetch_failed")
+                        and any(self.jobs[i]["scroll"] == s and self.jobs[i]["status"] == "pending" for i in self.order)]
                 if not todo:
-                    return
+                    if all(sc["fetched"] or sc.get("fetch_failed") for sc in self.scrolls.values()):
+                        return
+                    continue                                   # deferred scrolls may be restored by a re-plan: keep watching
                 if used0 is None:
                     total, free, hw = self._disk_state()
                     used0 = (total - free) - sum(self.staged_gb.values())
                 active = sum(1 for sc in self.scrolls.values() if sc["fetching"])
                 unstarted = sum(1 for k, sc in self.scrolls.items() if (sc["fetched"] or sc["fetching"]) and not any(j["scroll"] == k and j["status"] != "pending" for j in self.jobs.values()))
-                free_gpus = max(0, len(self.gpus) - len(self.busy))
+                free_gpus = max(0, len(self.allowed_set()) - len([g for g in self.busy if g in self.allowed_set()]))
                 s = todo[0]
                 if active >= self.a.fetch_parallel or unstarted >= free_gpus + self.a.fetch_ahead:
                     continue
@@ -339,24 +361,68 @@ class Scheduler:
         return seen + [s for s in self.scrolls if s not in seen]
 
     # ---- claim
+    def allowed_set(self) -> set:
+        base = self.allowed if self.allowed is not None else (self.allowed_init if self.allowed_init is not None else set(self.gpus))
+        return set(base) & set(self.gpus)
+
+    def _gpu_clear(self, gpu: str) -> bool:
+        """False when a FOREIGN process holds VRAM on a GPU we are about to launch on (appeared after startup).  --force-gpus disables the check."""
+        if self.a.force_gpus:
+            return True
+        try:
+            if self.gpu_mem_fn is not None:
+                used = float(self.gpu_mem_fn(gpu))
+            elif self.a.fake_gpus:
+                return True
+            else:
+                t, cache = self._mem_cache
+                if time.time() - t > 15:
+                    cache = {r[0]: float(r[1]) for r in nvsmi_query("index,memory.used")}
+                    self._mem_cache = (time.time(), cache)
+                used = cache.get(gpu, 0.0)
+        except (SystemExit, ValueError):
+            return True                                   # cannot measure: do not block on a monitoring failure
+        return used <= self.a.foreign_mib
+
     def claim(self, gpu: str):
         warned = 0.0
+        idle_warned = 0.0
         with self.cv:
             while True:
                 if self.stop_reason:
                     return None
+                pend = [self.jobs[i] for i in self.order if self.jobs[i]["status"] == "pending"]
+                running = [j for j in self.jobs.values() if j["status"] == "running"]
+                waiting_fetch = [j for j in pend if self.scrolls[j["scroll"]]["fetching"]]
+                if not pend and not running and not waiting_fetch:
+                    return None
+                if self.stop_launch:
+                    if not running:
+                        return None                       # graceful STOP: nothing running any more -> workers end, ALLDONE is written
+                    self.cv.wait(timeout=2)
+                    continue
+                if self.paused or gpu not in self.allowed_set() or time.time() < self.foreign_skip.get(gpu, 0.0):
+                    if not self.allowed_set() and not running and time.time() - idle_warned > 600:
+                        say("IDLE: no allowed GPU and nothing running (control dir); the box is still billing", "box8")
+                        idle_warned = time.time()
+                    self.cv.wait(timeout=2)
+                    continue
                 self._maybe_tail_split()
                 pend = [self.jobs[i] for i in self.order if self.jobs[i]["status"] == "pending"]
                 ready = [j for j in pend if self.scrolls[j["scroll"]]["fetched"]]
                 if self.tail_done:
                     ready.sort(key=lambda j: -j["expected_h"])          # tail: largest first (LPT)
-                waiting_fetch = [j for j in pend if self.scrolls[j["scroll"]]["fetching"]]
                 for j in ready:
                     ram_ok, ram_why = self._ram_ok()
                     if not ram_ok:
                         if time.time() - warned > 60:
                             say(f"GPU {gpu}: waiting for RAM: {ram_why}", "box8")
                             warned = time.time()
+                        break
+                    if not self._gpu_clear(gpu):
+                        self.foreign_skip[gpu] = time.time() + 60
+                        say(f"WARNING GPU {gpu}: a foreign process now holds VRAM (> --foreign-mib {self.a.foreign_mib:g} MiB); not launching on it for 60 s (--force-gpus overrides)", "box8")
+                        self.ev("foreign_gpu", gpu=gpu)
                         break
                     ok, why = self.gov.may_launch(j["id"], j["expected_h"], j["payload_gb"], 0.0)
                     if ok:
@@ -375,10 +441,6 @@ class Scheduler:
                         self.refused_announced.add(j["id"])
                         say("NOT LAUNCHED (budget): " + why, "budget")
                     self.save(j["scroll"])
-                running = [j for j in self.jobs.values() if j["status"] == "running"]
-                still = [i for i in self.order if self.jobs[i]["status"] == "pending"]
-                if not still and not running and not waiting_fetch:
-                    return None
                 self.cv.wait(timeout=5)
 
     def _maybe_tail_split(self):
@@ -387,11 +449,12 @@ class Scheduler:
         if self.tail_done or not self.cfg.get("dynamic") or getattr(self.a, "no_tail_split", False):
             return
         pend = [j for j in (self.jobs[i] for i in self.order) if j["status"] == "pending" and not j["attempts"]]     # never split a retry (it would lose its checkpoint)
-        if not pend or len(pend) >= len(self.gpus):
+        al = self.allowed_set()
+        if not pend or len(pend) >= len(al):
             return
-        avail = [0.0] * max(0, len(self.gpus) - len(self.busy))
+        avail = [0.0] * max(0, len(al) - len([g for g in self.busy if g in al]))
         for j in self.jobs.values():
-            if j["status"] == "running":
+            if j["status"] == "running" and j.get("gpu") in al:
                 try:
                     avail.append(self.gov.remaining_h(self.gov.running[j["id"]]))
                 except KeyError:
@@ -400,7 +463,7 @@ class Scheduler:
         new, notes = PL.tail_split(self.cfg, avail, pend, shells, "p50")
         self.tail_done = True
         if not notes:
-            say(f"tail balancing: {len(pend)} unstarted job(s) < {len(self.gpus)} GPUs, no stripe split shortens the simulated tail", "box8")
+            say(f"tail balancing: {len(pend)} unstarted job(s) < {len(al)} allowed GPUs, no stripe split shortens the simulated tail", "box8")
             return
         old_ids = {j["id"] for j in pend}
         new_ids = {j["id"] for j in new}
@@ -460,6 +523,7 @@ class Scheduler:
         self.procs[j["id"]] = p
         say(f"{j['id']}: rung {j['rung_name']} z[{j['z0']},{j['z1']}) on GPU {gpu} pid {p.pid} (attempt {att['n']}, overrides {ov})", "box8")
         last_sig, last_change, peak_rss, stalled, host_oom, early_mt = None, time.time(), 0.0, False, False, False
+        ctl_killed = False
         t_start = time.time()
         stall_s = self.a.stall_minutes * 60.0
         while p.poll() is None:
@@ -495,12 +559,20 @@ class Scheduler:
                 self._kill(p)
             if self.stop_reason and not p.poll():
                 self._kill(p)
+            if gpu in self.kill_req and not ctl_killed and p.poll() is None:
+                ctl_killed = True
+                say(f"{j['id']}: CONTROL KILL of GPU {gpu}: SIGTERM now; the interval is re-queued and resumes from its last autosave "
+                    f"(FIT_SPIRAL_AUTOSAVE_INTERVAL {os.environ.get('FIT_SPIRAL_AUTOSAVE_INTERVAL', '1000')} steps)", "box8")
+                self._kill(p)
+        self.kill_req.discard(gpu)
         rc = p.returncode
         self.procs.pop(j["id"], None)
         att.update(rc=rc, wall_s=round(time.time() - t_start, 1), peak_rss_gb=round(peak_rss, 1), t1=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
         txt = tail_text(fitlog, 20000) + "\n" + tail_text(jlog, 20000)
         if self.stop_reason:
             att["class"] = "hard_stop"
+        elif ctl_killed:
+            att["class"] = "ctl_kill"
         elif early_mt:
             att["class"] = "multinomial"
             att["log_tail"] = f"detect-early: {j.get('n_loaded')} tracks loaded"
@@ -544,6 +616,13 @@ class Scheduler:
                 self.gov.fit_end(j["id"], True, j["payload_gb"])
                 say(f"{j['id']}: DONE rung {j['rung_name']} in {att['wall_s']:.0f} s, peak RSS {att['peak_rss_gb']} GB", "box8")
                 self.ev("done", job=j["id"], rung=j["rung_name"], wall_s=att["wall_s"], peak_rss_gb=att["peak_rss_gb"])
+            elif cls == "ctl_kill":
+                j["status"] = "pending"                      # never lost: back in the queue, resumes from its last checkpoint, no attempt charged to the ladder
+                j["fresh"] = False
+                j.setdefault("notes", []).append("re-queued after a control-dir KILL")
+                self.gov.fit_end(j["id"], False)
+                self.ev("ctl_kill_requeued", job=j["id"], gpu=j.get("gpu"))
+                say(f"{j['id']}: re-queued after the control KILL (not a failure)", "box8")
             elif cls == "hard_stop":
                 j["status"] = "hard_stopped"
                 self.gov.fit_end(j["id"], False)
@@ -743,7 +822,173 @@ class Scheduler:
             self.stop_reason = why
             self.cv.notify_all()
 
+    # ---- runtime control: <home>/box8/control/ re-read every --control-poll-s
+    #   gpus          comma list of allowed GPU indices (live; absent = the --gpus list / all usable)
+    #   STOP          graceful: stop launching, let running fits finish, then the run ends (resume = re-run; state is on disk)
+    #   PAUSE/RESUME  PAUSE: no new launches while the file exists; RESUME (a command file, consumed) removes PAUSE and STOP
+    #   drain.<gpu>   finish that GPU's current fit, then do not use it     kill.<gpu>   SIGTERM that GPU's fit; the interval is re-queued from its last autosave
+    # box8/STOP (outside control/) keeps its old meaning: HARD stop of everything.  routeB_ctl.sh writes these files.
+    def read_control(self) -> dict:
+        c = self.control
+        c.mkdir(parents=True, exist_ok=True)
+        base = set(self.allowed_init) if self.allowed_init is not None else set(self.gpus)
+        gf = c / "gpus"
+        if gf.exists():
+            want = {x for x in re.split(r"[,\s]+", gf.read_text()) if x}
+            for u in sorted(want - set(self.gpus)):
+                if u not in self._warned_unknown_gpus:
+                    self._warned_unknown_gpus.add(u)
+                    say(f"CONTROL: gpus file lists GPU {u} which is not a usable GPU of this box (ignored)", "control")
+            base = want & set(self.gpus)
+        if (c / "RESUME").exists():
+            for n in ("PAUSE", "STOP", "RESUME"):
+                try:
+                    (c / n).unlink()
+                except OSError:
+                    pass
+        kills = sorted(f.name.split(".", 1)[1] for f in c.glob("kill.*") if not f.name.endswith(".done"))
+        for g in kills:                                   # a killed GPU stays out until a `gpus` command names it again
+            self.kill_req.add(g)
+            (c / f"drain.{g}").write_text("killed\n")
+            try:
+                (c / f"kill.{g}").rename(c / f"kill.{g}.done")
+            except OSError:
+                pass
+        drain = {f.name.split(".", 1)[1] for f in c.glob("drain.*")}
+        return {"allowed": base - drain, "paused": (c / "PAUSE").exists(), "stop": (c / "STOP").exists(), "kills": kills, "drain": sorted(drain)}
+
+    def apply_control(self, why_prefix: str = "CONTROL") -> bool:
+        st = self.read_control()
+        with self.cv:
+            changed = (st["allowed"] != self.allowed_set()) or st["paused"] != self.paused or st["stop"] != self.stop_launch or bool(st["kills"])
+            old = self.allowed_set()
+            self.allowed, self.paused, self.stop_launch = st["allowed"], st["paused"], st["stop"]
+            self.cv.notify_all()
+        if changed:
+            what = (f"allowed GPUs {sorted(old, key=str)} -> {sorted(st['allowed'], key=str)}; paused={st['paused']} stop={st['stop']} drain={st['drain']} kill={st['kills']}")
+            say(f"{why_prefix}: {what}", "control")
+            self.ev("control", what=what)
+            self.replan(what)
+        return changed
+
+    def control_loop(self):
+        while not self.done_evt.is_set():
+            try:
+                self.apply_control()
+            except Exception as e:                       # noqa: BLE001 - a bad control file must not kill the scheduler
+                say(f"CONTROL ERROR {type(e).__name__}: {e}", "control")
+            self.done_evt.wait(self.a.control_poll_s)
+
+    def replan(self, reason: str) -> dict | None:
+        """Re-plan the UNSTARTED work for the current set of allowed GPUs (shrink or regrow): tail split re-armed, scrolls that no longer fit the remaining budget/time are
+        DEFERRED explicitly (never a mid-fit cutoff; running fits always finish), earlier re-plan deferrals are re-admitted when capacity returns, Route A slots follow."""
+        if not self.cfg.get("dynamic") or self.dry:
+            return None
+        with self.cv:
+            al = self.allowed_set()
+            groups: dict = {}
+            for i in self.order:
+                j = self.jobs[i]
+                sc = j["scroll"]
+                g = groups.setdefault(sc, {"jobs": [], "committed": False})
+                if j["status"] == "pending" or (j["status"] == "deferred" and j.get("replan_deferred")):
+                    g["jobs"].append(j)
+                    if j["attempts"]:
+                        g["committed"] = True
+                elif j["status"] in ("running", "done", "split", "descended", "failed"):
+                    g["committed"] = True
+            groups = {k: v for k, v in groups.items() if v["jobs"]}
+            avail, extra = [], 0.0
+            for g in sorted(al, key=str):
+                jid = self.busy.get(g)
+                avail.append(self.gov.remaining_h(self.gov.running[jid]) if jid in self.gov.running else 0.0)
+            for g, jid in self.busy.items():
+                if g not in al and jid in self.gov.running:
+                    extra = max(extra, self.gov.remaining_h(self.gov.running[jid]))
+            shells = {k: sc["shell"] for k, sc in self.scrolls.items()}
+            prio = self.priority or self.order_scrolls()
+            res = PL.replan(self.cfg, avail, extra, groups, prio, shells, self.gov.spent(), self.gov.hours(), self.gov.r,
+                            self.gov.unpulled_gb + sum(f.payload_gb for f in self.gov.running.values()), self.a.plan_frac)
+            restored, deferred = [], []
+            for sc, g in groups.items():
+                for j in g["jobs"]:
+                    if sc in [d for d, _ in res["deferred"]]:
+                        if j["status"] == "pending":
+                            j["status"], j["replan_deferred"] = "deferred", True
+                            j["fail_why"] = next(w for d, w in res["deferred"] if d == sc)
+                    elif j["status"] == "deferred" and j.get("replan_deferred"):
+                        j["status"], j["replan_deferred"] = "pending", False
+                        j["fail_why"] = None
+                if sc in [d for d, _ in res["deferred"]]:
+                    deferred.append(sc)
+                elif any(j.get("replan_deferred") is False for j in g["jobs"]):
+                    restored.append(sc)
+            self.tail_done = False                          # re-arm the LPT tail split for the new GPU count
+            n_run = len([g for g in self.busy if g in al])
+            lines = [f"REPLAN ({reason}): {len(al)} allowed GPU(s) {sorted(al, key=str)} of {len(self.gpus)}, {n_run} busy; spent ${self.gov.spent():.2f} at {self.gov.hours():.2f} h; "
+                     f"{sum(len(g['jobs']) for g in groups.values())} unstarted job(s) in {len(groups)} scroll(s)",
+                     f"REPLAN p50 {res['mk50']:.1f} h / ${res['usd50']:.2f}; p90 {res['mk90']:.1f} h / ${res['usd90']:.2f} vs limit ${res['limit_usd']:.2f} / {res['limit_h']:.1f} h"]
+            for sc in res["keep"]:
+                lines.append(f"REPLAN keep {sc}")
+            for sc, w in res["deferred"]:
+                lines.append(f"REPLAN DEFERRED {sc}: {w}")
+            for sc in restored:
+                lines.append(f"REPLAN RESTORED {sc} (capacity is back)")
+            slots, sw = self._routea_slots_now()
+            lines.append(f"REPLAN Route A: {slots} slot(s) = {sw}")
+            lines.append(f"REPLAN disk: free {self._disk_state()[1]:.0f} of {self._disk_state()[0]:.0f} GB, staged inputs {sum(self.staged_gb.values()):.0f} GB")
+            for sc in groups:
+                self.save(sc)
+            self.cv.notify_all()
+        for l in lines:
+            say(l, "replan")
+        self.replan_log = lines
+        try:
+            (self.control).mkdir(parents=True, exist_ok=True)
+            (self.control / "PLAN.txt").write_text("\n".join(lines) + "\n")
+        except OSError:
+            pass
+        self.ev("replan", reason=reason, allowed=sorted(al, key=str), keep=res["keep"], deferred=[d for d, _ in res["deferred"]], restored=restored, mk90=res["mk90"], usd90=res["usd90"])
+        self._routea_rescale(slots)
+        return res
+
     # ---- Route A on the spare cores
+    def _routea_slots_now(self):
+        h = self.host or PL.Host([PL.Gpu(g, 40.0) for g in self.gpus])
+        return PL.routea_slots(h.phys_cores, len(self.allowed_set()), self.a.routea_reserve_cores, h.ram_gb, self.a.ram_need_gb, h.ram_reserve_gb,
+                               self.a.routea_ram_per_grow_gb, self.a.routea_slots)
+
+    def _routea_launch(self, slots: int, why: str):
+        from . import routea_side as RA
+        cmd = RA.command(self.H, self.routea_names, slots, self.routea_hours, self.a.routea_seeds)
+        say(f"Route A START on spare cores: {slots} slots = {why}; {len(self.routea_names)} scroll(s), {self.a.routea_seeds} seeds each, {self.routea_hours:.1f} h; log box8/logs/routeA.log", "routeA")
+        self.ev("routea_start", slots=slots, why=why, scrolls=self.routea_names, hours=self.routea_hours)
+        self.routea_slots = slots
+        self.routea_proc = (self.routea_launch_fn or RA.launch)(self.H, cmd, self.D / "logs" / "routeA.log")
+
+    def _routea_rescale(self, slots: int):
+        """Route A's worker count is fixed per process; on a GPU-count change it is restarted (it resumes: finished seeds are skipped) when the slot count moved by >= max(2, 20 %)."""
+        p = self.routea_proc
+        if p is None or self.routea_slots is None or p.poll() is not None:
+            return
+        if abs(slots - self.routea_slots) < max(2, 0.2 * self.routea_slots) or slots < 1:
+            return
+        say(f"Route A RESCALE {self.routea_slots} -> {slots} slots after the GPU change: restarting it (resumable; the grows in flight restart from their last round)", "routeA")
+        self.routea_expected_exit = True
+        try:
+            os.killpg(p.pid, signal.SIGTERM)
+            for _ in range(30):
+                if p.poll() is not None:
+                    break
+                time.sleep(1)
+            if p.poll() is None:
+                os.killpg(p.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        self._routea_launch(slots, f"rescaled (GPU change): {self._routea_slots_now()[1]}")
+        self.ev("routea_rescale", slots=slots)
+        self.routea_expected_exit = False
+
     def _routea_thread(self):
         a = self.a
         t0 = time.time()
@@ -751,9 +996,7 @@ class Scheduler:
             time.sleep(2)                                    # start after the first fit is on a GPU: the fits come first
         if self.done_evt.is_set() or self.stop_reason:
             return
-        busy = len(self.gpus)
-        h = self.host or PL.Host([PL.Gpu(g, 40.0) for g in self.gpus])
-        slots, why = PL.routea_slots(h.phys_cores, busy, a.routea_reserve_cores, h.ram_gb, a.ram_need_gb, h.ram_reserve_gb, a.routea_ram_per_grow_gb, a.routea_slots)
+        slots, why = self._routea_slots_now()
         if slots < 1:
             say(f"Route A NOT started: 0 slots ({why})", "routeA")
             self.ev("routea_skip", why=why)
@@ -767,18 +1010,18 @@ class Scheduler:
         if not names:
             say("Route A NOT started: no scroll chosen (pins/scrolls.json missing or --routea-disk-gb too small)", "routeA")
             return
-        hours = a.routea_hours or max(1.0, (getattr(a, 'planned_makespan_h', None) or 4.0) * 0.9)
-        cmd = RA.command(self.H, names, slots, hours, a.routea_seeds)
-        say(f"Route A START on spare cores: {slots} slots = {why}; {len(names)} scroll(s), {a.routea_seeds} seeds each, {hours:.1f} h; log box8/logs/routeA.log", "routeA")
-        self.ev("routea_start", slots=slots, why=why, scrolls=names, hours=hours)
-        self.routea_proc = RA.launch(self.H, cmd, self.D / "logs" / "routeA.log")
+        self.routea_names = names
+        self.routea_hours = a.routea_hours or max(1.0, (getattr(a, "planned_makespan_h", None) or 4.0) * 0.9)
+        self._routea_launch(slots, why)
         self.routea_stop = threading.Event()
         RA.publisher(self.H / "routeA_work", self.out, self.routea_stop, self.ev, every=max(5.0, a.poll_s * 4))
-        while self.routea_proc.poll() is None and not self.done_evt.is_set():
+        while not self.done_evt.is_set():
             time.sleep(5)
-        if self.routea_proc.poll() not in (None, 0):
-            say(f"Route A EXITED rc={self.routea_proc.returncode} (see box8/logs/routeA.log); Route B is unaffected", "routeA")
-            self.ev("routea_exit", rc=self.routea_proc.returncode)
+            p = self.routea_proc
+            if p.poll() not in (None, 0) and not self.routea_expected_exit:
+                say(f"Route A EXITED rc={p.returncode} (see box8/logs/routeA.log); Route B is unaffected", "routeA")
+                self.ev("routea_exit", rc=p.returncode)
+                break
 
     def _routea_finish(self):
         p = self.routea_proc
@@ -798,6 +1041,12 @@ class Scheduler:
         self.start_fetches()
         mon = threading.Thread(target=self.monitor, daemon=True)
         mon.start()
+        if not self.dry:
+            if (self.control / "STOP").exists():
+                say("CONTROL: a control/STOP file was left from an earlier run; removing it (restarting is deliberate)", "control")
+                (self.control / "STOP").unlink()
+            self.apply_control("CONTROL (startup)")
+            threading.Thread(target=self.control_loop, daemon=True, name="control").start()
         if getattr(self.a, "routea", False) and (not self.a.fake_gpus or os.environ.get("ROUTEB_TEST_ROUTEA")):
             threading.Thread(target=self._routea_thread, daemon=True, name="routea").start()
         ths = [threading.Thread(target=self.worker, args=(g,), name=f"gpu{g}") for g in self.gpus]
@@ -862,7 +1111,10 @@ def build_parser():
     ap.add_argument("--z0", type=int, default=None)
     ap.add_argument("--z1", type=int, default=None)
     ap.add_argument("--smoke", action="store_true", help="z 9000-9500, 1500 steps, 2 windings, 1 tile: a proof run (jobs get --smoke)")
-    ap.add_argument("--gpus", default=None, help="comma list of GPU indices (default: all from nvidia-smi)")
+    ap.add_argument("--gpus", default=None, help="comma list of GPU indices allowed at start (default: all usable); change at run time with routeB_ctl.sh gpus 0,1,2")
+    ap.add_argument("--foreign-mib", type=float, default=1500.0, help="a GPU whose memory.used exceeds this before we launch anything is held by a foreign process: warned and skipped")
+    ap.add_argument("--force-gpus", action="store_true", help="use GPUs even if a foreign process holds VRAM")
+    ap.add_argument("--control-poll-s", type=float, default=10.0, help="how often the control dir <home>/box8/control/ is re-read")
     ap.add_argument("--fake-gpus", type=int, default=0, help="TEST ONLY: N logical workers, no nvidia-smi, no RAM guard")
     ap.add_argument("--order", default="spt", choices=["given", "spt", "lpt"], help="queue order: shortest expected first (default; most scrolls finished per $) | as listed | longest first")
     ap.add_argument("--legacy-ladder", action="store_true", help="old static ladder (full -> sw2800), no planner/admission/tail split; also implied by --ladder")
@@ -921,21 +1173,45 @@ def build_parser():
     return ap
 
 
-def gpu_info(a) -> list[PL.Gpu]:
-    """GPU list with VRAM (GiB): fake (tests), --gpus subset, or nvidia-smi."""
-    if a.fake_gpus:
-        return [PL.Gpu(str(i), a.fake_vram_gib, a.gpu_speed) for i in range(a.fake_gpus)]
+def nvsmi_query(cols: str) -> list[list[str]]:
+    """Rows of `nvidia-smi --query-gpu=<cols>` (patched in tests)."""
     try:
-        out = subprocess.run(["nvidia-smi", "--query-gpu=index,name,memory.total", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=30)
+        out = subprocess.run(["nvidia-smi", f"--query-gpu={cols}", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise SystemExit(f"ROUTEB FAIL box8-gpus: cannot run nvidia-smi ({e})")
     if out.returncode != 0 or not out.stdout.strip():
         raise SystemExit(f"ROUTEB FAIL box8-gpus: nvidia-smi rc={out.returncode}: {out.stderr.strip()[:200]}")
-    rows = [[x.strip() for x in r.split(",")] for r in out.stdout.strip().splitlines()]
-    want = [g for g in a.gpus.split(",") if g] if a.gpus else None
-    gs = [PL.Gpu(r[0], float(r[2]) / 1024.0, a.gpu_speed) for r in rows if want is None or r[0] in want]
-    say("GPUs: " + "; ".join(f"{r[0]}={r[1]} {float(r[2]) / 1024:.1f} GiB" for r in rows if want is None or r[0] in want), "box8")
-    return gs
+    return [[x.strip() for x in r.split(",")] for r in out.stdout.strip().splitlines()]
+
+
+def gpu_info(a) -> tuple[list[PL.Gpu], list[PL.Gpu]]:
+    """(all usable GPUs, initially allowed GPUs).  Usable = every card without a FOREIGN process: memory.used above --foreign-mib at startup (e.g. a llama-server holding
+    VRAM) is warned about and skipped unless --force-gpus.  Allowed = the --gpus list (default all usable); the control dir's `gpus` file changes it at run time."""
+    if a.fake_gpus:
+        gs = [PL.Gpu(str(i), a.fake_vram_gib, a.gpu_speed) for i in range(a.fake_gpus)]
+        want = [g for g in (a.gpus or "").split(",") if g]
+        return gs, [g for g in gs if not want or g.idx in want]
+    rows = nvsmi_query("index,name,memory.total,memory.used")
+    usable, skipped = [], []
+    for r in rows:
+        used = float(r[3])
+        if used > a.foreign_mib and not a.force_gpus:
+            skipped.append(r[0])
+            say(f"WARNING GPU {r[0]} ({r[1]}) holds {used:.0f} MiB > --foreign-mib {a.foreign_mib:g} before we launched anything (a foreign process, e.g. a llama-server): "
+                f"SKIPPED. Use --force-gpus to use it anyway.", "box8")
+            continue
+        usable.append(PL.Gpu(r[0], float(r[2]) / 1024.0, a.gpu_speed))
+    say("GPUs: " + "; ".join(f"{r[0]}={r[1]} {float(r[2]) / 1024:.1f} GiB used {float(r[3]):.0f} MiB{' [SKIPPED foreign]' if r[0] in skipped else ''}" for r in rows), "box8")
+    want = [g for g in (a.gpus or "").split(",") if g]
+    for w in want:
+        if w in skipped:
+            say(f"--gpus lists GPU {w} but it is held by a foreign process and was skipped (--force-gpus overrides)", "box8")
+        elif w not in [g.idx for g in usable]:
+            say(f"--gpus lists GPU {w} which nvidia-smi does not report", "box8")
+    allowed = [g for g in usable if not want or g.idx in want]
+    if not allowed:
+        raise SystemExit("ROUTEB FAIL box8-gpus: no allowed GPU left (all requested GPUs are missing or held by foreign processes; --force-gpus to override)")
+    return usable, allowed
 
 
 def physical_cores(a) -> int:
@@ -951,15 +1227,39 @@ def physical_cores(a) -> int:
     return max(1, (os.cpu_count() or 2) // 2)
 
 
-def build_host(a, H: Path) -> PL.Host:
-    gs = gpu_info(a)
+def disk_measure(a, H: Path) -> tuple[float, float, list[str]]:
+    """(total GB, free GB, the df lines used) of the volume that actually holds ROUTEB_HOME (created first).  Overrides are announced; the base use is clamped to the volume."""
+    H.mkdir(parents=True, exist_ok=True)
+    du = shutil.disk_usage(H)
+    lines = [f"df {H} -> total {du.total / 1e9:.0f} GB, used {du.used / 1e9:.0f} GB, free {du.free / 1e9:.0f} GB (statvfs of the path itself, not of its parent)"]
+    total, free = du.total / 1e9, du.free / 1e9
+    if a.disk_total_gb is not None:
+        lines.append(f"OVERRIDE --disk-total-gb {a.disk_total_gb:g} (df said {total:.0f})")
+        total = a.disk_total_gb
+        free = min(free, total) if a.disk_free_gb is None else free
+    if a.disk_free_gb is not None:
+        lines.append(f"OVERRIDE --disk-free-gb {a.disk_free_gb:g} (df said {free:.0f})")
+        free = a.disk_free_gb
+    if free > total:
+        lines.append(f"free {free:.0f} > total {total:.0f}: clamped to total")
+        free = total
+    return total, free, lines
+
+
+def build_host(a, H: Path, gpus=None, allowed=None) -> PL.Host:
+    if gpus is None:
+        gpus, allowed = gpu_info(a)
     ram = a.fake_ram_gb if a.fake_gpus else meminfo_gb()[1]
-    du = shutil.disk_usage(H if H.exists() else H.parent)
-    total = a.disk_total_gb if a.disk_total_gb is not None else du.total / 1e9
-    free = a.disk_free_gb if a.disk_free_gb is not None else du.free / 1e9
-    return PL.Host(gs, phys_cores=physical_cores(a), ram_gb=ram, disk_total_gb=total, disk_free_gb=free, disk_high_water_frac=a.disk_high_water,
-                   fetch_files_per_s=a.fetch_files_per_s, fetch_parallel=a.fetch_parallel, fetch_ahead=a.fetch_ahead, ram_per_fit_gb=a.ram_need_gb,
-                   reserve_cores=a.routea_reserve_cores)
+    total, free, lines = disk_measure(a, H)
+    for l in lines:
+        say(l, "disk")
+    h = PL.Host(allowed, phys_cores=physical_cores(a), ram_gb=ram, disk_total_gb=total, disk_free_gb=free, disk_high_water_frac=a.disk_high_water,
+                fetch_files_per_s=a.fetch_files_per_s, fetch_parallel=a.fetch_parallel, fetch_ahead=a.fetch_ahead, ram_per_fit_gb=a.ram_need_gb,
+                reserve_cores=a.routea_reserve_cores)
+    h.all_gpus = list(gpus)
+    h.disk_lines = lines
+    h.env_in_base = not (a.disk_free_gb is not None)        # df of the real home already counts the env; an override does not
+    return h
 
 
 def all_scroll_names() -> list[str]:
@@ -1016,7 +1316,8 @@ def main(argv=None) -> int:
         return 1
     host = build_host(a, H)
     sch.host = host
-    sch.gpus = [g.idx for g in host.gpus]
+    sch.gpus = [g.idx for g in host.all_gpus]
+    sch.allowed_init = {g.idx for g in host.gpus}
     ng = max(1, len(sch.gpus))
     plan = None
     if not legacy and not a.no_plan:
@@ -1032,6 +1333,7 @@ def main(argv=None) -> int:
         for n_, why in plan["deferred"]:
             sch.ev("deferred", scroll=n_, why=why)
         run_names = list(plan["keep"])
+        sch.priority = list(plan.get("priority", []))
         if a.dry_run:
             return 0 if plan["fits"] else 3
     for s in run_names:

@@ -38,3 +38,8 @@ First: read the last 30 lines of the failing stage's log (`routeA_work/logs/`, `
 | `budget: REFUSE ... projected $X` | soft cap, or the projected end passes `--max-run-hours` | expected; defers the job (exit 4); raise the cap only with the owner's approval |
 | pull: `VERIFICATION FAILED` | partial/corrupt copy | the pull re-syncs with `--checksum` once; run again; unit is never marked pulled |
 | `ssh` pull `Permission denied` | the box does not have your key | add your public key to the box; the box never needs a key for our side |
+| `CONTROL: gpus file lists GPU N which is not a usable GPU` | typo, or N was skipped at start as foreign-held | `nvidia-smi`; `--force-gpus` at start |
+| `REPLAN DEFERRED <scroll>` after shrinking GPUs | the p90 re-plan no longer fits 80 % of the remaining budget/time | expected; `routeB_ctl.sh gpus <more>` re-admits it, or raise `--soft`/`--plan-frac` with the owner's approval |
+| `WARNING GPU N holds ... MiB (a foreign process)` | another process (e.g. llama-server) owns VRAM | free it, or `--force-gpus`; the GPU is skipped meanwhile |
+| `IDLE: no allowed GPU and nothing running` | `gpus none`, or every GPU drained/killed | `routeB_ctl.sh gpus 0,1,...` or `stop`: the box is still billing |
+| planner shows tiny free disk | old builds measured the parent of a not-yet-created home | v4 measures the home itself; see the `PLAN disk: df ...` line |

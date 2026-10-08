@@ -73,7 +73,10 @@ class Host:
 
     @property
     def used0_gb(self) -> float:
-        return (self.disk_total_gb - self.disk_free_gb) + self.env_gb
+        """Disk already in use before we stage anything, clamped to the volume.  A df of the real ROUTEB_HOME already counts the env; with a free-space override it
+        does not, so env_gb is added then (env_in_base False)."""
+        base = max(0.0, self.disk_total_gb - self.disk_free_gb) + (0.0 if getattr(self, "env_in_base", False) else self.env_gb)
+        return min(base, self.disk_total_gb)
 
     @property
     def min_vram(self) -> float:
@@ -364,8 +367,59 @@ def make_plan(host: Host, rates, scrolls: list[str], cfg: dict, z0: int = UP_LO,
         sim = simulate(h2, [res["facts"][n] for n in res["keep"]], c2, "p50")
         sens[lab] = money(rates, sim)["total_usd"], sim["makespan_h"]
     res["sensitivity"] = sens
-    res.update(deferred=deferred, all_facts={f.name: f for f in allf}, plan_frac=plan_frac, limit_usd=limit_usd, limit_h=limit_h)
+    res.update(priority=[f.name for f in prio], deferred=deferred, all_facts={f.name: f for f in allf}, plan_frac=plan_frac, limit_usd=limit_usd, limit_h=limit_h)
     return res
+
+
+# ------------------------------------------------------------------------------------------------ re-plan on a capacity change
+def replan_eval(cfg: dict, avail: list, extra_h: float, jobs: list, shells: dict, q: str) -> float:
+    """Simulated hours (from now) until every given unstarted job is done on GPUs free at `avail`, tail-split included; running jobs on GPUs that are no longer allowed
+    (`extra_h`) still bill until they finish."""
+    if not jobs:
+        return extra_h
+    if not avail:
+        return float("inf")
+    js = list(jobs)
+    if len(js) < len(avail):
+        js, _ = tail_split(cfg, avail, js, shells, q)
+    return max(lpt_makespan(avail, [hours(j, q) for j in js]), extra_h)
+
+
+def replan(cfg: dict, avail: list, extra_h: float, groups: dict, priority: list, shells: dict, spent_usd: float, now_h: float, rates, pending_payload_gb: float = 0.0,
+           plan_frac: float = 0.8) -> dict:
+    """Which unstarted scrolls still fit after a GPU-count change (shrink OR regrow).  `groups` = {scroll: {"jobs": [unstarted jobs], "committed": bool}}; committed scrolls
+    (something already ran or was retried) always stay.  Uncommitted scrolls are admitted greedily in priority order while the p90 case keeps
+    spent + makespan x effective $/h + payload egress <= plan_frac x soft AND now + makespan <= plan_frac x max run hours; the first that does not fit and everything after it is
+    DEFERRED with the numbers.  Pure; the same function re-admits earlier deferrals when GPUs come back."""
+    limit_usd = plan_frac * rates.soft_usd
+    limit_h = plan_frac * rates.max_run_hours if rates.max_run_hours else float("inf")
+    base = [j for g in groups.values() if g["committed"] for j in g["jobs"]]
+    order = [s for s in priority if s in groups and not groups[s]["committed"]] + [s for s in groups if not groups[s]["committed"] and s not in priority]
+
+    def cost(jobs, q):
+        mk = replan_eval(cfg, avail, extra_h, jobs, shells, q)
+        pay = pending_payload_gb + sum(j["payload_gb"] for j in jobs)
+        return mk, spent_usd + mk * rates.eff_hour_usd + pay * rates.egress_per_tb / 1000.0
+
+    keep, deferred, jobs = [], [], list(base)
+    blocked = None
+    for sc in order:
+        if blocked:
+            deferred.append((sc, blocked))
+            continue
+        trial = jobs + groups[sc]["jobs"]
+        mk, usd = cost(trial, "p90")
+        if usd <= limit_usd and now_h + mk <= limit_h and mk != float("inf"):
+            keep.append(sc)
+            jobs = trial
+        else:
+            blocked = (f"p90 re-plan on {len(avail)} allowed GPU(s): with it ${usd:.2f} / +{mk:.1f} h (now {now_h:.1f} h) vs limit ${limit_usd:.2f} / {limit_h:.1f} h "
+                       f"({plan_frac:.0%} of soft ${rates.soft_usd:g} / {rates.max_run_hours:g} h)")
+            deferred.append((sc, blocked))
+    mk50, usd50 = cost(jobs, "p50")
+    mk90, usd90 = cost(jobs, "p90")
+    return {"keep": keep, "deferred": deferred, "committed": [s for s, g in groups.items() if g["committed"]], "mk50": mk50, "mk90": mk90, "usd50": usd50, "usd90": usd90,
+            "limit_usd": limit_usd, "limit_h": limit_h, "n_allowed": len(avail)}
 
 
 # ------------------------------------------------------------------------------------------------ printing
@@ -394,6 +448,9 @@ def render(host: Host, rates, plan: dict, runnable_note: list[str] | None = None
     P(f"PLAN host: {host.n} GPU(s) VRAM {sorted({round(g.vram_gib, 1) for g in host.gpus})} GiB (speed x{host.gpus[0].speed:g}), {host.phys_cores} physical cores, "
       f"RAM {host.ram_gb:g} GB (<= {host.max_concurrent_fits()} concurrent fits at {host.ram_per_fit_gb:g} GB each), disk {host.disk_free_gb:.0f}/{host.disk_total_gb:.0f} GB free "
       f"(high-water {host.high_water_gb:.0f} GB), net {host.net_down_mb_s:.0f}/{host.net_up_mb_s:.0f} MB/s down/up, fetch {host.fetch_files_per_s:g} files/s x {host.fetch_parallel} parallel")
+    for l in getattr(host, "disk_lines", []):
+        P(f"PLAN disk: {l}")
+    P(f"PLAN disk base {host.used0_gb:.0f} GB of {host.disk_total_gb:.0f} GB (clamped to the volume; high-water {host.high_water_gb:.0f} GB)")
     P(f"PLAN budget: {rates.describe()}")
     for n_, why in runnable_note or []:
         P(f"  NOT RUNNABLE {n_}: {why}")

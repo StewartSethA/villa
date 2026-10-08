@@ -31,6 +31,17 @@ With no `--scrolls` this plans **every runnable eligible scroll**, defers (expli
 while :; do rsync -aH --partial --append-verify --exclude '.tmp_*' -e "ssh -p <PORT>" root@<BOX-IP>:/workspace/routeB/out/ ./out/; sleep 60; done
 python3 pull_box8.py --verify-only --dest ./out
 ```
+**Scaling back / forward on the fly (no restart):** the scheduler re-reads `$ROUTEB_HOME/box8/control/` every ~10 s.
+```
+./routeB_ctl.sh --home /workspace/routeB status          # allowed GPUs, jobs, budget, the latest REPLAN
+./routeB_ctl.sh --home /workspace/routeB gpus 0,1,2      # use ONLY these GPUs from now on (running fits on the others finish); `gpus 0,1,2,3,4,5,6,7` grows back
+./routeB_ctl.sh --home /workspace/routeB drain 5         # finish GPU 5's current fit, then stop using it
+./routeB_ctl.sh --home /workspace/routeB kill 5          # SIGTERM GPU 5's fit; its z-interval is re-queued and resumes from the last autosave (never lost); GPU 5 stays out
+./routeB_ctl.sh --home /workspace/routeB stop            # graceful: no new launches, running fits finish, the run ends (re-run the same command to resume)
+./routeB_ctl.sh --home /workspace/routeB pause | resume
+```
+Every change re-plans the unstarted work (tail split for the new GPU count, Route A slots = cores - 2 x allowed GPUs - reserve, RAM, disk) and prints `REPLAN ...` lines (also in `box8/control/PLAN.txt`): scrolls that no longer fit 80 % of the remaining budget/time at the p90 case are DEFERRED explicitly, and re-admitted when GPUs come back. Running fits are never cut off by a re-plan. Start-up: `--gpus 1,2,..` picks the initial set; a GPU already holding VRAM from a foreign process (e.g. a llama-server; `--foreign-mib` 1500) is warned about and skipped unless `--force-gpus`. The old hard stop (kills running fits) is still `touch $ROUTEB_HOME/box8/STOP`.
+
 Layout of `out/`: `<scroll>/<tag>/{files, PAYLOAD.json (size+md5 of every file), DONE}` per finished stripe (written the moment it finishes), `<scroll>/{SCROLL.json,DONE}`, `routeA/<scroll>__<seg>/...`, `STATUS.json`, `ALLDONE.json`. Mark-and-free: the puller writes `PULLED.json` per unit on the box; the box then deletes that scroll's fetched inputs. Stop the box: `touch $ROUTEB_HOME/box8/STOP` (running fits get SIGTERM; finished units stay pullable). Details: `SCHEDULING.md`, `BOX8_NOTES.md`, `AGENT_GUIDE.md`, `TROUBLESHOOTING.md`.
 
 Route B options: `--stripe-width 4500|7500|13500|full`, `--smoke` (proof-sized run), `--stages fetch,fit,tiles,ink,export`, `--help`.

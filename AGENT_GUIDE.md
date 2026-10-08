@@ -90,6 +90,8 @@ Flow, not state: compare `out/STATUS.json` job counts across two reads a few min
 | `HARD BUDGET STOP` | SIGTERM running fits, finished units stay pullable | pull; raise `--hard` only with the owner's approval |
 | exit code | 0 all done, 1 something failed loudly, 3 plan fits nothing, 4 budget left work unlaunched | |
 
+**Runtime control.** `routeB_ctl.sh status|gpus L|drain N|kill N|stop|pause|resume` writes files in `$ROUTEB_HOME/box8/control/`; the scheduler re-plans on every change (see BOX8_NOTES.md). To verify a change took: `status` shows the new allowed set and `REPLAN` lines; `events.jsonl` has a `control` and a `replan` row; `nvidia-smi` utilisation falls on the removed GPUs only after their current fit ends (drain) or within seconds (kill). A killed job shows attempt class `ctl_kill` and then `ok`.
+
 **Rules for changing it.** Pure logic goes in `planner.py`/`ladder.py` with a unit test using fake GPUs/disks/RAM (`routeB/tests/test_planner.py`); a new constant is a named parameter with
 a source line; run `python -m pytest routeB/tests deploy_common/tests tests` and `python3 deploy_common/branch_scan.py .` before every commit; never `set -e`; never push (the owner does).
 
