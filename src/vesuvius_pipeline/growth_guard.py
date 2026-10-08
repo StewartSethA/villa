@@ -1,0 +1,2755 @@
+"""Per-cell growth guard (PROTOTYPE, default OFF): keep growing a sheet while it stays sane,
+prune the FRONTIER where it runs into vacuum, a hairpin, a crease/mush swamp, or a sheet we
+already hold.
+
+User, 2026-09-25: "let a grow continue as long as planarity and other sanity requirements are
+met, including pruning frontier bits that are leading into hairpins or mush swamps ... I want
+the largest sheets we can", and: growth into a vacuum "is something we need to limit to prevent
+false reconnections or simply wasting surface"; "bake in dedup to the segment seeding and growth".
+
+WHAT THE DEPLOYED PIPELINE DID INSTEAD (stages/grow.py, read 2026-09-25): every verdict is
+WHOLE-SEGMENT and lands AFTER a round: material_frac < 0.75 -> "VACUUM" arms SPACELINE for the
+next round and, after two armed rounds, PAUSES the segment; spaghetti / holey / mushy /
+efficiency are the same shape (two bad rounds -> pause). Nothing looks at a CELL, nothing
+removes anything, and nothing knows another segment exists. The tracer itself reads the CT only
+through three residuals that are weight-gated to 0 by default (CLAUDE.md, "the load-bearing gap").
+
+THE ALGORITHM (pure numpy/scipy on a tifxyz lattice; no change to the C++ tracer):
+
+  1. per-CELL bad masks on the lattice grid
+       vacuum   CT at the cell's 3-D position <= ct_th (the material_frac criterion, per cell),
+                smoothed over a (2*vacuum_win+1)^2 window: >= vacuum_frac of the window is air.
+       fold     turn radius R = arc / theta < fold_radius_um over fold_arc_um of lattice line,
+                read along rows AND columns -- geomaps.fold_metrics' hairpin criterion
+                (user-verified 2026-09-20), made per-cell instead of per-segment.
+       plan     the cell's normal deviates > plan_deg from the mean normal of its window: a
+                crease / crumple the segment-level PCA planarity cannot see.
+       overlap  the cell lies within overlap_vox voxels ALONG a neighbouring segment's normal,
+                normals within overlap_deg (coverage.normal_distance, the production gate's
+                estimator): the sheet is already held.
+  2. only bad regions that TOUCH THE FRONTIER (within reach_rings of an invalid cell) are cut,
+       plus margin_rings. A bad region wholly enclosed by good surface is left alone: the
+       frontier WRAPPING AROUND a vacuum leaves a hole, which is fine and is the user's own
+       distinction -- what must not happen is growing THROUGH it.
+     overlap cells keep an overlap_keep_rings seam next to the good interior so the stitcher
+       still has overlap to register on (scripts/stitch measures overlap within 4 voxels).
+  3. keep the largest connected piece (a sheet is one piece); report why each cell went.
+  4. regrowth guard: the tracer resumes from the cropped lattice and will happily grow into the
+       same bad ground again. `regrown_fraction` measures how much of a round's NEW surface lies
+       on previously pruned ground; over regrow_block_frac the frontier is BLOCKED and the
+       segment ends ('done: guard_frontier_blocked') instead of looping.
+
+Every threshold is a `GuardPolicy` field, read from `pipeline_setting` rows `grow.guard.<field>`
+(`policy_from_db`), so the operator can change it without a deploy. `enabled` defaults to False:
+nothing here runs in production until it is switched on.
+"""
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import time
+from dataclasses import dataclass, field, fields
+from pathlib import Path
+
+import numpy as np
+from scipy import ndimage as ndi
+
+PREFIX = "grow.guard."
+_S3 = np.ones((3, 3), bool)
+
+# reasons in ATTRIBUTION order: a pruned cell is charged to the first that flags it
+REASONS = ("selfx", "overlap", "vacuum", "fold", "plan",
+          "quad_flip", "stretch", "normal_dev", "ridge_hit", "seam", "wrap_spacing", "curvature",
+          "empty_space")
+# roughness and flatten_feedback are SEGMENT-level scalars (frontier_roughness / flatten_feedback_check),
+# not per-cell masks, so they are never in REASONS -- they can only ever be a segment stop, never a cut.
+
+
+@dataclass(frozen=True)
+class GuardPolicy:
+    enabled: bool = False
+    hosts: str = ""               # comma list of hosts the guard runs on ('' = every host): the CANARY switch
+    # -- vacuum
+    vacuum: bool = True
+    ct_th: float = 5.0            # segment_yield's material criterion (`preds & CT>5`; insensitive 5..32)
+    ct_level: int = 1             # CT pyramid level the sampler reads (1 = 2x coarser than level 0)
+    vacuum_win: int = 2           # half-window (cells)
+    vacuum_frac: float = 0.75     # window fraction that must be air (sweep: 0.6 -> 0.75 loses no verified area on clean/watch)
+    # -- hairpin (geomaps.HAIRPIN_ARC_UM / HAIRPIN_RADIUS_UM: user-verified 2026-09-20)
+    fold: bool = True
+    fold_arc_um: float = 1000.0
+    fold_radius_um: float = 300.0     # SWEEP: 500 um (the metric's radius) over-prunes; 300 keeps fleet-verified area (scripts/growguard/sweep.py)
+    fold_half: int = 1                # cells flagged either side of a tight turn's centre (large = the whole window, the over-pruning first draft)
+    # -- local planarity / crumple
+    plan: bool = True
+    plan_win: int = 3             # half-window (cells)
+    plan_deg: float = 70.0
+    plan_frac: float = 0.4        # a cell is a swamp cell when >= this fraction of its window is crumpled (speckle is noise)
+    # -- same-sheet overlap (coverage.SAME_SHEET_VOX / ALIGN_DEG)
+    overlap: bool = True
+    overlap_vox: float = 4.0
+    overlap_deg: float = 20.0
+    overlap_keep_rings: int = 2
+    # -- frontier prune
+    min_bad_cells: int = 12       # a bad speck smaller than this is noise, not a swamp
+    reach_rings: int = 2          # "touches the frontier" = within this many cells of an invalid cell
+    margin_rings: int = 0         # sweep: any extra margin costs verified area for little gain
+    min_keep_cells: int = 64
+    keep_islands: bool = False
+    cut_interior: bool = False    # also cut bad regions that touch NO frontier (interior creases / self-crossings); False = live behaviour
+    # (2026-10-05, guard simulator: 85 % of 22,129 guarded rounds in 7 days KEPT >= 1 interior bad component, 365,771 in
+    #  total, and 97 % of the last 6 h of guarded rounds ended `selfcross_nonzero` -- this switch shows what cutting them costs)
+    # -- regrowth
+    regrow_block_frac: float = 0.3
+    regrow_tol_cells: float = 0.75   # x median edge: "on pruned ground"
+    # -- neighbour-aware pause (user, 2026-09-25: pause frontier elements that overlap a real, mergeable
+    #    neighbour, and queue the merge once the whole segment is mergeable with a friendly, clean one)
+    merge_pause: bool = False
+    merge_frontier_frac: float = 0.5      # share of the frontier band lying on ONE neighbour that triggers the pause
+    merge_neigh_min_planarity: float = 0.5
+    merge_neigh_max_fold: float = 0.05
+    # -- large sheets (user, 2026-09-25: "I want the largest sheets we can")
+    grow_to_sane: bool = False    # ignore the letters-sized target (`TARGET_MM`) while the frontier stays sane
+    max_area_cm2: float = 60.0    # hard ceiling either way (RAM/time; finish.FINISH_MAX_CM2 must be raised in step)
+    # -- ARM B (growth_degeneracy_2026-09-28.md): a post-round GEOMETRIC self-intersection check,
+    #    distinct from `fold`/`plan` (which are per-cell proxies that, measured directly against
+    #    `vc_tifxyz_selfcross`, barely reduce true crossing density -- 0.81->0.59 round1 but only
+    #    0.85->0.80 round3 on the segment that motivated this arm). Default OFF; composes with the
+    #    existing vacuum/fold/plan/overlap criteria (same `prune()` machinery, same frontier-touch /
+    #    interior-kept / regrowth-block behaviour -- this is just another REASON).
+    selfcross: bool = False
+    selfcross_bin: str = ""              # explicit path to vc_tifxyz_selfcross; "" resolves via PATH/caller
+    selfcross_env: dict | None = None    # subprocess env for the binary (LD_LIBRARY_PATH etc); None = inherit
+    # process env, which is WRONG for a portable vc_kit (2026-09-29 production incident: the guard's
+    # subprocess call did not carry LD_LIBRARY_PATH, so `vc_tifxyz_selfcross` resolved fine (fix 1)
+    # but failed to LOAD ("libvc_core.so: cannot open shared object file") on every phi host the
+    # first time selfcross was enabled fleet-wide -- caught loudly (mark_broken fired correctly),
+    # reverted, fixed here. `stages.grow.resolve_selfcross_bin` fills this from `tool_env(fleet)`,
+    # the SAME environment every other VC3D subprocess call in that stage already uses -- never
+    # set directly in code that does not have a `fleet` to resolve it from.
+    selfcross_timeout_s: float = 120.0
+    # (3), coordinator 2026-09-29: "every self-intersection is disallowed; there is no threshold
+    # to calibrate" -- a segment above this many triangles no longer SKIPS the check (silently
+    # unverified, contradicting that principle). It instead triggers `selfcross_check_incremental`:
+    # crop to this round's NEW cells + a spatial halo (`selfcross_crop_halo_vox`) and check that.
+    # This field is now the crop's OWN size ceiling (still a genuine cost safety valve for a
+    # pathological single-round growth blob): if even the incremental crop exceeds it, that is
+    # treated the same as a broken binary (mark_broken(), coordinator item 2) -- loud, not quiet.
+    # 2026-10-06 (selfx_2026-10-06/STATE.md): the skip is RETIRED -- 0 = no ceiling (default). In 7 days the 400 k
+    # ceiling skipped 15 pny rounds (418-485 k triangles; one of those surfaces read density 0.32 when measured) and
+    # every one of them was exactly a BIG segment going unverified. A positive value still works as a cost valve, but a
+    # surface above it is now UNVERIFIED and the round is held back (selfcross_fail_closed), never let through.
+    selfcross_max_triangles: int = 0
+    # (2026-10-06) worker threads for vc_tifxyz_selfcross. Its default (0 = hardware concurrency) spawned 272 threads per
+    # check on a phi (68-core KNL) already running 12 tracers: 31 of the 46 unverified rounds in 7 days were 120 s
+    # timeouts on phi20/phi30/phi28/v100, while the same binary censuses 339 k triangles in 2.8 s with 8 threads on pny.
+    selfcross_threads: int = 8
+    # timeout = clamp(selfcross_timeout_s, est_triangles/1e6 * selfcross_timeout_s_per_mtri, selfcross_timeout_max_s);
+    # a timed-out check is retried ONCE at 3x before the round is declared unverified.
+    selfcross_timeout_s_per_mtri: float = 600.0
+    selfcross_timeout_max_s: float = 3600.0
+    # FAIL CLOSED (user 2026-10-06, "There should not be self-intersections -- they are still happening"): when selfcross
+    # is enabled and the pre- or post-round check could not run (error / timeout / skip), THIS ROUND'S NEW CELLS are held
+    # back (the surface reverts to the cells it had at round start -- D3: only this round's growth is touched), the stop
+    # is `selfx_unverified`, and stages/grow.py PAUSES the grow (never fails it) and raises an alert. True = the fix.
+    selfcross_fail_closed: bool = True
+    # PREVENTION knobs (defaults = the live behaviour before 2026-10-06, so the canary stays exact; production turns them
+    # on through pipeline_setting grow.guard.*). `selfx` was pruned under the SAME component rules as vacuum/fold: a
+    # crossing component smaller than min_bad_cells (12) was "noise" and kept, and an enclosed one that does not split
+    # the sheet was kept -- so a round's own crossings survived and the round then stopped `selfcross_nonzero`.
+    selfcross_min_cells: int = 12        # smallest selfx component that is cut; 1 = every flagged cell (new cells only)
+    selfcross_cut_interior: bool = False  # also cut enclosed selfx components (new cells only: protected cells never are)
+    # stop on ANY residual contact (True, live) or only on a residual contact that still involves a cell grown THIS round
+    # (False): residual contacts entirely between protected (round-start) cells cannot be removed by the guard (D3), so
+    # stopping on them ends the segment without removing anything; they are recorded as selfcross_post.inherited_cells.
+    selfcross_stop_inherited: bool = True
+    # the incremental check crops to cells within selfcross_crop_halo_vox of a NEW cell (per point, not a bounding box:
+    # the box spanned the whole lattice because frontier growth rings the sheet -- 0 of 16,478 rounds in 7 days ever
+    # took the crop path). Only lattices with at least this many valid cells are cropped; smaller ones stay full-lattice.
+    selfcross_crop_min_cells: int = 60_000
+    # spatial halo (voxels) added around this round's new-cell bounding box before cropping for
+    # the incremental check: must exceed the binary's own broad-phase `--cell` (default 40 vox,
+    # "affects speed, never contact verdicts or counts") by a comfortable margin, since the
+    # binary can only ever find a contact between triangles within roughly one such neighbourhood
+    # of each other -- a wider halo can only ADD old cells the crop didn't strictly need, never
+    # exclude a contact the full-lattice check would have found. 200 vox = 5x the broad-phase
+    # cell; not yet calibrated against a real pathologically-large segment (measured only on the
+    # sizes in the n=400 sample, max 155,040 triangles -- see FINDINGS 2026-09-29).
+    selfcross_crop_halo_vox: float = 200.0
+    # STOP if the density (mean transverse contacts / triangle, both diagonals) measured on the
+    # CROPPED surface is still above this. Target is exactly 0 (user directive): a value > 0 means
+    # cutting the flagged quads did not remove every crossing (a hairpin can re-cross outside the
+    # cells the census flagged as its own corners).
+    selfcross_density_stop: float = 0.0
+    # early-abort: geo_hairpin_lines / geo_lines_read (geomaps.fold_metrics), calibrated on a
+    # held-out HALF of a 40-segment sample (growth_degeneracy_2026-09-28.md data; seed 20260929,
+    # threshold chosen on the train half only): TPR 1.00 / FPR 0.20 (train, n=20) and TPR 1.00 /
+    # FPR 0.29 (test, n=20) for the positive class "self-intersection density > 0.3". 0 disables.
+    selfcross_hairpin_abort_ratio: float = 0.66
+    selfcross_hairpin_min_lines: int = 20     # do not trust the ratio on a near-empty sample
+    # SCRUB (user 2026-10-07, top priority: "Absolutely no self-intersections should be allowed from now on, period"): the
+    # per-round prune above protects round-start cells (D3), so every crossing a segment already carried stayed forever and
+    # the grow kept extending around it (2026-10-07 census, 40 growing segments: 37 crossing at their kept checkpoint,
+    # 3,461 contacts p50). The scrub is the one deliberate exception to "never smaller than round start": it removes the
+    # cells that are corners of a flagged quad (any age), re-checks the whole lattice, and repeats to a verified zero. It
+    # keeps the piece holding the anchor/largest piece (the clean part) and a segment resumes from that.
+    selfcross_scrub: bool = True
+    selfcross_scrub_max_iter: int = 8
+
+    # -- SHADOW CRITERIA (2026-09-29, coordinator/user directive): nine more structural
+    #    invariants, each with a COMPUTE flag (default True: measure and record every round,
+    #    cheap) and a separate ENFORCE flag (default False for every one: measure only, never
+    #    prune or stop, until a human-reviewed calibration says otherwise). This is how "added,
+    #    and demonstrably firing" is delivered without a guessed threshold touching production --
+    #    see SHADOW_CRITERIA_2026-09-29.md for what each measures, its unit, and why its default
+    #    threshold is conservative (rarely-firing) rather than tuned: none of the nine has the
+    #    n=40 held-out calibration selfx/hairpin got in the original report.
+    quad_flip: bool = True
+    quad_flip_enforce: bool = False           # threshold-free (cosang < 0 is unambiguous)
+    stretch: bool = True
+    stretch_ratio_th: float = 3.0             # edge length / lattice median edge, unitless
+    stretch_enforce: bool = False
+    roughness: bool = True                    # SEGMENT-level: frontier perimeter_um / sqrt(area_um2)
+    roughness_th: float = 6.0                 # conservative (rarely-firing); no held-out data yet
+    roughness_enforce: bool = False
+    # USER ORDER 2026-10-07 (explicit deploy approval): `roughness` and `hairpin_abort` are SEGMENT-level aborts that ended 45-62 % / 25 % of the 40-100 cm2
+    # growths. With this switch ON (default) they become FLAGS: growth continues, the measured value is returned in info['flags'] (grow.py records the
+    # `guard_flag_*` metric and the `rough_frontier` / `hairpin_flag` segment flag -- information carried downstream, not a veto). OFF = the legacy stop.
+    # Local geometric exclusion (selfx scrub, fold/plan/ridge cuts) is untouched: this only changes the segment-level abort.
+    segment_abort_as_flag: bool = True
+    # STOP POLICY (user trial 2026-10-07): 'legacy' = every guard stop ends the grow as before; 'frontier_only' = a growth may end only when its valid frontier is exhausted
+    # (gain-based exhaustion in the grow loop), a size/compute target is hit, or the user asks. Here: `frontier_blocked` becomes a recorded FLAG (info['flags']['frontier_reentry'])
+    # and growth continues -- the regrown cells on pruned ground are still cut every round, so the loop ends by exhaustion, not by an abort. Default legacy until measured.
+    stop_policy: str = "legacy"
+    normal_dev: bool = True
+    normal_dev_deg_th: float = 45.0           # degrees vs the normal-grid; conservative, no data yet
+    normal_dev_enforce: bool = False
+    ridge_hit: bool = True
+    ridge_hit_vox: float = 3.0                # window, LEVEL-0 voxels, along the lattice normal
+    ridge_hit_frac_th: float = 0.5            # SEGMENT-level would_stop: fraction of cells with no nearby ridge
+    ridge_hit_enforce: bool = False
+    seam: bool = True
+    seam_step_vox: float = 12.0               # LEVEL-0 voxels; matches fuse3d_review's own planted-step test
+    seam_search_vox: float = 30.0             # ridge search window MUST exceed seam_step_vox or a real jump can never be resolved on both sides
+    seam_enforce: bool = False
+    wrap_spacing: bool = True
+    wrap_spacing_pitch_um: float = 700.0      # conservative mid-range default (shape_metrics' own fallback)
+    wrap_spacing_enforce: bool = False
+    curvature: bool = True
+    curvature_frac_th: float = 0.30           # turn radius < this * distance-from-umbilicus is implausible
+    curvature_enforce: bool = False
+    flatten_feedback: bool = True             # SEGMENT-level: recent flatten(s) collapsed
+    flatten_feedback_valid_th: float = 0.20   # stages/render.py's OWN "collapsed flatten" bar, reused not guessed
+    flatten_feedback_streak: int = 2
+    flatten_feedback_enforce: bool = False
+    # -- empty_space (coordinator, 2026-09-29 ARM E addition): "many PHerc0211 segments wander
+    #    into empty space undetected" -- a CHEAP ridge_hit: single-point (no +-window search)
+    #    surface-prediction support at each FRONTIER cell's own position, not the whole lattice.
+    #    O(frontier cells), one pred_sampler call/round -- meant as a per-round early-warning that
+    #    is far cheaper than ridge_hit's windowed search, at the cost of being less tolerant of a
+    #    slightly-off-surface frontier (no search radius).
+    empty_space: bool = True
+    empty_space_frac_th: float = 0.5          # SEGMENT-level would_stop: frontier fraction with no support AT ALL
+    empty_space_enforce: bool = False
+
+
+def apply_segment_overrides(pol: GuardPolicy, text: str | None) -> GuardPolicy:
+    """Per-segment GuardPolicy overrides (A/B arms on the same seed): `text` = JSON object {field: value} from the segment's `guard_policy` metric. Unknown fields and
+    values of the wrong type are ignored (never raises); returns `pol` unchanged for empty input."""
+    if not text:
+        return pol
+    try:
+        d = json.loads(text)
+    except (TypeError, ValueError):
+        return pol
+    if not isinstance(d, dict):
+        return pol
+    by = {f.name: f for f in fields(GuardPolicy)}
+    kw = {}
+    for k, v in d.items():
+        f = by.get(k)
+        if f is None:
+            continue
+        t = f.type
+        try:
+            kw[k] = (bool(v) if t in (bool, "bool") else int(v) if t in (int, "int") else str(v) if t in (str, "str") else float(v))
+        except (TypeError, ValueError):
+            continue
+    from dataclasses import replace as _rep
+    return _rep(pol, **kw) if kw else pol
+
+
+def policy_from_db(db) -> GuardPolicy:
+    """Defaults, overridden by `pipeline_setting` rows `grow.guard.<field>`. Never raises."""
+    kw = {}
+    try:
+        rows = db.execute("SELECT key, value FROM pipeline_setting WHERE key LIKE ?", (PREFIX + "%",)).fetchall()
+    except Exception:                                    # noqa: BLE001 - no table / hub restarting: defaults
+        return GuardPolicy()
+    by = {f.name: f for f in fields(GuardPolicy)}
+    for r in rows:
+        k = r[0][len(PREFIX):]
+        if k not in by:
+            continue
+        t = by[k].type
+        v = r[1]
+        try:
+            kw[k] = (str(v).strip().lower() in ("1", "true", "yes", "on")) if t in (bool, "bool") \
+                else (int(float(v)) if t in (int, "int") else (str(v) if t in (str, "str") else float(v)))
+        except (TypeError, ValueError):
+            continue
+    return GuardPolicy(**kw)
+
+
+# ----------------------------------------------------------------------------- lattice helpers
+def lattice_frame(X, Y, Z):
+    """P (H, W, 3) float64 and V (H, W) valid. Invalid cells are <= 0 (tifxyz writes -1)."""
+    V = (X > 0) & (Y > 0) & (Z > 0)
+    P = np.stack([X, Y, Z], axis=-1).astype(np.float64)
+    return P, V
+
+
+def median_edge(P, V) -> float:
+    e = []
+    for ax in (0, 1):
+        a, b = (P[1:], P[:-1]) if ax == 0 else (P[:, 1:], P[:, :-1])
+        ok = (V[1:] & V[:-1]) if ax == 0 else (V[:, 1:] & V[:, :-1])
+        if ok.any():
+            e.append(np.linalg.norm(a - b, axis=-1)[ok])
+    return float(np.median(np.concatenate(e))) if e else float("nan")
+
+
+def grid_normals(P, V):
+    """Unit normals (cross of the two lattice tangents, central differences where both
+    neighbours are valid, one-sided otherwise) and the mask where they are defined. Orientation
+    follows the lattice, so a hairpin FLIPS the normal -- which is what `plan` reads."""
+    def d(axis):
+        nxt = np.roll(P, -1, axis)
+        prv = np.roll(P, 1, axis)
+        vn = np.roll(V, -1, axis)
+        vp = np.roll(V, 1, axis)
+        if axis == 0:
+            vn[-1] = False
+            vp[0] = False
+        else:
+            vn[:, -1] = False
+            vp[:, 0] = False
+        D = np.zeros_like(P)
+        both = V & vn & vp
+        D[both] = (nxt - prv)[both]
+        f = V & vn & ~vp
+        D[f] = (nxt - P)[f]
+        b = V & vp & ~vn
+        D[b] = (P - prv)[b]
+        return D, V & (vn | vp)
+    di, oi = d(0)
+    dj, oj = d(1)
+    n = np.cross(di, dj)
+    nn = np.linalg.norm(n, axis=-1)
+    ok = V & oi & oj & (nn > 1e-9)
+    n = n / np.maximum(nn, 1e-12)[..., None]
+    return n, ok
+
+
+def lattice_area_cm2(P, V, voxel_um: float) -> float:
+    """Sum of the areas of the lattice quads whose four corners are valid."""
+    q = V[:-1, :-1] & V[1:, :-1] & V[:-1, 1:] & V[1:, 1:]
+    a = 0.5 * (np.linalg.norm(np.cross(P[1:, :-1] - P[:-1, :-1], P[:-1, 1:] - P[:-1, :-1]), axis=-1)
+               + np.linalg.norm(np.cross(P[1:, 1:] - P[1:, :-1], P[1:, 1:] - P[:-1, 1:]), axis=-1))
+    return float(a[q].sum() * (voxel_um * 1e-4) ** 2)
+
+
+# ----------------------------------------------------------------------------- per-cell criteria
+def fold_mask(P, V, voxel_um: float, pol: GuardPolicy):
+    """Cells inside a turn tighter than pol.fold_radius_um, read along rows and columns
+    (geomaps.fold_metrics' criterion, per cell). A window needs every cell valid."""
+    H, W = V.shape
+    med = median_edge(P, V)
+    out = np.zeros((H, W), bool)
+    if not np.isfinite(med) or med <= 0:
+        return out
+    k = int(max(2, round((pol.fold_arc_um / voxel_um) / med)))
+    for ax in (0, 1):
+        Q = P if ax == 0 else P.transpose(1, 0, 2)
+        U = V if ax == 0 else V.T
+        n = Q.shape[0]
+        if n <= k + 1:
+            continue
+        T = Q[1:] - Q[:-1]                                   # (n-1, m, 3)
+        L = np.linalg.norm(T, axis=-1)
+        good = U[1:] & U[:-1] & (L > 1e-9)
+        Tn = T / np.maximum(L, 1e-12)[..., None]
+        cs = np.concatenate([np.zeros((1,) + L.shape[1:]), np.cumsum(np.where(good, L, 0.0), axis=0)], axis=0)
+        gc = np.concatenate([np.zeros((1,) + good.shape[1:], int), np.cumsum(good, axis=0)], axis=0)
+        i = np.arange(0, n - 1 - k)
+        arc = cs[i + k] - cs[i]                              # arc over k steps starting at i
+        full = (gc[i + k] - gc[i]) == k
+        ok0 = good[i]
+        ok1 = good[i + k - 1] if k >= 1 else good[i]
+        cosang = np.clip(np.einsum("imc,imc->im", Tn[i], Tn[i + k - 1]), -1.0, 1.0)
+        theta = np.arccos(cosang)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            r_um = np.where(theta > 1e-6, arc * voxel_um / theta, np.inf)
+        hit = full & ok0 & ok1 & (r_um < pol.fold_radius_um)          # (n-1-k, m)
+        # flag the cells around the turn's centre (the whole window when fold_half is large)
+        m = np.zeros((n, hit.shape[1]), bool)
+        c0 = k // 2
+        for off in range(max(0, c0 - pol.fold_half), min(k, c0 + pol.fold_half) + 1):
+            m[off:off + hit.shape[0]] |= hit
+        out |= m if ax == 0 else m.T
+    return out & V
+
+
+def plan_mask(P, V, pol: GuardPolicy):
+    """Cells whose normal deviates > pol.plan_deg from the window-mean normal."""
+    n, ok = grid_normals(P, V)
+    w = (2 * pol.plan_win + 1)
+    wt = ok.astype(np.float64)
+    mean = np.stack([ndi.uniform_filter(n[..., c] * wt, size=w, mode="constant") for c in range(3)], axis=-1)
+    norm = np.linalg.norm(mean, axis=-1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        cosang = np.einsum("hwc,hwc->hw", n, mean) / np.maximum(norm, 1e-9)
+    # a window whose normals cancel (norm ~ 0) is itself a crumple
+    raw = ok & ((cosang < np.cos(np.radians(pol.plan_deg))) | (norm < 0.2 * ndi.uniform_filter(wt, size=w, mode="constant")))
+    frac = ndi.uniform_filter(raw.astype(np.float64), size=w, mode="constant")
+    den = ndi.uniform_filter(ok.astype(np.float64), size=w, mode="constant")
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return ok & (np.where(den > 0, frac / den, 0.0) >= pol.plan_frac)
+
+
+def vacuum_mask(P, V, sampler, pol: GuardPolicy):
+    """Cells lying in air: CT(x, y, z) <= ct_th, smoothed to a (2*win+1)^2 window fraction."""
+    out = np.zeros(V.shape, bool)
+    if sampler is None or not V.any():
+        return out
+    ct = np.asarray(sampler(P[V]), dtype=np.float64)
+    air = np.zeros(V.shape, np.float64)
+    air[V] = (ct <= pol.ct_th).astype(np.float64)
+    w = 2 * pol.vacuum_win + 1
+    num = ndi.uniform_filter(air, size=w, mode="constant")
+    den = ndi.uniform_filter(V.astype(np.float64), size=w, mode="constant")
+    with np.errstate(invalid="ignore", divide="ignore"):
+        frac = np.where(den > 0, num / den, 0.0)
+    return V & (frac >= pol.vacuum_frac)
+
+
+# ----------------------------------------------------------------------------- shadow criteria
+# 2026-09-29: nine more, all SHADOW MODE (compute + record every round, never prune/stop unless
+# `<crit>_enforce` is set -- see GuardPolicy). Each takes exactly the inputs it needs; the ones
+# that need an external resource (a surface-prediction sampler, an umbilicus, a normal-grid
+# sampler, the pipeline DB) accept it as a plain callable/None so growth_guard.py itself never
+# has to import volumes/scrolls -- the caller (stages/grow.py) resolves those the same way it
+# already resolves the CT sampler, and passes None where nothing is available THIS ROUND (a
+# criterion the caller cannot feed is SKIPPED, never scored as "clean").
+
+def quad_flip_mask(P, V, pol: GuardPolicy):
+    """Cells whose own normal points MORE than 90 deg from its window-mean neighbourhood normal
+    -- the surface has locally turned inside out (a negative-signed-area quad), the sharpest and
+    only threshold-free criterion here. A strict subset of what `plan_mask` can eventually catch
+    at a very permissive `plan_deg`, kept separate because it needs no threshold to justify."""
+    n, ok = grid_normals(P, V)
+    w = 2 * pol.plan_win + 1
+    wt = ok.astype(np.float64)
+    mean = np.stack([ndi.uniform_filter(n[..., c] * wt, size=w, mode="constant") for c in range(3)], axis=-1)
+    norm = np.linalg.norm(mean, axis=-1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        cosang = np.einsum("hwc,hwc->hw", n, mean) / np.maximum(norm, 1e-9)
+    return ok & (norm > 1e-9) & (cosang < 0.0)
+
+
+def stretch_ratio_p90(P, V) -> float | None:
+    """p90 of (3-D edge length / lattice median edge) over every valid edge -- the SCALAR the
+    growth-ab schema and guard_review's EXTRA_THRESHOLD_CRITERIA call `stretch_p90`."""
+    med = median_edge(P, V)
+    if not np.isfinite(med) or med <= 0:
+        return None
+    ratios = []
+    for ax in (0, 1):
+        a, b = (P[1:], P[:-1]) if ax == 0 else (P[:, 1:], P[:, :-1])
+        ok = (V[1:] & V[:-1]) if ax == 0 else (V[:, 1:] & V[:, :-1])
+        if ok.any():
+            ratios.append(np.linalg.norm(a - b, axis=-1)[ok] / med)
+    if not ratios:
+        return None
+    return round(float(np.percentile(np.concatenate(ratios), 90)), 4)
+
+
+def stretch_mask(P, V, pol: GuardPolicy):
+    """A cell touching a 3-D edge longer than `stretch_ratio_th` x the lattice's own median edge
+    -- local over-stretching, a precursor to a bad flatten (`edge_med_vox`, stages/render.py,
+    measures the same quantity as a single segment-level number; this is the per-cell version)."""
+    med = median_edge(P, V)
+    out = np.zeros(V.shape, bool)
+    if not np.isfinite(med) or med <= 0:
+        return out
+    th = pol.stretch_ratio_th * med
+    for ax in (0, 1):
+        a, b = (P[1:], P[:-1]) if ax == 0 else (P[:, 1:], P[:, :-1])
+        ok = (V[1:] & V[:-1]) if ax == 0 else (V[:, 1:] & V[:, :-1])
+        d = np.linalg.norm(a - b, axis=-1)
+        bad = ok & (d > th)
+        if ax == 0:
+            out[1:][bad] = True
+            out[:-1][bad] = True
+        else:
+            out[:, 1:][bad] = True
+            out[:, :-1][bad] = True
+    return out & V
+
+
+def frontier_roughness(V, pol: GuardPolicy, voxel_um: float, step_size: float = 20.0) -> dict:
+    """SEGMENT-level: frontier perimeter_um / sqrt(area_um2) -- compactness of the growing edge.
+    A smooth, round frontier reads low; a fractal, many-fingered one (often preceding a crumple)
+    reads high. `step_size` is the tracer's lattice pitch (voxels/cell) -- 20 is the fleet
+    default (DEFAULT_STEP_SIZE, stages/grow.py); pass the segment's own recorded one when known."""
+    band = frontier_band(V, 0)
+    cell_um = step_size * voxel_um
+    perim_um = float(band.sum()) * cell_um
+    area_um2 = float(V.sum()) * cell_um ** 2
+    r = perim_um / np.sqrt(area_um2) if area_um2 > 0 else float("nan")
+    return {"cells": int(band.sum()), "value": round(r, 4) if np.isfinite(r) else None,
+           "would_stop": bool(np.isfinite(r) and r > pol.roughness_th)}
+
+
+def _normal_dev_degrees(P, V, sampler):
+    """(idx, dev_degrees) or (None, None) when `sampler` is None. Shared by `normal_dev_mask`
+    (threshold) and `normal_dev_p90` (the scalar growth-ab/guard_review call `normal_dev_p90_deg`)."""
+    if sampler is None:
+        return None, None
+    n, ok = grid_normals(P, V)
+    idx = np.nonzero(ok)
+    if not len(idx[0]):
+        return idx, np.zeros(0)
+    ref = np.asarray(sampler(P[idx]), dtype=np.float64)
+    refn = ref / np.maximum(np.linalg.norm(ref, axis=-1, keepdims=True), 1e-9)
+    cosang = np.clip(np.abs(np.einsum("nc,nc->n", n[idx], refn)), -1.0, 1.0)   # abs: orientation sign is a convention, not a defect
+    return idx, np.degrees(np.arccos(cosang))
+
+
+def normal_dev_p90(P, V, sampler) -> float | None:
+    _, dev = _normal_dev_degrees(P, V, sampler)
+    return round(float(np.percentile(dev, 90)), 3) if dev is not None and len(dev) else None
+
+
+def normal_dev_mask(P, V, sampler, pol: GuardPolicy):
+    """Angle between the lattice's OWN normal (`grid_normals`) and a normal-grid's published
+    normal at the same point, in degrees. `sampler(xyz) -> (nx, ny, nz)` per point, or None where
+    no normal-grid sampler is wired for this scroll/host this round (SKIPPED -- returns None, not
+    an empty/clean mask: absence of the reference is not evidence of agreement)."""
+    idx, dev = _normal_dev_degrees(P, V, sampler)
+    if idx is None:
+        return None
+    out = np.zeros(V.shape, bool)
+    if len(dev):
+        out[idx] = dev > pol.normal_dev_deg_th
+    return out
+
+
+def _ridge_offset_slow(pts: np.ndarray, nv: np.ndarray, pred_sampler, window_vox: float, step: float = 1.0) -> np.ndarray:
+    """Reference implementation, one point at a time -- kept ONLY as the ground truth
+    `tests/test_growth_guard_ridge_offset_perf.py` checks the vectorised `_ridge_offset` against
+    (measured 39.6-74.2 s/segment, growth_degeneracy_2026-09-28.md's 2026-09-29 follow-up
+    replay -- do not call this from production code)."""
+    offs = np.arange(-window_vox, window_vox + 1e-6, step)
+    vals = np.zeros((len(pts), len(offs)), bool)
+    for k, o in enumerate(offs):
+        vals[:, k] = np.asarray(pred_sampler(pts + nv * o)) > 0
+    r = np.full(len(pts), np.nan)
+    for i in range(len(pts)):
+        row = vals[i]
+        if not row.any():
+            continue
+        d = np.diff(np.r_[0, row.astype(int), 0])
+        st = np.nonzero(d == 1)[0]
+        en = np.nonzero(d == -1)[0]
+        centres = offs[0] + (st + en - 1) / 2.0 * step
+        r[i] = centres[np.argmin(np.abs(centres))]
+    return r
+
+
+def _ridge_offset(pts: np.ndarray, nv: np.ndarray, pred_sampler, window_vox: float, step: float = 1.0) -> np.ndarray:
+    """Nearest predicted-surface crossing along the normal, within +-window_vox (LEVEL-0 voxels),
+    or NaN. Simplified from docs/experiments/fuse3d_review/code/s1_ct.py / s3_jump.py's sub-voxel
+    edge fit to a fixed-offset sample, appropriate for a per-round guard cost, not a research
+    measurement -- ridge_hit_mask/seam_mask both build on this.
+
+    VECTORISED (2026-09-29 follow-up): the original per-point Python loop measured 39.6-74.2 s
+    per real segment (growth_degeneracy_2026-09-28.md's shadow-criteria replay); this version
+    finds every point's run of True samples in ONE `ndi.label` call (row-only connectivity, so a
+    run never crosses between points) and picks each point's run nearest offset 0 with a single
+    sort + `np.unique(..., return_index=True)` -- no per-point Python loop. Verified to return
+    IDENTICAL values to `_ridge_offset_slow` on real segment data (`tests/
+    test_growth_guard_ridge_offset_perf.py`), same run-centre semantics, not an approximation.
+
+    Measured separately (FINDINGS.md 2026-09-29 follow-up): on real data, `pred_sampler` I/O
+    (chunk fetch + decompress from the real prediction zarr) is the DOMINANT cost -- 35.9 s of a
+    39.6 s total for one real segment at window_vox=30 -- not the post-processing this function
+    vectorises. So ALL `window_vox` offsets are queried in ONE combined call (every offset's
+    points concatenated) rather than one call per offset: at a 192-voxel chunk size and a <=60-
+    voxel window, most of a point's offsets land in the SAME zarr chunk, and `ZarrSampler`
+    already reads each touched chunk once per call regardless of how many of its points hit it
+    -- so one big call avoids re-fetching that chunk once per offset. `pred_sampler` must accept
+    an arbitrary-length point array (every sampler in this module already does)."""
+    vals, offs = _sample_window(pts, nv, pred_sampler, window_vox, step)
+    return _reduce_to_offset(vals, offs, step)
+
+
+def _sample_window(pts: np.ndarray, nv: np.ndarray, pred_sampler, window_vox: float, step: float = 1.0):
+    """(vals bool (N, W), offs (W,)): `pred_sampler` queried ONCE for every point x every offset
+    combined -- see `_ridge_offset`'s docstring for why this beats one call per offset. Factored
+    out of `_ridge_offset` so `ridge_hit_and_seam_masks` can sample ONCE at the wider window and
+    derive both criteria (2026-09-29, coordinator item (c): "share one wide prediction sample
+    between ridge_hit and seam")."""
+    offs = np.arange(-window_vox, window_vox + 1e-6, step)
+    N, W = len(pts), len(offs)
+    if N == 0:
+        return np.zeros((0, W), bool), offs
+    combined = (pts[:, None, :] + nv[:, None, :] * offs[None, :, None]).reshape(N * W, 3)
+    vals = (np.asarray(pred_sampler(combined)) > 0).reshape(N, W)
+    return vals, offs
+
+
+def _reduce_to_offset(vals: np.ndarray, offs: np.ndarray, step: float = 1.0) -> np.ndarray:
+    """Given a (N, W) boolean sample and its (W,) offsets, the per-point nearest-to-zero run
+    centre (or NaN) -- the reduction half of `_ridge_offset`, factored out so it can run on a
+    COLUMN SLICE of an already-sampled wider array (see `ridge_hit_and_seam_masks`)."""
+    N, W = vals.shape
+    r = np.full(N, np.nan)
+    if N == 0 or W == 0 or not vals.any():
+        return r
+    idx0 = int(np.argmin(np.abs(offs)))
+    struct = np.array([[0, 0, 0], [1, 1, 1], [0, 0, 0]], bool)   # horizontal (within-row) connectivity ONLY
+    lab, n = ndi.label(vals, structure=struct)
+    if n == 0:
+        return r
+    rows, cols = np.nonzero(lab)
+    labels = lab[rows, cols]
+    # per-run: mean column (its centre) and which point (row) it belongs to -- every pixel of a
+    # given label shares one row by construction (no cross-row connectivity), so any is fine.
+    counts = np.bincount(labels, minlength=n + 1)
+    col_sums = np.bincount(labels, weights=cols.astype(np.float64), minlength=n + 1)
+    centres = col_sums[1:] / counts[1:]                          # index 0 = label 1
+    label_row = np.zeros(n + 1, dtype=np.int64)
+    label_row[labels] = rows                                     # last write per label is fine (same row throughout)
+    dist = np.abs(centres - idx0)
+    order = np.lexsort((dist, label_row[1:]))                    # sort by row, then by distance to idx0
+    sorted_rows = label_row[1:][order]
+    _, first = np.unique(sorted_rows, return_index=True)         # first (= closest) run per row
+    best_rows = sorted_rows[first]
+    best_centres = centres[order[first]]
+    r[best_rows] = offs[0] + best_centres * step
+    return r
+
+
+def _seam_edges_from_r(V: np.ndarray, idx, pts: np.ndarray, nv: np.ndarray, n_full: np.ndarray,
+                       r: np.ndarray, pol: "GuardPolicy") -> np.ndarray:
+    """The edge-comparison half of the seam criterion, factored out of `seam_mask` so
+    `ridge_hit_and_seam_masks` can reuse it on a shared sample's `r`. `n_full` is the FULL
+    (H, W, 3) normal field (`grid_normals`'s first return); `r` is per-point (same order as
+    `idx`)."""
+    R = np.full(V.shape + (3,), np.nan)
+    R[idx] = pts + nv * np.where(np.isfinite(r), r, 0.0)[:, None]
+    known = np.zeros(V.shape, bool)
+    known[idx] = np.isfinite(r)
+    out = np.zeros(V.shape, bool)
+    for ax in (0, 1):
+        a = R[1:] if ax == 0 else R[:, 1:]
+        b = R[:-1] if ax == 0 else R[:, :-1]
+        ka = known[1:] if ax == 0 else known[:, 1:]
+        kb = known[:-1] if ax == 0 else known[:, :-1]
+        na = n_full[1:] if ax == 0 else n_full[:, 1:]
+        nb = n_full[:-1] if ax == 0 else n_full[:, :-1]
+        va = V[1:] if ax == 0 else V[:, 1:]
+        vb = V[:-1] if ax == 0 else V[:, :-1]
+        good = va & vb & ka & kb
+        nbar = na + nb
+        nbar = nbar / np.maximum(np.linalg.norm(nbar, axis=-1, keepdims=True), 1e-9)
+        cut = np.abs(np.einsum("...c,...c->...", b - a, nbar))
+        bad = good & (cut > pol.seam_step_vox)
+        if ax == 0:
+            out[1:][bad] = True
+            out[:-1][bad] = True
+        else:
+            out[:, 1:][bad] = True
+            out[:, :-1][bad] = True
+    return out & V
+
+
+def ridge_hit_and_seam_masks(P, V, pred_sampler, pol: "GuardPolicy"):
+    """Shared-sample version of `ridge_hit_mask` + `seam_mask` (2026-09-29, coordinator item
+    (c)): samples ONCE at the wider `seam_search_vox` window, then derives ridge_hit's narrower
+    `ridge_hit_vox` answer by slicing the SAME sampled array's central columns and reducing that
+    slice separately -- avoiding a second `pred_sampler` call (and its I/O) entirely, since
+    `ridge_hit_vox <= seam_search_vox` always. Returns (ridge_hit_mask, seam_mask), either None
+    if `pred_sampler` is None. `shadow_round` uses this instead of calling `ridge_hit_mask`/
+    `seam_mask` separately whenever both are enabled; the two standalone functions are kept
+    (and still tested) for callers that want only one."""
+    if pred_sampler is None:
+        return None, None
+    n_full, ok = grid_normals(P, V)
+    idx = np.nonzero(ok)
+    if not len(idx[0]):
+        empty = np.zeros(V.shape, bool)
+        return empty, empty
+    pts, nv = P[idx], n_full[idx]
+    wide_vals, wide_offs = _sample_window(pts, nv, pred_sampler, pol.seam_search_vox)
+
+    center = int(np.argmin(np.abs(wide_offs)))
+    narrow = np.abs(wide_offs) <= pol.ridge_hit_vox + 1e-9
+    r_ridge = _reduce_to_offset(wide_vals[:, narrow], wide_offs[narrow])
+    ridge_out = np.zeros(V.shape, bool)
+    ridge_out[idx] = ~np.isfinite(r_ridge)
+
+    r_seam = _reduce_to_offset(wide_vals, wide_offs)
+    seam_out = _seam_edges_from_r(V, idx, pts, nv, n_full, r_seam, pol)
+    del center   # only used to document that wide_offs is symmetric about it; not otherwise needed
+    return ridge_out & V, seam_out
+
+
+def empty_space_mask(P, V, pred_sampler, pol: GuardPolicy):
+    """(ARM E addition, coordinator 2026-09-29: "many PHerc0211 segments wander into empty space
+    undetected".) A CHEAP `ridge_hit`: single-point surface-prediction support (no +-window
+    search) at each FRONTIER cell's own lattice position, not the whole lattice's interior --
+    the frontier is exactly where "wandering into empty space" would first show up, and this is
+    meant as a much lighter per-round check than `ridge_hit_mask`'s windowed search (one
+    `pred_sampler` call over `frontier_band` cells only, instead of `window_vox`-many offsets
+    over every valid cell). `pred_sampler(xyz) -> value` (>0 = predicted surface), or None where
+    no prediction is local to this host/scroll this round (SKIPPED, never scored clean)."""
+    if pred_sampler is None:
+        return None
+    band = frontier_band(V, pol.reach_rings)
+    idx = np.nonzero(band)
+    out = np.zeros(V.shape, bool)
+    if not len(idx[0]):
+        return out
+    supported = np.asarray(pred_sampler(P[idx])) > 0
+    out[idx] = ~supported
+    return out
+
+
+def ridge_hit_mask(P, V, pred_sampler, pol: GuardPolicy):
+    """Cells with NO surface-prediction hit within +-ridge_hit_vox of the lattice along their own
+    normal -- unsupported by the independent surface-prediction model. `pred_sampler(xyz) ->
+    value` (>0 = predicted surface, e.g. a ZarrSampler over the thresholded m7 prediction), or
+    None where no prediction is local to this host this round (SKIPPED). Standalone version --
+    `shadow_round` uses `ridge_hit_and_seam_masks` instead when both criteria are enabled, to
+    share one sample."""
+    if pred_sampler is None:
+        return None
+    n, ok = grid_normals(P, V)
+    idx = np.nonzero(ok)
+    if not len(idx[0]):
+        return np.zeros(V.shape, bool)
+    r = _ridge_offset(P[idx], n[idx], pred_sampler, pol.ridge_hit_vox)
+    out = np.zeros(V.shape, bool)
+    out[idx] = ~np.isfinite(r)
+    return out
+
+
+def seam_mask(P, V, pred_sampler, pol: GuardPolicy):
+    """Wrap-jump seam detector (fuse3d_review's "ridge-coordinate seam" idea, code/s3_jump.py):
+    for each edge between adjacent lattice cells, correct BOTH endpoints to their nearest
+    predicted-ridge crossing along the normal (`_ridge_offset`, wider window than ridge_hit's own
+    so a genuine jump is still findable); an edge whose corrected endpoints differ by more than
+    `seam_step_vox` along their averaged normal is a coordinate discontinuity in the SAME
+    predicted surface -- the lattice jumped across a scan/wrap gap, not a smooth bend. Edges with
+    an unresolved endpoint on either side are left alone (unknown, not clean, not cut).
+    `pred_sampler` as `ridge_hit_mask`; None SKIPS this criterion entirely. Standalone version --
+    `shadow_round` uses `ridge_hit_and_seam_masks` instead when both criteria are enabled."""
+    if pred_sampler is None:
+        return None
+    n, ok = grid_normals(P, V)
+    idx = np.nonzero(ok)
+    if not len(idx[0]):
+        return np.zeros(V.shape, bool)
+    r = _ridge_offset(P[idx], n[idx], pred_sampler, pol.seam_search_vox)
+    return _seam_edges_from_r(V, idx, P[idx], n[idx], n, r, pol)
+
+
+def wrap_spacing_mask(P, V, umbilicus_of_z, voxel_um: float, pol: GuardPolicy):
+    """A lattice edge whose distance-from-umbilicus (radius) jumps by more than one winding
+    pitch (`shape_metrics.winding_span_and_jump_frac`'s `radial_jump_frac` criterion, made
+    per-cell): the edge crossed to a different wrap of the spiral. `umbilicus_of_z(z) -> (ux,
+    uy)`, or None where no umbilicus is registered/trusted for this scroll (SKIPPED)."""
+    if umbilicus_of_z is None or not V.any():
+        return None
+    idx = np.nonzero(V)
+    z = P[idx][:, 2]
+    ux, uy = umbilicus_of_z(z)
+    r = np.hypot(P[idx][:, 0] - ux, P[idx][:, 1] - uy)
+    R = np.full(V.shape, np.nan)
+    R[idx] = r
+    pitch_vox = pol.wrap_spacing_pitch_um / voxel_um if voxel_um else pol.wrap_spacing_pitch_um
+    out = np.zeros(V.shape, bool)
+    for ax in (0, 1):
+        a = R[1:] if ax == 0 else R[:, 1:]
+        b = R[:-1] if ax == 0 else R[:, :-1]
+        ok = (V[1:] & V[:-1]) if ax == 0 else (V[:, 1:] & V[:, :-1])
+        d = np.abs(a - b)
+        bad = ok & (d > pitch_vox)
+        if ax == 0:
+            out[1:][bad] = True
+            out[:-1][bad] = True
+        else:
+            out[:, 1:][bad] = True
+            out[:, :-1][bad] = True
+    return out & V
+
+
+def curvature_mask(P, V, voxel_um: float, umbilicus_of_z, pol: GuardPolicy):
+    """A local in-plane turn radius much tighter than the sheet's own distance from the
+    umbilicus is geometrically implausible for a spiral wrap (curvature ~ 1/r) and is a fold, not
+    a wrap: reuses `fold_mask`'s turn-radius construction verbatim, with the threshold scaled to
+    THIS segment's own median umbilicus distance (`curvature_frac_th * r_med`) instead of
+    `fold_mask`'s fixed `fold_radius_um` -- the same shape check, a radius-relative threshold.
+    None (no umbilicus) SKIPS this criterion."""
+    if umbilicus_of_z is None or not V.any():
+        return None
+    idx = np.nonzero(V)
+    z = P[idx][:, 2]
+    ux, uy = umbilicus_of_z(z)
+    r = np.hypot(P[idx][:, 0] - ux, P[idx][:, 1] - uy)
+    r_med = float(np.median(r)) if len(r) else float("nan")
+    if not np.isfinite(r_med) or r_med <= 0:
+        return np.zeros(V.shape, bool)
+    from dataclasses import replace
+    pol2 = replace(pol, fold_radius_um=pol.curvature_frac_th * r_med, fold_arc_um=pol.fold_arc_um, fold_half=pol.fold_half)
+    return fold_mask(P, V, voxel_um, pol2)
+
+
+def flatten_feedback_check(db, seg: str, pol: GuardPolicy) -> dict:
+    """Has this segment's most recent flatten(s) collapsed `flatten_feedback_streak` times in a
+    row? Reuses stages/render.py's OWN "collapsed flatten: valid < 0.20" bar (reason string) --
+    not a re-guessed threshold. SEGMENT-level (no mask): shadow-mode only records `would_stop`;
+    nothing pauses growth until `flatten_feedback_enforce` is set."""
+    rows = db.execute(
+        "SELECT reason FROM attempt WHERE seg=? AND stage='flatten' AND state<>'pending' ORDER BY id DESC LIMIT ?",
+        (seg, pol.flatten_feedback_streak)).fetchall()
+    collapsed = sum(1 for r in rows if r["reason"] and "collapsed" in str(r["reason"]).lower())
+    return {"cells": None, "checked": len(rows), "collapsed_recent": collapsed,
+           "would_stop": bool(collapsed >= pol.flatten_feedback_streak and len(rows) >= pol.flatten_feedback_streak)}
+
+
+@dataclass
+class ShadowContext:
+    """External resources the nine shadow criteria need but growth_guard.py never resolves
+    itself (no volumes/scrolls import here): the caller (stages/grow.py) builds whichever of
+    these it can for this round and leaves the rest None, which SKIPS that criterion rather than
+    scoring it as clean. All optional; an all-None context still runs quad_flip/stretch/roughness
+    (purely geometric, no external data needed)."""
+    pred_sampler: object = None          # (xyz) -> value; >0 = predicted surface
+    normal_sampler: object = None        # (xyz) -> (nx, ny, nz); the normal-grid's own normal
+    umbilicus_of_z: object = None        # (z) -> (ux, uy)
+    db: object = None                    # sqlite connection, for flatten_feedback_check
+    seg: str | None = None
+    step_size: float = 20.0
+
+
+# per-cell criteria that live in REASONS; roughness/flatten_feedback are segment-level (see below)
+SHADOW_CELL_CRITERIA = ("quad_flip", "stretch", "normal_dev", "ridge_hit", "seam", "wrap_spacing", "curvature")
+
+
+def shadow_round(P, V, pol: GuardPolicy, voxel_um: float, ctx: "ShadowContext | None" = None) -> dict:
+    """Compute EVERY shadow criterion this round (cheap ones always; the ones needing external
+    data whenever `ctx` supplies it), regardless of any `_enforce` flag -- this is the "shadow"
+    half of shadow mode. Returns {name: {"mask": ndarray|None, **info}} for the seven per-cell
+    criteria, plus "roughness" and "flatten_feedback" with `"mask": None` (segment-level).
+    A None mask means SKIPPED this round (not computed), not "no cells flagged" -- callers must
+    keep that distinction when recording `guard_<crit>_cells` (None, not 0)."""
+    ctx = ctx or ShadowContext()
+    out: dict[str, dict] = {}
+
+    def rec(name, mask, extra=None):
+        info = {"mask": mask, "cells": (None if mask is None else int(mask.sum()))}
+        if extra:
+            info.update(extra)
+        out[name] = info
+
+    if pol.quad_flip:
+        rec("quad_flip", quad_flip_mask(P, V, pol))
+    if pol.stretch:
+        # stretch_p90: the growth-ab SCHEMA.md / guard_review.EXTRA_THRESHOLD_CRITERIA column name
+        rec("stretch", stretch_mask(P, V, pol), {"stretch_p90": stretch_ratio_p90(P, V)})
+    if pol.normal_dev:
+        # normal_dev_p90_deg: same cross-module contract
+        rec("normal_dev", normal_dev_mask(P, V, ctx.normal_sampler, pol),
+            {"normal_dev_p90_deg": normal_dev_p90(P, V, ctx.normal_sampler)})
+    if pol.ridge_hit and pol.seam:
+        # share ONE wide pred_sampler call between the two (2026-09-29, coordinator item (c)):
+        # ridge_hit_vox <= seam_search_vox always, so seam's sample already covers ridge_hit's.
+        m_ridge, m_seam = ridge_hit_and_seam_masks(P, V, ctx.pred_sampler, pol)
+        n_valid = int(V.sum())
+        frac = (m_ridge.sum() / n_valid) if (m_ridge is not None and n_valid) else None
+        rec("ridge_hit", m_ridge, {"would_stop": bool(frac is not None and frac > pol.ridge_hit_frac_th),
+                                   "ridge_hit": bool(frac is not None and frac > pol.ridge_hit_frac_th),
+                                   "frac_unsupported": (round(frac, 4) if frac is not None else None)})
+        rec("seam", m_seam, {"seam_steps": (None if m_seam is None else int(m_seam.sum()))})
+    else:
+        if pol.ridge_hit:
+            m = ridge_hit_mask(P, V, ctx.pred_sampler, pol)
+            n_valid = int(V.sum())
+            frac = (m.sum() / n_valid) if (m is not None and n_valid) else None
+            # ridge_hit: guard_review reads this as a plain boolean ("did this round fail the
+            # ridge-support check"), not a cell count -- would_stop IS that boolean.
+            rec("ridge_hit", m, {"would_stop": bool(frac is not None and frac > pol.ridge_hit_frac_th),
+                                 "ridge_hit": bool(frac is not None and frac > pol.ridge_hit_frac_th),
+                                 "frac_unsupported": (round(frac, 4) if frac is not None else None)})
+        if pol.seam:
+            m = seam_mask(P, V, ctx.pred_sampler, pol)
+            # seam_steps: guard_review reads this as a count ("(v or 0) > 0"); the flagged-edge count
+            rec("seam", m, {"seam_steps": (None if m is None else int(m.sum()))})
+    if pol.empty_space:
+        m = empty_space_mask(P, V, ctx.pred_sampler, pol)
+        n_front = int(frontier_band(V, pol.reach_rings).sum())
+        frac = (m.sum() / n_front) if (m is not None and n_front) else None
+        # naming mirrors ridge_hit's: guard_review-style boolean AND the fraction, so a UI/replay
+        # reader that already knows ridge_hit's contract needs no new convention to learn.
+        rec("empty_space", m, {"would_stop": bool(frac is not None and frac > pol.empty_space_frac_th),
+                               "empty_space": bool(frac is not None and frac > pol.empty_space_frac_th),
+                               "frac_unsupported": (round(frac, 4) if frac is not None else None)})
+    if pol.wrap_spacing:
+        rec("wrap_spacing", wrap_spacing_mask(P, V, ctx.umbilicus_of_z, voxel_um, pol))
+    if pol.curvature:
+        rec("curvature", curvature_mask(P, V, voxel_um, ctx.umbilicus_of_z, pol))
+    if pol.roughness:
+        info = frontier_roughness(V, pol, voxel_um, ctx.step_size)
+        out["roughness"] = {"mask": None, **info}
+    if pol.flatten_feedback and ctx.db is not None and ctx.seg is not None:
+        info = flatten_feedback_check(ctx.db, ctx.seg, pol)
+        out["flatten_feedback"] = {"mask": None, **info}
+    return out
+
+
+def overlap_mask(P, V, cover, pol: GuardPolicy, own: str | None = None):
+    """Cells already held by another segment. `cover(points, normals, ok, own)` -> bool per
+    point; see SegmentIndex."""
+    out = np.zeros(V.shape, bool)
+    if cover is None or not V.any():
+        return out
+    n, ok = grid_normals(P, V)
+    idx = np.nonzero(V)
+    hit = cover(P[idx], n[idx], ok[idx], own)
+    out[idx] = hit
+    return out
+
+
+class SegmentIndex:
+    """Same-sheet coverage by a set of other segments: a lazy KD-tree per segment and a bbox
+    prefilter, using vesuvius_pipeline.coverage.normal_distance (the production gate's
+    estimator). `add(seg, X, Y, Z)` thins nothing; pass a decimated lattice if it is huge."""
+
+    def __init__(self, vox: float = 4.0, deg: float = 20.0):
+        from . import coverage as C
+        self.C, self.vox, self.deg = C, vox, deg
+        self.T: dict[str, dict] = {}
+        self.tree: dict[str, object] = {}
+
+    def add(self, seg: str, X, Y, Z):
+        T = self.C.surface_points(X, Y, Z)
+        if len(T["xyz"]) and T["bbox"] is not None:
+            self.T[seg] = T
+
+    def attribute(self, pts, nrm, ok, own=None):
+        """(hit mask, name per point or '') -- the covering segment with the SMALLEST along-normal
+        distance wins."""
+        from scipy.spatial import cKDTree
+        C = self.C
+        hit = np.zeros(len(pts), bool)
+        name = np.full(len(pts), "", dtype=object)
+        if not len(pts) or not self.T:
+            return hit, name
+        p = pts.astype(np.float64)
+        best = np.full(len(pts), np.inf)
+        lo, hi = p.min(axis=0), p.max(axis=0)
+        old = getattr(C, "ALIGN_DEG", None)
+        C.ALIGN_DEG = self.deg
+        try:
+            for s, T in self.T.items():
+                if s == own:
+                    continue
+                b0 = np.asarray(T["bbox"][0]) - C.R_QUERY
+                b1 = np.asarray(T["bbox"][1]) + C.R_QUERY
+                if np.any(b0 > hi) or np.any(b1 < lo):
+                    continue
+                if s not in self.tree:
+                    self.tree[s] = cKDTree(T["xyz"], leafsize=32, balanced_tree=False, compact_nodes=False)
+                d = C.normal_distance(p, nrm.astype(np.float64), ok, T, tree=self.tree[s])
+                # 2026-09-30 (c2322ce): a candidate only attributes points if its PAIR passes
+                # the median gate too (coverage.gated_hit) -- otherwise it is adjacent-winding,
+                # not the same sheet, however many individual points land within `vox`.
+                point_hit, pair_ok, _med = C.gated_hit(d, vox=self.vox)
+                if not pair_ok:
+                    continue
+                better = point_hit & (d < best)
+                best[better] = d[better]
+                name[better] = s
+                hit |= point_hit
+        finally:
+            if old is not None:
+                C.ALIGN_DEG = old
+        return hit, name
+
+    def __call__(self, pts, nrm, ok, own=None):
+        return self.attribute(pts, nrm, ok, own)[0]
+
+
+def merge_readiness(X, Y, Z, pol: "GuardPolicy", cover, neighbour_ok, voxel_um: float, own: str | None = None) -> dict:
+    """Is this segment's FRONTIER now mostly lying on one real, clean neighbour, and is the segment
+    itself clean? Then growing on only adds a duplicate: pause it and hand the pair to the merger.
+    `neighbour_ok(name) -> bool` is the caller's quality gate (planarity >= merge_neigh_min_planarity,
+    fold < merge_neigh_max_fold, not mush/degenerate), read from the segment inventory."""
+    P, V = lattice_frame(X, Y, Z)
+    out = {"mergeable": False, "with": None, "band_share": 0.0, "reason": None}
+    if cover is None or not V.any():
+        out["reason"] = "no neighbour index"
+        return out
+    band = V & frontier_band(V, pol.reach_rings)
+    n, ok = grid_normals(P, V)
+    idx = np.nonzero(band)
+    if not len(idx[0]):
+        out["reason"] = "no frontier"
+        return out
+    hit, names = cover.attribute(P[idx], n[idx], ok[idx], own)
+    if not hit.any():
+        out["reason"] = "frontier overlaps nothing"
+        return out
+    vals, counts = np.unique(names[hit], return_counts=True)
+    k = int(np.argmax(counts))
+    out["with"] = str(vals[k])
+    out["band_share"] = round(float(counts[k] / len(hit)), 4)
+    if out["band_share"] < pol.merge_frontier_frac:
+        out["reason"] = "frontier share on the best neighbour below threshold"
+        return out
+    if not neighbour_ok(out["with"]):
+        out["reason"] = "neighbour fails quality gate (mush / hairpin / non-planar)"
+        return out
+    from .stages import geomaps as GM
+    pl = GM.planarity_score(P, V)
+    fold = float(fold_mask(P, V, voxel_um, pol).mean())
+    out["own_planarity"], out["own_fold_cells"] = round(float(pl), 3), round(fold, 4)
+    if not (np.isfinite(pl) and pl >= pol.merge_neigh_min_planarity and fold <= pol.merge_neigh_max_fold):
+        out["reason"] = "segment itself fails the quality gate"
+        return out
+    out["mergeable"] = True
+    return out
+
+
+# ----------------------------------------------------------------------------- pruning
+@dataclass
+class GuardResult:
+    keep: np.ndarray
+    masks: dict
+    pruned_by: dict
+    cells_before: int
+    cells_after: int
+    components_cut: int
+    interior_bad_kept: int
+    frontier_bad_frac: float
+    stop: str | None = None
+    extra: dict = field(default_factory=dict)   # e.g. {"selfcross_pre": {...}} -- ARM B diagnostics
+    codes: "np.ndarray | None" = None            # uint8 reason grid on the PRE-prune lattice (see CODE_NAMES); never in summary()
+
+    def summary(self) -> dict:
+        out = {"cells_before": self.cells_before, "cells_after": self.cells_after,
+               "pruned_by": self.pruned_by, "components_cut": self.components_cut,
+               "interior_bad_components_kept": self.interior_bad_kept,
+               "frontier_bad_frac": round(self.frontier_bad_frac, 4), "stop": self.stop}
+        out.update(self.extra)
+        return out
+
+
+def frontier_band(V, rings: int):
+    """Valid cells within `rings` of an invalid cell (the grid edge counts as invalid)."""
+    if rings <= 0:
+        return V & ~ndi.binary_erosion(V, _S3, border_value=0)
+    return V & ~ndi.binary_erosion(V, _S3, iterations=rings, border_value=0)
+
+
+def prune(V, masks: dict, pol: GuardPolicy, anchor=None, protected=None) -> GuardResult:
+    """Cut the bad regions that touch the frontier; keep enclosed ones; keep the largest piece.
+
+    `protected` (2026-09-30, "merges and resumes only expand" -- CLAUDE.md): a boolean mask of
+    cells that were already present and valid at the START of this round (every cell on a fresh
+    seed grow's first round, or every INHERITED cell on a resume/merge). When given, no cell in
+    `protected & V` is ever removed by this call, regardless of which criterion flags it -- not by
+    the per-reason removal, not by the margin/island dilation, and not by the largest-connected-
+    -component selection. A round whose own NEW cells are all bad therefore stops with the surface
+    UNCHANGED, never smaller than it started: the guard may only trim what IT added growth to this
+    round. `None` (every existing caller: self_test, a bare `evaluate()` call with no round
+    bookkeeping) reproduces the exact previous behaviour -- no cell is protected, same as before
+    this parameter existed."""
+    V = V.astype(bool)
+    protected = (protected.astype(bool) & V) if protected is not None else None
+    band = frontier_band(V, pol.reach_rings)
+    rm_by: dict[str, np.ndarray] = {}
+    cut = 0
+    interior = 0
+    any_bad = np.zeros_like(V)
+    for r in REASONS:
+        m = masks.get(r)
+        if m is None:
+            continue
+        m = m & V
+        lab, n = ndi.label(m, structure=_S3)
+        if n == 0:
+            rm_by[r] = np.zeros_like(V)
+            continue
+        sizes = np.bincount(lab.ravel(), minlength=n + 1)
+        touch = np.zeros(n + 1, bool)
+        touch[np.unique(lab[band & (lab > 0)])] = True
+        # selfx has its own size floor and interior rule (2026-10-06): "every self-intersection is disallowed".
+        is_sx = r == "selfx"
+        big = sizes >= (max(1, int(pol.selfcross_min_cells)) if is_sx else pol.min_bad_cells)
+        # A bad region that does not touch the frontier is still CUT when it is a BARRIER: a
+        # crease/hairpin that runs across the sheet, so that removing it leaves a second piece
+        # (the tail the tracer followed round the fold). An enclosed hole splits nothing and stays.
+        barrier = np.zeros(n + 1, bool)
+        interior_cut = pol.cut_interior or (is_sx and pol.selfcross_cut_interior)
+        for lb in ([] if interior_cut else np.nonzero(big & ~touch)[0]):   # every big one is cut anyway: skip the O(n x lattice) loop
+            if lb == 0:
+                continue
+            cm = ndi.binary_dilation(lab == lb, _S3, iterations=max(0, pol.margin_rings)) if pol.margin_rings > 0 else (lab == lb)
+            l2, n2 = ndi.label(V & ~cm, structure=_S3)
+            if n2 >= 2 and (np.bincount(l2.ravel())[1:] >= pol.min_keep_cells).sum() >= 2:
+                barrier[lb] = True
+        sel = (touch | barrier) & big
+        if pol.cut_interior or (is_sx and pol.selfcross_cut_interior):   # default False: the enclosed-hole rule above is the live behaviour
+            sel = sel | big
+        sel[0] = False
+        interior += int(((~sel) & big)[1:].sum())
+        cut += int(sel.sum())
+        rm = sel[lab]
+        any_bad |= m & big[lab]
+        if r == "overlap" and pol.overlap_keep_rings > 0 and rm.any():
+            good = V & ~m
+            seam = ndi.binary_dilation(good, _S3, iterations=pol.overlap_keep_rings) & rm
+            rm = rm & ~seam
+        rm_by[r] = rm
+    rm_all = np.zeros_like(V)
+    for r in REASONS:
+        if r in rm_by:
+            rm_all |= rm_by[r]
+    if pol.margin_rings > 0 and rm_all.any():
+        rm_all = ndi.binary_dilation(rm_all, _S3, iterations=pol.margin_rings) & V
+    if protected is not None:
+        # "merges and resumes only expand" (CLAUDE.md, 2026-09-30): a cell present at round start
+        # is never removed by this guard, however badly it scores on any criterion -- the round may
+        # only trim what IT grew. Excluding it from rm_all (rather than only restoring it after
+        # island selection below) means it also never gets dilated away by margin_rings or costs a
+        # neighbouring new cell its own fair evaluation.
+        rm_all = rm_all & ~protected
+    keep = V & ~rm_all
+    if not pol.keep_islands and keep.any():
+        lab, n = ndi.label(keep, structure=_S3)
+        if n > 1:
+            main = 1 + int(np.argmax(np.bincount(lab.ravel())[1:]))
+            if anchor is not None and lab[anchor] > 0:      # the piece the tracer STARTED in, when it survived
+                main = int(lab[anchor])
+            keep = lab == main
+    if protected is not None:
+        # Belt and suspenders: the largest-connected-component selection just above could still
+        # drop a protected cell that the NEW growth disconnected from the main piece (e.g. the
+        # tracer's anchor ended up in a different fragment). A protected cell is restored
+        # unconditionally -- the invariant this exists for ("never smaller than round start") is
+        # enforced here, not hoped for from the component choice.
+        keep = keep | protected
+    stop = None
+    # "nothing_left" means the GUARD emptied the sheet. A young lattice that is simply small (9 or 28 cells after
+    # round 1) has had nothing cut, and ending it here killed two real seeds on the first canary (2026-09-25).
+    if (V & ~keep).any() and keep.sum() < pol.min_keep_cells:
+        stop = "nothing_left"
+    pruned_by, taken = {}, np.zeros_like(V)
+    dropped = V & ~keep
+    codes = np.zeros(V.shape, np.uint8)             # sidecar only: observes the attribution below, changes nothing
+    codes[V] = 1
+    for r in REASONS:
+        m = masks.get(r)
+        if m is None:
+            continue
+        got = dropped & m & ~taken
+        pruned_by[r] = int(got.sum())
+        codes[got] = CODE_NAMES.index(r)
+        taken |= got
+    pruned_by["margin_or_island"] = int((dropped & ~taken).sum())
+    codes[dropped & ~taken] = CODE_NAMES.index("margin_or_island")
+    fb = float((any_bad & band).sum() / max(1, band.sum()))
+    return GuardResult(keep, masks, pruned_by, int(V.sum()), int(keep.sum()), cut, interior, fb, stop, codes=codes)
+
+
+def evaluate(X, Y, Z, pol: GuardPolicy, voxel_um: float, sampler=None, cover=None, own=None, anchor=None,
+            selfx_mask: np.ndarray | None = None, shadow: dict | None = None,
+            protected: np.ndarray | None = None) -> GuardResult:
+    """All enabled criteria on one lattice, then `prune`. `selfx_mask` (ARM B) is computed by the
+    caller (`guard_tifxyz`, which has the on-disk `src` a subprocess census needs) rather than
+    here. `shadow` (the nine 2026-09-29 criteria, from `shadow_round`) is measured regardless of
+    enforcement, but a criterion's mask is only added to `masks` -- i.e. only actually PRUNED --
+    when its own `pol.<name>_enforce` is True. This is the shadow/enforce split: measurement and
+    action are two different questions, answered by two different flags."""
+    P, V = lattice_frame(X, Y, Z)
+    masks = {}
+    if pol.selfcross and selfx_mask is not None:
+        masks["selfx"] = selfx_mask
+    if pol.overlap and cover is not None:
+        masks["overlap"] = overlap_mask(P, V, cover, pol, own)
+    if pol.vacuum and sampler is not None:
+        masks["vacuum"] = vacuum_mask(P, V, sampler, pol)
+    if pol.fold:
+        masks["fold"] = fold_mask(P, V, voxel_um, pol)
+    if pol.plan:
+        masks["plan"] = plan_mask(P, V, pol)
+    for name in SHADOW_CELL_CRITERIA:
+        if shadow and getattr(pol, f"{name}_enforce", False):
+            m = shadow.get(name, {}).get("mask")
+            if m is not None:
+                masks[name] = m
+    return prune(V, masks, pol, anchor=anchor, protected=protected)
+
+
+# ----------------------------------------------------------------------------- regrowth guard
+def regrown_fraction(prev_keep_xyz: np.ndarray, pruned_xyz: np.ndarray, new_xyz: np.ndarray, tol: float) -> float:
+    """Of the cells a round ADDED (further than `tol` from the previous kept surface), the
+    fraction lying within `tol` of ground that was pruned. 0 when the round added nothing."""
+    from scipy.spatial import cKDTree
+    if not len(new_xyz) or not len(pruned_xyz):
+        return 0.0
+    if len(prev_keep_xyz):
+        d_old, _ = cKDTree(prev_keep_xyz).query(new_xyz, k=1)
+        added = new_xyz[d_old > tol]
+    else:
+        added = new_xyz
+    if not len(added):
+        return 0.0
+    d_pr, _ = cKDTree(pruned_xyz).query(added, k=1)
+    return float((d_pr <= tol).mean())
+
+
+# ----------------------------------------------------------------------------- tifxyz I/O
+def _read_xyz(d):
+    import tifffile
+    return tuple(tifffile.imread(Path(d) / f"{a}.tif").astype(np.float32) for a in "xyz")
+
+
+def _read_gen(d):
+    import tifffile
+    p = Path(d) / "generations.tif"
+    return tifffile.imread(p) if p.exists() else None
+
+
+def selfcross_timeout(pol: GuardPolicy, n_cells: int | None) -> float:
+    """The check's wall budget for a lattice of `n_cells` valid cells (~2 triangles each), clamped to
+    [selfcross_timeout_s, selfcross_timeout_max_s]. Unknown size -> the base value."""
+    t = float(pol.selfcross_timeout_s)
+    if n_cells:
+        t = max(t, 2.0 * n_cells / 1e6 * float(pol.selfcross_timeout_s_per_mtri))
+    return min(t, max(float(pol.selfcross_timeout_max_s), float(pol.selfcross_timeout_s)))
+
+
+def _valid_cells(src: str) -> int | None:
+    try:
+        import tifffile
+        x = tifffile.imread(Path(src) / "x.tif")
+        return int((x > 0).sum())
+    except Exception:  # noqa: BLE001 -- only sizes the timeout; the check itself reports a real read failure
+        return None
+
+
+def selfcross_check(src: str, shape: tuple[int, int], pol: GuardPolicy, n_cells: int | None = None) -> tuple[np.ndarray | None, dict]:
+    """The binary census, once, with ONE retry at 3x the budget when the first attempt timed out (a loaded host, not a
+    broken tool: 31 of the 46 unverified rounds of 2026-09-29..10-06 were TimeoutExpired). See `_selfcross_once`."""
+    if n_cells is None and pol.selfcross:
+        n_cells = _valid_cells(src)
+    tmo = selfcross_timeout(pol, n_cells)
+    mask, info = _selfcross_once(src, shape, pol, tmo)
+    if not info.get("ran") and str(info.get("error", "")).startswith("TimeoutExpired"):
+        first = info.get("error")
+        mask, info = _selfcross_once(src, shape, pol, tmo * 3.0)
+        info["retried_after"] = first[:120]
+    info["timeout_s"] = round(tmo, 1)
+    return mask, info
+
+
+def _selfcross_once(src: str, shape: tuple[int, int], pol: GuardPolicy, timeout_s: float) -> tuple[np.ndarray | None, dict]:
+    """ARM B (growth_degeneracy_2026-09-28.md): run upstream's `vc_tifxyz_selfcross` (report-only,
+    never modifies `src`) and mark every lattice cell that is a corner of a flagged quad -- fed into
+    `evaluate()` as reason "selfx", so it gets the SAME frontier-touch / interior-kept / largest-
+    component / regrowth-block treatment as vacuum/fold/plan, for free.
+
+    Returns (mask or None, info). `info['ran']` is False, and mask is None, whenever the check did
+    NOT produce a trustworthy answer (binary missing, subprocess failure, timeout, lattice above
+    `selfcross_max_triangles`) -- that is recorded in `info['error']`/`info['skipped']` and treated
+    as "no check this round", never as "clean": a broken tool must not silently mask real crossings,
+    and it must not be able to stop growth on its own failure either.
+
+    Cost, measured (growth_degeneracy_2026-09-28.md, n=40 real segments up to ~50k triangles /
+    ~9 cm2): wall time p50 0.050 s, p90 0.078 s, max 0.085 s -- negligible against a grow round's
+    ~700-1800 CPU-s. Re-measure `info['wall_s']` in production before relying on this number at
+    much larger sizes than tested here."""
+    info: dict = {"ran": False}
+    if not pol.selfcross:
+        info["skipped"] = "policy_off"
+        return None, info
+    binp = pol.selfcross_bin or shutil.which("vc_tifxyz_selfcross")
+    if not binp or not os.path.exists(binp):
+        info["skipped"] = "binary_not_found"
+        return None, info
+    out = Path(src) / f".selfcross_guard_{os.getpid()}.json"
+    t0 = time.time()
+    try:
+        cmd = [binp, "--surface", str(src), "-o", str(out)]
+        if int(pol.selfcross_threads or 0) > 0:
+            cmd += ["--threads", str(int(pol.selfcross_threads))]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s,
+                           env=pol.selfcross_env)
+        info["wall_s"] = round(time.time() - t0, 3)
+        if r.returncode != 0 or not out.exists():
+            info["error"] = ((r.stderr or r.stdout) or "")[-200:]
+            return None, info
+        rep = json.loads(out.read_text())
+    except (OSError, subprocess.TimeoutExpired, ValueError) as e:
+        info["error"] = f"{type(e).__name__}: {e}"
+        return None, info
+    finally:
+        try:
+            out.unlink()
+        except OSError:
+            pass
+    census = rep.get("census") or []
+    tri = census[0].get("triangles") if census else 0
+    if not census or not tri:
+        info["ran"] = True
+        info["density"] = 0.0
+        info["triangles"] = int(tri or 0)
+        return np.zeros(shape, bool), info
+    if pol.selfcross_max_triangles and tri > pol.selfcross_max_triangles:
+        info["skipped"] = f"triangles {tri} > selfcross_max_triangles {pol.selfcross_max_triangles}"
+        return None, info
+    trans = [c.get("transverse", 0) for c in census]
+    info["ran"] = True
+    info["triangles"] = int(tri)
+    info["density"] = round((sum(trans) / len(trans)) / tri, 4)
+    mask = np.zeros(shape, bool)
+    h, w = shape
+    for c in census:
+        for hit in (c.get("transverse_contacts") or []):
+            for q in (hit.get("quad1"), hit.get("quad2")):
+                if not q:
+                    continue
+                r0, c0 = int(q[0]), int(q[1])
+                for dr in (0, 1):
+                    for dc in (0, 1):
+                        rr, cc = r0 + dr, c0 + dc
+                        if 0 <= rr < h and 0 <= cc < w:
+                            mask[rr, cc] = True
+    return mask, info
+
+
+def _align_shifted_canvas(prev_V: np.ndarray, prev_P: np.ndarray, V: np.ndarray, P: np.ndarray,
+                          search_pad: int = 6) -> tuple[int, int] | None:
+    """Find the integer (dr, dc) lattice-index shift that places `prev_V`'s grid inside `V`'s
+    larger grid, verified against the real XYZ coordinates (not just mask overlap -- a wrong
+    shift can still overlap heavily by coincidence when the new grid is much denser than the
+    old one, which is the common case here).
+
+    2026-10-01 (guard_invariant_violation root cause): measured on 6 real PHerc0358 merged-resume
+    rounds that `vc_grow_seg_from_seed --resume` pads the canvas SYMMETRICALLY when it needs more
+    room -- `dr == dc == (new_shape - old_shape) // 2` in all 6 -- so that is tried first and is
+    normally the only candidate evaluated. A small neighbourhood around it is still searched in
+    case padding is ever asymmetric, each candidate scored by RMSE of the inherited points'
+    coordinates against the proposed location, never by overlap count alone.
+
+    Returns None when no candidate's RMSE is convincingly small -- a bad guess must never be
+    returned, because the only use of this is PROTECTING cells from the guard, and a wrong offset
+    would protect garbage (or newly-grown cells) and expose a bug worse than the one it fixes."""
+    ha, wa = prev_V.shape
+    hb, wb = V.shape
+    dr0, dc0 = (hb - ha) // 2, (wb - wa) // 2
+    n_prev = int(prev_V.sum())
+    if n_prev == 0:
+        return None
+    best = None
+    for dr in range(dr0 - search_pad, dr0 + search_pad + 1):
+        for dc in range(dc0 - search_pad, dc0 + search_pad + 1):
+            if dr < 0 or dc < 0 or dr + ha > hb or dc + wa > wb:
+                continue
+            sub_V = V[dr:dr + ha, dc:dc + wa]
+            both = prev_V & sub_V
+            n = int(both.sum())
+            if n < max(16, int(0.9 * n_prev)):
+                continue    # must recover almost every inherited cell, not just some of them
+            sub_P = P[dr:dr + ha, dc:dc + wa]
+            diff = prev_P[both] - sub_P[both]
+            rmse = float(np.sqrt((diff ** 2).sum(axis=-1)).mean())
+            if best is None or rmse < best[0]:
+                best = (rmse, dr, dc)
+    if best is None:
+        return None
+    rmse, dr, dc = best
+    # a genuine match is near-exact (unchanged lattice positions, or a few voxels of relaxation
+    # drift); tens of voxels of residual means this was the wrong shift, found only because the
+    # denser new lattice has enough points to coincidentally overlap -- refuse rather than guess.
+    if rmse > 32.0:
+        return None
+    return dr, dc
+
+
+def new_cell_mask(V: np.ndarray, prev_V: np.ndarray | None, P: np.ndarray | None = None,
+                  prev_P: np.ndarray | None = None, info: dict | None = None) -> np.ndarray:
+    """Cells valid NOW that were not valid at the end of the previous guard round. `prev_V` is
+    None on the first round -- every valid cell counts as new, same as always.
+
+    When the checkpoint grid changed shape between rounds (it grows when the tracer's bounding
+    array is extended -- measured to happen on almost every resumed/merged round, not only round
+    1), `prev_V` cannot be compared directly. If the real lattice coordinates (`P`/`prev_P`) are
+    given, `_align_shifted_canvas` looks for the integer shift that recovers the inherited cells;
+    when found, the comparison is done in the ALIGNED frame instead of being abandoned. Only when
+    no coordinates are given, or no confident shift is found, does this fall back to "every valid
+    cell is new" -- the original, safe default, recorded in `info['new_cell_mask_fallback']` so
+    the degradation is never silent (CLAUDE.md: "a degradation that succeeds is a silent
+    failure")."""
+    if prev_V is None:
+        return V.copy()
+    if prev_V.shape == V.shape:
+        return V & ~prev_V
+    if P is not None and prev_P is not None:
+        off = _align_shifted_canvas(prev_V, prev_P, V, P)
+        if off is not None:
+            dr, dc = off
+            aligned_prev = np.zeros_like(V)
+            ha, wa = prev_V.shape
+            aligned_prev[dr:dr + ha, dc:dc + wa] = prev_V
+            if info is not None:
+                info["new_cell_mask_aligned_offset"] = [dr, dc]
+            return V & ~aligned_prev
+    if info is not None:
+        info["new_cell_mask_fallback"] = (
+            f"shape {tuple(prev_V.shape)} -> {tuple(V.shape)}: no confident coordinate alignment "
+            "found; treating the whole lattice as new this round (protection not applied)")
+    return V.copy()
+
+
+def selfcross_check_incremental(src: str, X: np.ndarray, Y: np.ndarray, Z: np.ndarray,
+                                V: np.ndarray, new_mask: np.ndarray,
+                                pol: GuardPolicy) -> tuple[np.ndarray | None, dict]:
+    """(3), coordinator 2026-09-29: replaces the `selfcross_max_triangles` SKIP with an
+    incremental check, so a large segment is never silently left unverified. Crops `src` to this
+    round's NEW cells (`new_mask`) plus every OLD cell within `selfcross_crop_halo_vox` of their
+    axis-aligned bounding box, writes that as a TEMPORARY tifxyz (invalid cells set to -1; `src`
+    itself is never touched -- CLAUDE.md), and runs the real `selfcross_check` on the crop
+    instead of the whole lattice.
+
+    Why an axis-aligned box, not a per-point radius: a bounding box expanded by the halo is a
+    conservative SUPERSET of "every old cell within halo of some new cell" -- it can only keep
+    MORE old cells than strictly needed (extra cost, never a missed contact), so it cannot hide a
+    real self-intersection the full-lattice check would have found. When growth is scattered
+    (the box would barely shrink anything) or the new region is not genuinely local, this falls
+    back to the full-lattice `selfcross_check` -- the incremental path is a cost optimisation,
+    never the sole means of ever checking a cell.
+
+    Returns exactly `selfcross_check`'s (mask, info) contract, `info` additionally carrying
+    `incremental`, `crop_cells`, `full_cells` when the crop path was actually used."""
+    if not pol.selfcross:
+        return None, {"skipped": "policy_off"}
+    n_full = int(V.sum())
+    if not new_mask.any() or not V.any() or n_full < int(pol.selfcross_crop_min_cells):
+        return selfcross_check(src, X.shape, pol, n_cells=n_full)
+    P = np.stack([X, Y, Z], axis=-1).astype(np.float64)
+    new_pts = P[new_mask & V]
+    if len(new_pts) == 0:
+        return selfcross_check(src, X.shape, pol, n_cells=n_full)
+    halo = pol.selfcross_crop_halo_vox
+    # 2026-10-06: per POINT (every valid cell within `halo` of some new cell), not the new cells' bounding box -- frontier
+    # growth rings the whole sheet, so the box was the whole lattice and the crop path never ran (0 / 16,478 rounds).
+    # Still a conservative superset of what a contact needs: a triangle touching a new triangle lies within one quad
+    # edge (<= the binary's --maxedge, 60 vox) + its touch tolerance of a new cell, far inside a 200-vox halo.
+    from scipy.spatial import cKDTree
+    d, _ = cKDTree(new_pts).query(P[V], k=1, distance_upper_bound=halo)
+    keep = np.zeros_like(V)
+    keep[V] = np.isfinite(d)
+    keep |= new_mask & V
+    n_keep = int(keep.sum())
+    if n_keep >= n_full * 0.9:          # the crop barely shrank anything -- just run the real thing
+        return selfcross_check(src, X.shape, pol, n_cells=n_full)
+    import tempfile
+    import tifffile
+    with tempfile.TemporaryDirectory(prefix="selfx_incr_") as td:
+        Xc, Yc, Zc = X.copy(), Y.copy(), Z.copy()
+        Xc[~keep] = -1.0
+        Yc[~keep] = -1.0
+        Zc[~keep] = -1.0
+        tifffile.imwrite(os.path.join(td, "x.tif"), Xc)
+        tifffile.imwrite(os.path.join(td, "y.tif"), Yc)
+        tifffile.imwrite(os.path.join(td, "z.tif"), Zc)
+        # start from SRC's own meta.json (whatever fields the binary needs -- grid_offset,
+        # vc_gsfs_params, etc -- travel with it unchanged) and only refresh bbox/area, exactly
+        # like write_cropped() does for a real guard crop; a hand-built minimal meta.json was
+        # missing a field the binary requires and failed to load ("type must be number, but is
+        # null") -- reusing the real one is the same fix write_cropped already relies on.
+        meta = {}
+        srcmeta = Path(src) / "meta.json"
+        if srcmeta.exists():
+            try:
+                meta = json.loads(srcmeta.read_text())
+            except (ValueError, OSError):
+                meta = {}
+        Pc = np.stack([Xc, Yc, Zc], axis=-1).astype(np.float64)
+        if keep.any():
+            meta["bbox"] = [Pc[keep].min(axis=0).tolist(), Pc[keep].max(axis=0).tolist()]
+        meta["uuid"] = "selfx_incremental_crop"
+        meta["source"] = "growth_guard.selfcross_check_incremental"
+        Path(td, "meta.json").write_text(json.dumps(meta))
+        mask, info = selfcross_check(td, X.shape, pol, n_cells=n_keep)
+    info["incremental"] = True
+    info["crop_cells"] = n_keep
+    info["full_cells"] = n_full
+    return mask, info
+
+
+def _selfx_unrunnable(msg: str, reason: str) -> None:
+    """A check that could not run. The ROUND is always held back (guard_round, selfcross_fail_closed); what differs is
+    the host: a TOOL fault (binary missing, library will not load, non-zero exit, unreadable report) marks this host
+    broken -- every later check here would fail the same way -- while a TIMEOUT that survived its 3x retry is a loaded
+    host, alerted but not a reason to stop every grow on the box (2026-10-06: 31 such timeouts in 7 days each took a
+    whole phi/v100 out of grow admission until its agent restarted)."""
+    if str(reason).startswith("TimeoutExpired"):
+        try:
+            from .alerts import alert
+            alert(f"growth_guard: {msg} -- round held back, grow paused (host NOT marked broken: timeout)")
+        except Exception as e:                    # noqa: BLE001 - alerting must never mask the real failure
+            print(f"growth_guard: alert() failed: {type(e).__name__}: {e}")
+        return
+    mark_broken(msg)
+
+
+def guard_tifxyz(src: str, dst: str, pol: GuardPolicy, voxel_um: float, sampler=None, cover=None,
+                 own: str | None = None, shadow_ctx: "ShadowContext | None" = None,
+                 new_mask: np.ndarray | None = None) -> GuardResult:
+    """Evaluate `src` and write the cropped surface to `dst` (a new tifxyz dir: x/y/z -- and
+    generations.tif when the tracer wrote one -- with -1 / 0 where pruned, meta.json with updated
+    bbox/area, guard.json with the numbers). `src` is never modified (CLAUDE.md: never modify an
+    existing meta.json). The kept piece is the one holding the tracer's START (the smallest
+    generation) when that survives, else the largest.
+
+    `new_mask` (3), 2026-09-29: this round's new cells, from `guard_round`'s `GuardState.prev_V`
+    bookkeeping. When given, the selfcross check runs `selfcross_check_incremental` (crops to the
+    new region + a halo, falling back to the full lattice on its own when that would not help);
+    when None (self_test's direct calls, or no prior state), it runs the full-lattice
+    `selfcross_check` exactly as before -- never a regression for a caller that does not track
+    round-to-round state."""
+    X, Y, Z = _read_xyz(src)
+    gen = _read_gen(src)
+    anchor = None
+    V = (X > 0) & (Y > 0) & (Z > 0)
+    if gen is not None and gen.shape == X.shape:
+        if V.any():
+            anchor = np.unravel_index(int(np.argmin(np.where(V, gen, np.iinfo(gen.dtype).max))), V.shape)
+    if not pol.selfcross:
+        selfx_mask, selfx_info = None, {}
+    elif new_mask is not None:
+        selfx_mask, selfx_info = selfcross_check_incremental(src, X, Y, Z, V, new_mask, pol)
+    else:
+        selfx_mask, selfx_info = selfcross_check(src, X.shape, pol)
+    if pol.selfcross and not selfx_info.get("ran"):
+        # (2) selfcross is ENABLED but the pre-round check could not run at all (binary missing,
+        # subprocess error, timeout) -- coordinator, 2026-09-29: this is not a skip, it is a
+        # guard that has gone dark while believed to be protecting production. Force the
+        # self-test cache to FAILED (agent.run_grow refuses this host's next grow claim) and
+        # surface the reason as its own metric (stages/grow.py records `guard_selfx_error`).
+        reason = selfx_info.get("error") or selfx_info.get("skipped") or "unknown"
+        _selfx_unrunnable(f"selfcross enabled but pre-round check failed: {reason}", reason)
+        selfx_info["guard_selfx_error"] = f"pre: {reason}"
+    P, _ = lattice_frame(X, Y, Z)
+    shadow = shadow_round(P, V, pol, voxel_um, shadow_ctx)
+    # "merges and resumes only expand": whatever was valid and NOT new this round is protected
+    # from pruning (see `prune()`'s own docstring). `new_mask is None` (self_test's direct calls,
+    # or a caller tracking no round state) means "no protection", exactly the old behaviour.
+    protected = (V & ~new_mask) if new_mask is not None else None
+    res = evaluate(X, Y, Z, pol, voxel_um, sampler=sampler, cover=cover, own=own, anchor=anchor,
+                  selfx_mask=selfx_mask, shadow=shadow, protected=protected)
+    if selfx_info:
+        res.extra["selfcross_pre"] = selfx_info
+        if "guard_selfx_error" in selfx_info:
+            res.extra["guard_selfx_error"] = selfx_info["guard_selfx_error"]
+    if shadow:
+        # masks are large arrays and never belong in a JSON summary; keep everything else,
+        # nested (for debugging/completeness)...
+        res.extra["shadow"] = {k: {kk: vv for kk, vv in v.items() if kk != "mask"} for k, v in shadow.items()}
+        # ...AND flattened to the TOP LEVEL under the exact names guard_review.py's
+        # EXTRA_THRESHOLD_CRITERIA / growth_ab.py's SUMMARY_METRICS look for directly in
+        # guard_summary (its primary lookup path; stages/grow.py also records these as their own
+        # `metric` rows, guard_review's documented fallback path -- both are kept in sync here).
+        for name, key in (("stretch", "stretch_p90"), ("normal_dev", "normal_dev_p90_deg"),
+                          ("seam", "seam_steps"), ("ridge_hit", "ridge_hit"),
+                          ("empty_space", "empty_space")):
+            v = shadow.get(name, {}).get(key)
+            if v is not None:
+                res.extra[key] = v
+        if "roughness" in shadow and shadow["roughness"].get("value") is not None:
+            res.extra["frontier_roughness"] = shadow["roughness"]["value"]
+    write_cropped(src, dst, res.keep, voxel_um, res.summary())
+    return res
+
+
+def write_cropped(src: str, dst: str, keep: np.ndarray, voxel_um: float, summary: dict | None = None) -> None:
+    """Write `src`'s lattice restricted to `keep` as a new tifxyz dir (x/y/z = -1 and
+    generations = 0 where dropped; meta.json with bbox / area / max_gen refreshed). Never
+    touches `src`."""
+    import tifffile
+    X, Y, Z = _read_xyz(src)
+    gen = _read_gen(src)
+    dstp = Path(dst)
+    dstp.mkdir(parents=True, exist_ok=True)
+    for a, A in zip("xyz", (X, Y, Z), strict=True):
+        B = A.copy()
+        B[~keep] = -1.0
+        tifffile.imwrite(dstp / f"{a}.tif", B)
+    g2 = None
+    if gen is not None and gen.shape == keep.shape:
+        g2 = gen.copy()
+        g2[~keep] = 0
+        tifffile.imwrite(dstp / "generations.tif", g2)
+    meta = {}
+    mp = Path(src) / "meta.json"
+    if mp.exists():
+        meta = json.loads(mp.read_text())
+    P, V = lattice_frame(np.where(keep, X, -1), np.where(keep, Y, -1), np.where(keep, Z, -1))
+    if V.any():
+        meta["bbox"] = [P[V].min(axis=0).tolist(), P[V].max(axis=0).tolist()]
+    meta["area_cm2"] = lattice_area_cm2(P, V, voxel_um)
+    if g2 is not None and V.any():
+        meta["max_gen"] = int(g2[V].max())
+    if summary is not None:
+        meta["guard"] = summary
+        (dstp / "guard.json").write_text(json.dumps(summary, indent=1))
+    (dstp / "meta.json").write_text(json.dumps(meta, indent=1))
+
+
+
+# ----------------------------------------------------------------------------- self-crossing SCRUB (2026-10-07)
+def _main_piece(keep: np.ndarray, anchor) -> np.ndarray:
+    """The connected piece of `keep` holding `anchor` (the tracer's start) when it survived, else the largest."""
+    lab, n = ndi.label(keep, structure=_S3)
+    if n <= 1:
+        return keep
+    main = 1 + int(np.argmax(np.bincount(lab.ravel())[1:]))
+    if anchor is not None and lab[anchor] > 0:
+        main = int(lab[anchor])
+    return lab == main
+
+
+def selfx_scrub_keep(src: str, pol: GuardPolicy, voxel_um: float, keep0: np.ndarray | None = None) -> tuple[np.ndarray | None, dict]:
+    """Cut `src` back to a lattice with a VERIFIED ZERO self-crossings, whatever the age of the cells involved.
+
+    Each pass runs the full-lattice `vc_tifxyz_selfcross` on the current candidate (a scratch tifxyz written beside `src`),
+    drops every cell that is a corner of a flagged quad, keeps the piece holding the tracer's start (else the largest),
+    and checks again; it stops only on a pass that reports ZERO transverse contacts. Returns (keep, info):
+      * info['ran']   False -> the check could not run (keep is None): the caller must fail closed, never treat it as clean;
+      * info['clean'] True only when the LAST pass found density 0 and no flagged cell on exactly the returned `keep`;
+      * info['removed_cells'], ['iters'], ['density_first'], ['cells_before'], ['cells_after'].
+    `src` is never modified. Pure function of the surface: the same input always gives the same keep."""
+    X, Y, Z = _read_xyz(src)
+    V = (X > 0) & (Y > 0) & (Z > 0)
+    gen = _read_gen(src)
+    anchor = None
+    if gen is not None and gen.shape == X.shape and V.any():
+        anchor = np.unravel_index(int(np.argmin(np.where(V, gen, np.iinfo(gen.dtype).max))), V.shape)
+    keep = V.copy() if keep0 is None else (keep0 & V)
+    info: dict = {"ran": False, "clean": False, "iters": 0, "cells_before": int(V.sum()), "removed_cells": 0}
+    import tempfile
+    td = tempfile.mkdtemp(prefix=".selfx_scrub_", dir=str(Path(src).parent))
+    try:
+        for it in range(max(1, int(pol.selfcross_scrub_max_iter)) + 1):
+            if it > 0 and keep.sum() < pol.min_keep_cells:      # only a CUT can leave 'nothing': a small clean young surface is clean
+                info.update(ran=True, clean=False, cells_after=int(keep.sum()), stop="nothing_left")
+                return keep, info
+            write_cropped(src, td, keep, voxel_um)
+            mask, ci = selfcross_check(td, V.shape, pol, n_cells=int(keep.sum()))
+            if not ci.get("ran"):
+                info["error"] = ci.get("error") or ci.get("skipped") or "unknown"
+                return None, info
+            info["ran"] = True
+            if it == 0:
+                info["density_first"] = ci.get("density")
+            flagged = (mask & keep) if mask is not None else np.zeros_like(keep)
+            if not flagged.any():
+                info["clean"] = (ci.get("density") or 0.0) == 0.0     # flagged empty but density>0 would be a tool/mask disagreement
+                if not info["clean"]:
+                    info["error"] = "density>0 with no flagged cell"
+                break
+            k1 = keep & ~flagged
+            keep = _main_piece(k1, anchor)
+            info["flagged_cells"] = info.get("flagged_cells", 0) + int(flagged.sum())
+            info["island_cells"] = info.get("island_cells", 0) + int(k1.sum() - keep.sum())    # clean cells cut off from the main piece
+            info["iters"] = it + 1
+        info["cells_after"] = int(keep.sum())
+        info["removed_cells"] = int(V.sum() - keep.sum())
+        return keep, info
+    finally:
+        shutil.rmtree(td, ignore_errors=True)
+
+
+def selfcross_contacts(src: str, pol: GuardPolicy, n_cells: int | None = None) -> tuple[list | None, dict]:
+    """Like `selfcross_check`, but returns the CONTACT PAIRS [((r1, c1), (r2, c2)), ...] (lattice quad origins of the two quads
+    that cross) instead of the corner mask -- the generation at which each crossing was CREATED needs both quads. (None, info)
+    when the tool could not run (info['error'] / ['skipped'])."""
+    import tempfile
+    binp = pol.selfcross_bin or shutil.which("vc_tifxyz_selfcross")
+    if not pol.selfcross or not binp or not os.path.exists(binp):
+        return None, {"ran": False, "skipped": "policy_off_or_binary_not_found"}
+    fd, rep = tempfile.mkstemp(suffix=".json", prefix=".selfcross_contacts_"); os.close(fd)
+    cmd = [binp, "--surface", str(src), "-o", rep]
+    if int(pol.selfcross_threads or 0) > 0:
+        cmd += ["--threads", str(int(pol.selfcross_threads))]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=selfcross_timeout(pol, n_cells), env=pol.selfcross_env)
+        if r.returncode != 0:
+            return None, {"ran": False, "error": ((r.stderr or r.stdout) or "")[-200:]}
+        R = json.loads(Path(rep).read_text())
+    except (OSError, subprocess.TimeoutExpired, ValueError) as e:
+        return None, {"ran": False, "error": f"{type(e).__name__}: {e}"}
+    finally:
+        try:
+            os.unlink(rep)
+        except OSError:
+            pass
+    cs = [((int(h["quad1"][0]), int(h["quad1"][1])), (int(h["quad2"][0]), int(h["quad2"][1])))
+          for c in (R.get("census") or []) for h in (c.get("transverse_contacts") or []) if h.get("quad1") and h.get("quad2")]
+    return cs, {"ran": True}
+
+
+CAUSAL_HOPS = 8     # NAMED TUNABLE (mode C): lattice hops a crossing can causally reach. = the tracer's local-solve radius ("local solves reach radius 8",
+                    # TracerSelfCollision.hpp Params.window comment); swept 4/8/16 in docs/experiments/selfx_population_2026-10-07.
+
+
+def contact_seeds(V: np.ndarray, gen: np.ndarray, contacts) -> tuple[np.ndarray, np.ndarray, int | None]:
+    """Crossing SEED cells for mode C and the flagged-corner mask. For each contact the quad created LATER (larger max corner generation) is the
+    offender (it pierced the older sheet): its corners committed in that creating generation are the seeds. Equal generations: both quads.
+    -> (seeds bool HxW, flagged-corner mask, first creating generation or None)."""
+    H, W = V.shape
+    seeds = np.zeros((H, W), bool)
+    F = np.zeros((H, W), bool)
+    gfirst = None
+
+    def corners(q):
+        r, c = q
+        sl = (slice(r, r + 2), slice(c, c + 2))
+        return sl, V[sl], gen[sl]
+    for qa, qb in contacts:
+        for q in (qa, qb):
+            if 0 <= q[0] < H - 1 and 0 <= q[1] < W - 1:
+                F[q[0]:q[0] + 2, q[1]:q[1] + 2] = True
+        (sa, va, ga), (sb, vb, gb) = corners(qa), corners(qb)
+        ma = int(ga[va].max()) if va.any() else 0
+        mb = int(gb[vb].max()) if vb.any() else 0
+        g = max(ma, mb)
+        gfirst = g if gfirst is None else min(gfirst, g)
+        for sl, v, gg, m in ((sa, va, ga, ma), (sb, vb, gb, mb)):
+            if m == g:
+                seeds[sl] |= (v & (gg == m))
+    return seeds & V, F & V, gfirst
+
+
+def causal_downstream(V: np.ndarray, gen: np.ndarray, seeds: np.ndarray, hops: int | None = CAUSAL_HOPS) -> np.ndarray:
+    """MODE C closure. Provenance is RECONSTRUCTED (the checkpoint stores only per-cell generation, no parent graph): a cell's predecessors are its
+    8-neighbours committed in an earlier-or-same generation (the tracer places a vertex by solving it against already-placed neighbours, and
+    same-generation neighbours are solved together). The causal set is the forward closure of `seeds` along predecessor -> successor edges
+    (successor generation >= predecessor generation) limited to `hops` lattice steps. Cells grown later but not reachable that way stay."""
+    H, W = V.shape
+    cur = seeds & V
+    out = cur.copy()
+    g = gen.astype(np.int64)
+    for _ in range(int(hops) if hops is not None else int(H) * int(W)):        # hops=None: UNBOUNDED -- iterate to the fixpoint (rule D)
+        new = np.zeros_like(cur)
+        for dr in (-1, 0, 1):
+            for dc in (-1, 0, 1):
+                if dr == 0 and dc == 0:
+                    continue
+                a = (slice(max(0, -dr), H - max(0, dr)), slice(max(0, -dc), W - max(0, dc)))      # source window
+                b = (slice(max(0, dr), H - max(0, -dr)), slice(max(0, dc), W - max(0, -dc)))     # destination window
+                new[b] |= cur[a] & V[b] & (g[b] >= g[a])
+        new &= ~out
+        if not new.any():
+            break
+        out |= new
+        cur = new
+    return out
+
+
+def selfx_scrub_keep_causal(src: str, pol: GuardPolicy, voxel_um: float, hops: int = CAUSAL_HOPS) -> tuple[np.ndarray | None, dict]:
+    """MODE C (dry-run capable: returns the keep mask, writes nothing): cull the crossing quads plus the cells causally downstream of each
+    crossing (causal_downstream), keep every later-grown cell that is not consequent to a crossing, then verify-scrub to zero crossings
+    (selfx_scrub_keep with keep0: only the connected piece holding the tracer start survives a *flagged* pass, as in mode A)."""
+    X, Y, Z = _read_xyz(src)
+    V = (X > 0) & (Y > 0) & (Z > 0)
+    gen = _read_gen(src)
+    if gen is None or gen.shape != V.shape or not V.any():
+        k, info = selfx_scrub_keep(src, pol, voxel_um)
+        info["mode"] = "A_no_generations"
+        return k, info
+    cs, ci = selfcross_contacts(src, pol, int(V.sum()))
+    if cs is None:
+        return None, dict(ci, cells_before=int(V.sum()), removed_cells=0, clean=False)
+    if not cs:
+        k, info = selfx_scrub_keep(src, pol, voxel_um)
+        info["mode"] = "C_nothing_to_cut"
+        return k, info
+    seeds, F, gfirst = contact_seeds(V, gen, cs)
+    down = causal_downstream(V, gen, seeds, hops)
+    keep, info = selfx_scrub_keep(src, pol, voxel_um, keep0=V & ~(down | F))
+    info.update(mode=f"C{int(hops)}", g_first=gfirst, causal_cells=int(down.sum()), seed_cells=int(seeds.sum()))
+    info["removed_cells"] = int(V.sum() - keep.sum()) if keep is not None else info.get("removed_cells", 0)
+    return keep, info
+
+
+# ----------------------------------------------------------------------------- MODE D: first defect and EVERYTHING downstream (user decision 2026-10-07)
+LINEAGE_TRIGGERS_ALL = ("crossing", "coincident", "grazing", "coplanar", "fold_over", "normal_reversal")
+LINEAGE_TRIGGERS_DEFAULT = ("crossing", "coincident", "grazing", "coplanar")     # crossing + selfcontact pairs. NOT +fold_over (asked for): on 37 in-solve-guarded crossing-free segments fold_over as an unbounded-closure trigger keeps only 33 % of the area (p50 25 %), normal_reversal 23 % (p50 7 %); see docs/experiments/selfx_population_2026-10-07/ruleD/STATE.md
+LINEAGE_MAX_PASS = 6
+
+
+def parse_triggers(text: str | None) -> tuple:
+    """'crossing,pairs,fold_over' -> tuple of trigger names ('pairs' = coincident+grazing+coplanar). 'crossing' is ALWAYS included. Unknown names ignored."""
+    names = []
+    for t in (text or "").replace(";", ",").split(","):
+        t = t.strip().lower()
+        if t == "pairs":
+            names += ["coincident", "grazing", "coplanar"]
+        elif t in LINEAGE_TRIGGERS_ALL:
+            names.append(t)
+    if not names:
+        return LINEAGE_TRIGGERS_DEFAULT
+    out = ["crossing"] + [t for t in LINEAGE_TRIGGERS_ALL if t in names and t != "crossing"]
+    return tuple(out)
+
+
+def lineage_origins(X, Y, Z, V, gen, triggers, cs=None, min_sep: float | None = None) -> tuple[np.ndarray, dict]:
+    """Defect ORIGIN cells in growth order for the enabled `triggers` (each switchable; 'crossing' always). -> (origins bool HxW, {trigger: n origin cells}).
+      crossing        : corners of the later-created quad of every transverse contact (growth_guard.contact_seeds; the flagged cells of BOTH quads are culled by the scrub)
+      coincident / grazing / coplanar : selfcontact.contact_pairs; origin = the cell of the LATER-generation member of each pair (both on a tie)
+      fold_over / normal_reversal     : degeneracy seams (quad masks -> their cells); origin = the flagged cells of each seam
+    """
+    from . import selfcontact as SC, degeneracy as DG
+    H, W = V.shape
+    org = np.zeros((H, W), bool)
+    counts = {}
+    if cs:
+        seeds, F, _g = contact_seeds(V, gen.astype(np.int64), cs)
+        org |= seeds | F
+        counts["crossing"] = int((seeds | F).sum())
+    else:
+        counts["crossing"] = 0
+    pt = [t for t in ("coincident", "grazing", "coplanar") if t in triggers]
+    if pt:
+        pr = SC.contact_pairs(X, Y, Z, V, min_sep=min_sep)
+        for t in pt:
+            code = {"coincident": 0, "grazing": 1, "coplanar": 2}[t]
+            m = pr["type"] == code
+            ra, ca, rb, cb = pr["ra"][m], pr["ca"][m], pr["rb"][m], pr["cb"][m]
+            ga, gb = gen[ra, ca], gen[rb, cb]
+            la = ga >= gb
+            lb = gb >= ga
+            o = np.zeros((H, W), bool)
+            o[ra[la], ca[la]] = True
+            o[rb[lb], cb[lb]] = True
+            counts[t] = int((o & V).sum())
+            org |= o
+    if "fold_over" in triggers or "normal_reversal" in triggers:
+        P, _ = DG._valid(X, Y, Z, V)
+        if "fold_over" in triggers:
+            m = DG.quad_to_cells(DG.fold_over(P, V), (H, W)) & V
+            counts["fold_over"] = int(m.sum()); org |= m
+        if "normal_reversal" in triggers:
+            m = DG.quad_to_cells(DG.normal_reversal(P, V), (H, W)) & V
+            counts["normal_reversal"] = int(m.sum()); org |= m
+    return org & V, counts
+
+
+def selfx_scrub_keep_lineage(src: str, pol: GuardPolicy, voxel_um: float, triggers=LINEAGE_TRIGGERS_DEFAULT, hops: int | None = None,
+                             max_pass: int = LINEAGE_MAX_PASS, min_sep: float | None = None) -> tuple[np.ndarray | None, dict]:
+    """MODE D (rule: FIRST DEFECT AND ALL DOWNSTREAM NODES, unbounded hops). Cull every defect origin (see lineage_origins) plus its full forward closure along
+    the reconstructed lineage (growth_guard.causal_downstream, generation order + 8-adjacency), keep upstream cells, branches that are not downstream and later-grown
+    cells that are not consequent to a defect, keep the tracer-start piece (islands dropped, counted), then VERIFY on the kept lattice: transverse census (selfx_scrub_keep, always)
+    plus every enabled trigger detector must report ZERO; remaining origins are culled with their closure again (<= max_pass passes); any trigger residual after that is reported
+    in info['residual_triggers'] (and the cells culled outright). info: mode 'D', triggers, hops, origin_counts (first pass), downstream_cells, passes, island_cells, removed_cells,
+    residual_triggers, clean (transverse verified zero AND residual_triggers == 0). Writes nothing."""
+    X, Y, Z = _read_xyz(src)
+    V = (X > 0) & (Y > 0) & (Z > 0)
+    gen = _read_gen(src)
+    info: dict = {"mode": "D", "triggers": list(triggers), "hops": hops, "cells_before": int(V.sum()), "ran": False, "clean": False, "removed_cells": 0}
+    if gen is None or gen.shape != V.shape or not V.any():
+        k, i2 = selfx_scrub_keep(src, pol, voxel_um)
+        i2.update(mode="D_no_generations", triggers=list(triggers))
+        return k, i2
+    keep = V.copy()
+    anchor = np.unravel_index(int(np.argmin(np.where(V, gen, np.iinfo(gen.dtype).max))), V.shape)
+    first = True
+    for it in range(max_pass):
+        cs, ci = selfcross_contacts(src, pol, int(V.sum())) if it == 0 else (None, {"ran": True})
+        if it == 0 and cs is None:
+            return None, dict(info, error=ci.get("error") or ci.get("skipped") or "unknown")
+        Xk = np.where(keep, X, -1.0); Yk = np.where(keep, Y, -1.0); Zk = np.where(keep, Z, -1.0)
+        if it > 0:
+            import tempfile
+            td = tempfile.mkdtemp(prefix=".selfx_lineage_", dir=str(Path(src).parent))
+            try:
+                write_cropped(src, td, keep, voxel_um)
+                cs, ci = selfcross_contacts(td, pol, int(keep.sum()))
+            finally:
+                shutil.rmtree(td, ignore_errors=True)
+            if cs is None:
+                return None, dict(info, error=ci.get("error") or ci.get("skipped") or "unknown")
+        org, counts = lineage_origins(Xk, Yk, Zk, keep, gen, triggers, cs=cs, min_sep=min_sep)
+        if first:
+            info["origin_counts"] = counts; info["origin_cells_first"] = int(org.sum()); first = False
+        if not org.any():
+            info["passes"] = it
+            break
+        down = causal_downstream(keep, gen, org, hops)
+        info["downstream_cells"] = info.get("downstream_cells", 0) + int(down.sum())
+        k1 = keep & ~down
+        if k1.sum() < pol.min_keep_cells:
+            keep = k1
+            info.update(ran=True, clean=False, cells_after=int(keep.sum()), stop="nothing_left", passes=it + 1)
+            return keep, info
+        km = _main_piece(k1, anchor if k1[anchor] else None)
+        info["island_cells"] = info.get("island_cells", 0) + int(k1.sum() - km.sum())
+        keep = km
+    else:
+        info["passes"] = max_pass
+    # final: transverse verification (always) on exactly `keep`; also counts residual non-crossing triggers
+    kk, si = selfx_scrub_keep(src, pol, voxel_um, keep0=keep)
+    if kk is None:
+        return None, dict(info, error=si.get("error"), ran=False)
+    info["ran"] = True
+    info["island_cells"] = info.get("island_cells", 0) + int(si.get("island_cells") or 0)
+    keep = kk
+    Xk = np.where(keep, X, -1.0); Yk = np.where(keep, Y, -1.0); Zk = np.where(keep, Z, -1.0)
+    org, rc = lineage_origins(Xk, Yk, Zk, keep, gen, tuple(t for t in triggers if t != "crossing"), cs=None, min_sep=min_sep)
+    info["residual_triggers"] = {k: v for k, v in rc.items() if v}
+    info["residual_cells"] = int(org.sum())
+    if org.any():                                # last resort: cull the residual cells themselves (no closure), never leave a trigger
+        keep = _main_piece(keep & ~org, anchor if (keep & ~org)[anchor] else None)
+    info["cells_after"] = int(keep.sum())
+    info["removed_cells"] = int(V.sum() - keep.sum())
+    info["clean"] = bool(si.get("clean")) and bool(keep.sum() >= pol.min_keep_cells)
+    if keep.sum() < pol.min_keep_cells:
+        info["stop"] = "nothing_left"
+    return keep, info
+
+
+def selfx_scrub_keep_downstream(src: str, pol: GuardPolicy, voxel_um: float, margin: int = 0) -> tuple[np.ndarray | None, dict]:
+    """MODE B (frontier reset): cut the crossing quads AND the connected region grown at/after the generation the first crossing was
+    created (+ `margin` cells), so a resume starts from cells that predate every crossing; then verify-scrub to zero (never
+    smaller than needed for that). Mode A is `selfx_scrub_keep`. Needs generations.tif; without it falls back to mode A (info['mode']='A_no_generations')."""
+    X, Y, Z = _read_xyz(src)
+    V = (X > 0) & (Y > 0) & (Z > 0)
+    gen = _read_gen(src)
+    if gen is None or gen.shape != V.shape or not V.any():
+        k, info = selfx_scrub_keep(src, pol, voxel_um)
+        info["mode"] = "A_no_generations"
+        return k, info
+    cs, ci = selfcross_contacts(src, pol, int(V.sum()))
+    if cs is None:
+        return None, dict(ci, cells_before=int(V.sum()), removed_cells=0, clean=False)
+    if not cs:
+        k, info = selfx_scrub_keep(src, pol, voxel_um)
+        info["mode"] = "B_nothing_to_cut"
+        return k, info
+    H, W = V.shape
+    F = np.zeros(V.shape, bool)
+    for q in {x for c in cs for x in c}:
+        r, c = q
+        if 0 <= r < H - 1 and 0 <= c < W - 1:
+            F[r:r + 2, c:c + 2] = True
+    F &= V
+
+    def qgen(q):
+        r, c = q
+        blk = V[r:r + 2, c:c + 2]
+        return int(gen[r:r + 2, c:c + 2][blk].max()) if blk.any() else 0
+    g_first = min(max(qgen(a), qgen(b)) for a, b in cs)
+    D0 = V & (gen >= g_first)
+    lab, _ = ndi.label(D0, structure=_S3)
+    touch = np.unique(lab[ndi.binary_dilation(F, _S3) & D0])
+    touch = touch[touch > 0]
+    cut = np.isin(lab, touch) | F
+    if margin > 0:
+        cut = ndi.binary_dilation(cut, _S3, iterations=int(margin))
+    keep, info = selfx_scrub_keep(src, pol, voxel_um, keep0=V & ~cut)
+    info.update(mode=f"B{int(margin)}", g_first=g_first, gen_max=int(gen[V].max()), downstream_cells=int((V & cut).sum()))
+    info["removed_cells"] = int(V.sum() - keep.sum()) if keep is not None else info.get("removed_cells", 0)
+    return keep, info
+
+
+def selfx_scrub(src: str, pol: GuardPolicy, voxel_um: float, dst: str | None = None, keep0: np.ndarray | None = None,
+                tag: str = "selfxclean", margin: int | None = None) -> tuple[str | None, dict]:
+    """`selfx_scrub_keep` + write. Returns (path, info): `src` itself (nothing written) when it is already clean, a new
+    `<tag>_<name>` dir beside it when cells were cut, None when the check could not run or could not be driven to zero
+    (info['error'] / info['clean'] False) -- the caller fails closed."""
+    if margin is not None and keep0 is None:          # mode B: also cut what was grown after the first crossing (+ margin cells)
+        keep, info = selfx_scrub_keep_downstream(src, pol, voxel_um, margin=margin)
+    else:
+        keep, info = selfx_scrub_keep(src, pol, voxel_um, keep0=keep0)
+    if keep is None or not info.get("clean"):
+        return None, info
+    if info["removed_cells"] == 0 and keep0 is None:
+        return src, info
+    dst = dst or str(Path(src).parent / f"{tag}_{Path(src).name}")
+    write_cropped(src, dst, keep, voxel_um, dict(info, scrub_of=str(src)))
+    return dst, info
+
+
+# ----------------------------------------------------------------------------- per-round reason sidecar
+# guard_reasons_r<N>.npz (2026-10-05, Live Grows prune-reason view). Purely ADDITIVE and observational: it reads the
+# GuardResult after the fact and never feeds back into pruning (tests/test_growth_guard_reasons.py proves the cropped
+# lattice and the summary are byte-identical with and without it). `REASON_SIDECAR = False` switches it off.
+REASON_SIDECAR = True
+STOP_NAMES = ("selfcross_nonzero", "frontier_blocked", "nothing_left", "hairpin_abort", "roughness", "flatten_feedback",
+              "mergeable", "other", "open")
+# cell codes 0..len(REASONS)+2, then the segment-level stops (edge codes only). 0 = invalid, 1 = kept.
+CODE_NAMES = ("invalid", "kept") + tuple(REASONS) + ("margin_or_island",) + STOP_NAMES
+SCORE_NAMES = ("stretch", "plan_dev_deg")     # per-cell continuous scores cheap enough to compute from the lattice alone
+SIDECAR_MAX_CELLS = 60000
+SIDECAR_MAX_EDGES = 40000
+
+
+def cell_scores(P, V, pol: "GuardPolicy") -> dict:
+    """Continuous per-cell scores from the lattice alone: `stretch` = longest incident 3-D edge / median edge;
+    `plan_dev_deg` = angle between the cell's normal and its window-mean normal (what `plan` thresholds at plan_deg).
+    normal_dev / ridge / seam / empty_space / wrap_spacing / curvature need CT or normal-grid samplers and are carried as
+    boolean cut codes only, never as a continuous per-cell score (segment-level p90s stay in guard.json)."""
+    out = {}
+    med = median_edge(P, V)
+    st = np.full(V.shape, np.nan, np.float32)
+    if np.isfinite(med) and med > 0:
+        cur = np.zeros(V.shape, np.float64)
+        for ax in (0, 1):
+            a, b = (P[1:], P[:-1]) if ax == 0 else (P[:, 1:], P[:, :-1])
+            ok = (V[1:] & V[:-1]) if ax == 0 else (V[:, 1:] & V[:, :-1])
+            d = np.where(ok, np.linalg.norm(a - b, axis=-1) / med, 0.0)
+            if ax == 0:
+                cur[1:] = np.maximum(cur[1:], d); cur[:-1] = np.maximum(cur[:-1], d)
+            else:
+                cur[:, 1:] = np.maximum(cur[:, 1:], d); cur[:, :-1] = np.maximum(cur[:, :-1], d)
+        st[V & (cur > 0)] = cur[V & (cur > 0)]
+    out["stretch"] = st
+    n, ok = grid_normals(P, V)
+    w = 2 * pol.plan_win + 1
+    wt = ok.astype(np.float64)
+    mean = np.stack([ndi.uniform_filter(n[..., c] * wt, size=w, mode="constant") for c in range(3)], axis=-1)
+    norm = np.linalg.norm(mean, axis=-1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        cosang = np.clip(np.einsum("hwc,hwc->hw", n, mean) / np.maximum(norm, 1e-9), -1.0, 1.0)
+    dev = np.degrees(np.arccos(cosang)).astype(np.float32)
+    dev[~ok] = np.nan
+    out["plan_dev_deg"] = dev
+    return out
+
+
+def _edge_pairs(A, B):
+    """Row/col index pairs of 4-neighbour cells (a, b) with A[a] & B[b], both directions of both axes."""
+    rs, cs, rs2, cs2 = [], [], [], []
+    for dr, dc in ((0, 1), (1, 0), (0, -1), (-1, 0)):
+        H, W = A.shape
+        r0, r1 = max(0, -dr), H - max(0, dr)
+        c0, c1 = max(0, -dc), W - max(0, dc)
+        a = A[r0:r1, c0:c1] & B[r0 + dr:r1 + dr, c0 + dc:c1 + dc]
+        r, c = np.nonzero(a)
+        rs.append(r + r0); cs.append(c + c0); rs2.append(r + r0 + dr); cs2.append(c + c0 + dc)
+    return np.concatenate(rs), np.concatenate(cs), np.concatenate(rs2), np.concatenate(cs2)
+
+
+def build_reason_sidecar(P, V, gen, res: "GuardResult", stop: str | None, round_no: int, pol: "GuardPolicy",
+                         info: dict | None = None) -> dict:
+    """Arrays for the sidecar. `P, V` are the PRE-prune lattice; `res.codes` the reason grid on it."""
+    C = res.codes if res.codes is not None else np.where(V, 1, 0).astype(np.uint8)
+    H, W = C.shape
+    kept, pruned = C == 1, C >= 2
+    stop_name = (stop if stop in STOP_NAMES else ("other" if stop else "open"))
+    stop_code = CODE_NAMES.index(stop_name)
+    # (a) CUT edges: kept cell next to a pruned cell, coloured by the pruned cell's reason
+    r0, c0, r1, c1 = _edge_pairs(kept, pruned)
+    e_a, e_b, e_code = list(zip(r0, c0)), list(zip(r1, c1)), C[r1, c1]
+    # (b) STOP / frontier edges: adjacent kept cells that both sit on the post-prune frontier and neither touches a pruned cell
+    fr = kept & ~ndi.binary_erosion(kept, ndi.generate_binary_structure(2, 1), border_value=0)
+    near_pruned = ndi.binary_dilation(pruned, _S3) if pruned.any() else np.zeros_like(pruned)
+    fr = fr & ~near_pruned
+    sa, sb, sc_, sd = _edge_pairs(fr, fr)
+    fwd = (sa < sc_) | ((sa == sc_) & (sb < sd))           # each undirected edge once
+    sa, sb, sc_, sd = sa[fwd], sb[fwd], sc_[fwd], sd[fwd]
+    ra = np.concatenate([r0, sa]); ca = np.concatenate([c0, sb]); rb = np.concatenate([r1, sc_]); cb = np.concatenate([c1, sd])
+    ecode = np.concatenate([C[r1, c1], np.full(len(sa), stop_code, np.uint8)]).astype(np.uint8)
+    if len(ecode) > SIDECAR_MAX_EDGES:
+        keep_i = np.unique(np.linspace(0, len(ecode) - 1, SIDECAR_MAX_EDGES).astype(np.int64))
+        ra, ca, rb, cb, ecode = ra[keep_i], ca[keep_i], rb[keep_i], cb[keep_i], ecode[keep_i]
+    edge_xyz = np.stack([P[ra, ca], P[rb, cb]], axis=1).astype(np.float32) if len(ecode) else np.zeros((0, 2, 3), np.float32)
+    # (c) decimated dense cell grid (pre-prune): xyz, code, generation, scores
+    nv = int(V.sum())
+    s = max(1, int(np.ceil(np.sqrt(max(1, H * W) / float(SIDECAR_MAX_CELLS)))))
+    Vs = V[::s, ::s]
+    xyz = np.where(Vs[..., None], P[::s, ::s], np.nan).astype(np.float32)
+    g = (gen[::s, ::s].astype(np.uint16) if gen is not None and gen.shape == V.shape else np.zeros(Vs.shape, np.uint16))
+    sc = cell_scores(P, V, pol)
+    arrs = {"codes": C, "code_names": np.array(json.dumps(list(CODE_NAMES))),
+            "edge_xyz": edge_xyz, "edge_code": ecode, "cell_stride": np.int32(s), "cell_xyz": xyz,
+            "cell_code": C[::s, ::s], "cell_gen": g,
+            "score_names": np.array(json.dumps(list(SCORE_NAMES)))}
+    for k in SCORE_NAMES:
+        arrs["score_" + k] = sc[k][::s, ::s].astype(np.float32)
+    counts = {n: int((C == k).sum()) for k, n in enumerate(CODE_NAMES) if k >= 2 and n not in STOP_NAMES}
+    arrs["meta"] = np.array(json.dumps({
+        "round": int(round_no), "stop": stop, "stop_edge_name": stop_name, "grid": [int(H), int(W)], "stride": s,
+        "cells_before": nv, "cells_after": int(kept.sum()), "counts": counts, "n_edges": int(len(ecode)),
+        "n_cut_edges": int(len(r0)), "n_stop_edges": int(len(sa)), "pruned_by": dict(res.pruned_by),
+        "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
+    return arrs
+
+
+def write_reason_sidecar(path: str, arrs: dict) -> str:
+    """Atomic write (tmp + rename) of one sidecar. Never overwrites a different round's file."""
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp.npz")
+    np.savez_compressed(tmp, **arrs)
+    os.replace(tmp, p)
+    return str(p)
+
+
+def read_reason_sidecar(path: str) -> dict:
+    """npz -> dict with the JSON strings decoded (code_names, score_names, meta) and arrays as-is."""
+    with np.load(path, allow_pickle=False) as z:
+        out = {k: z[k] for k in z.files}
+    for k in ("code_names", "score_names", "meta"):
+        out[k] = json.loads(str(out[k]))
+    out["cell_stride"] = int(out["cell_stride"])
+    return out
+
+
+def latest_reason_sidecar(target_dir: str) -> str | None:
+    """Newest guard_reasons_r<N>.npz under <target>/guard_reasons/ (highest round), or None."""
+    best = None
+    for p in Path(target_dir, "guard_reasons").glob("guard_reasons_r*.npz"):
+        try:
+            n = int(p.stem.rsplit("_r", 1)[1])
+        except (ValueError, IndexError):
+            continue
+        if best is None or n > best[0]:
+            best = (n, str(p))
+    return best[1] if best else None
+
+# ----------------------------------------------------------------------------- the grow-loop step
+@dataclass
+class GuardState:
+    """What the loop carries between rounds: where we cut, and what the surface was after the cut."""
+    pruned_xyz: np.ndarray | None = None
+    keep_xyz: np.ndarray | None = None
+    rounds_cut: int = 0
+    # (3), 2026-09-29: the valid-cell mask as of the END of the last guard_round call, for
+    # `selfcross_check_incremental`'s "new cells this round" -- None on the first round (every
+    # valid cell counts as new then, same as a full-lattice check).
+    prev_V: np.ndarray | None = None
+    # 2026-10-01: the lattice coordinates alongside prev_V, same shape, so new_cell_mask can
+    # align prev_V into a resized round's grid instead of giving up protection on any round whose
+    # canvas changed shape (growth_invariant_violation root cause -- see new_cell_mask).
+    prev_P: np.ndarray | None = None
+    rounds_seen: int = 0          # guard_round calls so far (the round number in guard_reasons_r<N>.npz)
+
+
+def guard_round(cur: str, pol: GuardPolicy, voxel_um: float, state: GuardState, sampler=None, cover=None,
+                own: str | None = None, tag: str = "g", neighbour_ok=None,
+                shadow_ctx: "ShadowContext | None" = None) -> tuple[str, dict]:
+    """One guard step on the checkpoint a round just produced.
+
+    Returns (checkpoint to resume from, info). `info["stop"]` is None, "frontier_blocked" (the round
+    mostly re-grew into ground we had already pruned) or "nothing_left". When nothing is cut the
+    checkpoint is returned unchanged and nothing is written."""
+    X, Y, Z = _read_xyz(cur)
+    P, V = lattice_frame(X, Y, Z)
+    info = {"regrown_frac": 0.0, "stop": None}
+    state.rounds_seen += 1
+    round_no = state.rounds_seen
+    # (3), 2026-09-29: this round's new cells, relative to the valid mask as of the end of the
+    # LAST guard_round call -- everything on round 1 (state.prev_V is None), same as before.
+    # 2026-10-01: pass coordinates too so a resized canvas is ALIGNED, not treated as all-new
+    # (growth_invariant_violation root cause); `info` records an alignment or a fallback, never
+    # silently.
+    nm = new_cell_mask(V, state.prev_V, P=P, prev_P=state.prev_P, info=info)
+    if state.pruned_xyz is not None and len(state.pruned_xyz) and V.any():
+        tol = pol.regrow_tol_cells * max(1.0, median_edge(P, V))
+        info["regrown_frac"] = round(regrown_fraction(state.keep_xyz if state.keep_xyz is not None else np.zeros((0, 3)),
+                                                      state.pruned_xyz, P[V], tol), 4)
+    dst = str(Path(cur).parent / f"guarded_{tag}_{Path(cur).name}")
+    ready = None
+    if pol.merge_pause and cover is not None and neighbour_ok is not None:
+        ready = merge_readiness(X, Y, Z, pol, cover, neighbour_ok, voxel_um, own)
+        info["merge"] = ready
+    # a mergeable frontier keeps its overlap (the merger registers on it); everything else is still cut
+    res = guard_tifxyz(cur, dst, pol, voxel_um, sampler=sampler,
+                       cover=None if (ready and ready["mergeable"]) else cover, own=own,
+                       shadow_ctx=shadow_ctx, new_mask=nm)
+    info.update(res.summary())
+    # SHADOW segment-level stops (roughness / flatten_feedback): measured every round regardless
+    # (info["shadow"] always carries them when their compute flag is on), but only ALLOWED to end
+    # the segment when their own _enforce flag is set -- default False for both.
+    sh = info.get("shadow") or {}
+    if pol.roughness_enforce and (sh.get("roughness") or {}).get("would_stop") and info["stop"] is None:
+        if pol.segment_abort_as_flag:
+            info.setdefault("flags", {})["roughness"] = (sh.get("roughness") or {}).get("value")
+        else:
+            info["stop"] = "roughness"
+    if pol.flatten_feedback_enforce and (sh.get("flatten_feedback") or {}).get("would_stop") and info["stop"] is None:
+        info["stop"] = "flatten_feedback"
+    if ready and ready["mergeable"]:
+        info["stop"] = "mergeable"
+    cut = V & ~res.keep
+    if info["regrown_frac"] >= pol.regrow_block_frac and state.rounds_cut > 0 and info["stop"] is None:
+        if pol.stop_policy == "frontier_only":
+            info.setdefault("flags", {})["frontier_reentry"] = round(float(info["regrown_frac"]), 4)     # flagged, growth continues
+        else:
+            info["stop"] = "frontier_blocked"
+    if res.stop:
+        info["stop"] = info["stop"] or res.stop
+    # ARM B verification + early-abort (growth_degeneracy_2026-09-28.md), on `dst` -- the surface
+    # that will actually be resumed from if this round's cut survives. `dst` always exists here
+    # (guard_tifxyz/write_cropped wrote it unconditionally); the "nothing cut" cleanup below runs
+    # AFTER this block. Target is EXACTLY ZERO self-intersections: any density > 0 after our own
+    # pruning means the flagged quads' corners did not cover every crossing, and the segment stops
+    # rather than shipping a still-degenerate surface (this is the failure mode measured directly
+    # on PHerc0191_cea9032 -- fold/plan cropping cut density only 6-28%, never to 0).
+    pre_err = res.extra.get("guard_selfx_error") if pol.selfcross else None
+    if pol.selfcross and info["stop"] is None and not pre_err:
+        if cut.any():
+            Xd2, Yd2, Zd2 = _read_xyz(dst)
+            Vd2 = (Xd2 > 0) & (Yd2 > 0) & (Zd2 > 0)
+            post_mask, post = selfcross_check_incremental(dst, Xd2, Yd2, Zd2, Vd2, nm & Vd2, pol)
+        else:
+            Vd2 = V
+            post_mask = res.masks.get("selfx")
+            post = res.extra.get("selfcross_pre", {})   # dst == src, no need to re-run
+        if post.get("ran"):
+            post = dict(post)
+            if post_mask is not None and post_mask.shape == nm.shape:
+                post["new_cells"] = int((post_mask & nm & Vd2).sum())          # residual this round's growth still carries
+                post["inherited_cells"] = int((post_mask & ~nm & Vd2).sum())   # residual among protected round-start cells
+            info["selfcross_post"] = post
+            if (post.get("density") or 0.0) > pol.selfcross_density_stop:
+                if pol.selfcross_scrub:
+                    pass        # the scrub below cuts it to a verified zero (all ages); only a scrub that fails stops the segment
+                elif pol.selfcross_stop_inherited or post.get("new_cells", 1) > 0:
+                    info["stop"] = "selfcross_nonzero"
+        else:
+            # (2) same as the pre-round case above: enabled but could not verify the crop. A
+            # round that cannot be shown clean must not be silently allowed to look clean.
+            reason = post.get("error") or post.get("skipped") or "unknown"
+            _selfx_unrunnable(f"selfcross enabled but post-round check failed: {reason}", reason)
+            info["guard_selfx_error"] = f"post: {reason}"
+    if pol.selfcross and pol.selfcross_fail_closed and (pre_err or info.get("guard_selfx_error")):
+        # FAIL CLOSED (2026-10-06): this round could not be shown free of self-crossings, so none of what it grew is
+        # kept. The surface reverts to the cells it had at round start (`V & ~nm`, in this round's lattice frame -- the
+        # cells `prune` already protects; D3: only this round's growth is touched). stages/grow.py pauses the grow.
+        hold = V & ~nm
+        res.keep = hold
+        cut = V & ~hold
+        info["selfx_held_back_cells"] = int((V & nm).sum())
+        info["cells_after"] = int(hold.sum())
+        info["stop"] = "selfx_unverified"
+        info["guard_selfx_error"] = info.get("guard_selfx_error") or pre_err
+        write_cropped(cur, dst, hold, voxel_um, dict(res.summary(), **{k: info[k] for k in
+                      ("stop", "selfx_held_back_cells", "cells_after", "guard_selfx_error")}))
+    if pol.selfcross_hairpin_abort_ratio > 0 and info["stop"] is None:
+        try:
+            from .stages import geomaps as GM
+            Xd, Yd, Zd = _read_xyz(dst)
+            Pd, Vd = lattice_frame(Xd, Yd, Zd)
+            fm = GM.fold_metrics(Pd, Vd, voxel_um)
+            lr = int(fm.get("geo_lines_read") or 0)
+            if lr >= pol.selfcross_hairpin_min_lines:
+                ratio = float(fm.get("geo_hairpin_lines") or 0) / lr
+                info["hairpin_ratio"] = round(ratio, 4)
+                if ratio >= pol.selfcross_hairpin_abort_ratio:
+                    if pol.segment_abort_as_flag:
+                        info.setdefault("flags", {})["hairpin"] = round(ratio, 4)      # flagged, growth continues (see GuardPolicy.segment_abort_as_flag)
+                    else:
+                        info["stop"] = "hairpin_abort"
+        except (OSError, ValueError, KeyError) as e:  # noqa: BLE001 -- never stop growth on the abort check's own failure
+            info["hairpin_error"] = f"{type(e).__name__}: {e}"
+
+    if pol.selfcross and pol.selfcross_scrub and info["stop"] != "selfx_unverified" and not info.get("guard_selfx_error") \
+            and res.keep.any():
+        # SCRUB (2026-10-07, user: "absolutely no self-intersections ... period"): whatever the prune left, the surface that is
+        # resumed from and published has a VERIFIED ZERO crossings -- inherited / re-optimised round-start cells included.
+        # The checks above are incremental (new cells + halo); this is a full-lattice pass on exactly the kept set.
+        try:
+            keep_s, sc = selfx_scrub_keep(cur, pol, voxel_um, keep0=res.keep)
+        except Exception as e:                       # noqa: BLE001 - recorded, and the stop below holds the segment
+            keep_s, sc = None, {"ran": False, "error": f"{type(e).__name__}: {e}"}
+        if keep_s is None or not sc.get("clean"):
+            info["selfx_scrub"] = dict(sc, failed=True)
+            info["stop"] = info["stop"] or "selfcross_nonzero"
+            if keep_s is None:
+                _selfx_unrunnable(f"selfcross scrub could not run: {sc.get('error')}", str(sc.get("error")))
+        else:
+            sc["protected_removed"] = int(((V & ~nm) & ~keep_s).sum())       # round-start cells the scrub had to take (D3 exception)
+            sc["removed_this_round_cells"] = int((res.keep & ~keep_s).sum())
+            info["selfx_scrub"] = sc
+            if sc["removed_this_round_cells"]:
+                res.keep = keep_s
+                cut = V & ~res.keep
+                info["cells_after"] = int(res.keep.sum())
+                write_cropped(cur, dst, res.keep, voxel_um, dict(res.summary(), selfx_scrub=sc))
+                if res.keep.sum() < pol.min_keep_cells and info["stop"] is None:
+                    info["stop"] = "nothing_left"
+
+    def _emit_reasons(extra_dir=None):
+        """Per-round reason sidecar (see REASON_SIDECAR). Observational: failures are ANNOUNCED in info, never raised."""
+        if not REASON_SIDECAR or res.codes is None:
+            return
+        try:
+            arrs = build_reason_sidecar(P, V, _read_gen(cur), res, info.get("stop"), round_no, pol, info)
+            name = f"guard_reasons_r{round_no}.npz"
+            main = write_reason_sidecar(str(Path(cur).parent / "guard_reasons" / name), arrs)
+            if extra_dir is not None:                       # next to guard.json in the surviving cropped dir
+                shutil.copyfile(main, Path(extra_dir) / name)
+            info["reason_sidecar"] = name
+        except Exception as e:  # noqa: BLE001 -- the sidecar must never stop or change a round
+            info["reason_sidecar_error"] = f"{type(e).__name__}: {e}"
+    if not cut.any():
+        shutil.rmtree(dst, ignore_errors=True)
+        _emit_reasons()
+        state.keep_xyz = P[V]
+        state.prev_V = V
+        state.prev_P = P
+        return cur, info
+    state.rounds_cut += 1
+    state.pruned_xyz = P[cut] if state.pruned_xyz is None else np.concatenate([state.pruned_xyz, P[cut]])
+    state.keep_xyz = P[res.keep]
+    state.prev_V = res.keep
+    state.prev_P = P
+    _emit_reasons(dst)
+    return dst, info
+
+
+# ----------------------------------------------------------------------------- neighbour feed (hub side)
+def lattice_bbox(ckpt: str):
+    X, Y, Z = _read_xyz(ckpt)
+    P, V = lattice_frame(X, Y, Z)
+    return (P[V].min(axis=0), P[V].max(axis=0)) if V.any() else None
+
+
+def hub_neighbours(db, fleet, scroll: str, bbox, own: str, limit: int = 300, stride: int = 2):
+    """A SegmentIndex over the segments of `scroll` whose pushed lattice bbox touches `bbox`, read from
+    the hub's var/lattice. None when this host has no pushed lattices (a peer): the overlap and
+    merge criteria are then INERT there, and the caller records that fact rather than guessing.
+    The neighbour feed for peers (a decimated per-scroll surface index rsynced by `vpipe sync`) is the
+    remaining deployment piece."""
+    if bbox is None:
+        return None
+    import gzip
+    from .workflow import growth as GR
+    lo, hi = np.asarray(bbox[0]) - 60.0, np.asarray(bbox[1]) + 60.0
+    idx = SegmentIndex()
+    n = 0
+    rows = db.execute("SELECT seg FROM segment WHERE scroll=? AND seg<>?", (scroll, own)).fetchall()
+    for (seg,) in rows:
+        d = GR.pushed_dir(fleet, seg)
+        try:
+            meta = json.loads((d / "latest.json").read_text())
+            bb = meta.get("bbox")
+            if not bb or np.any(np.asarray(bb[0]) > hi) or np.any(np.asarray(bb[1]) < lo):
+                continue
+            h, w = meta["grid"]
+            raw = gzip.decompress((d / "latest.bin").read_bytes())
+            xyz = np.frombuffer(raw[: h * w * 12], dtype=np.float32).reshape(h, w, 3)
+        except (OSError, ValueError, KeyError):
+            continue
+        idx.add(seg, xyz[::stride, ::stride, 0], xyz[::stride, ::stride, 1], xyz[::stride, ::stride, 2])
+        n += 1
+        if n >= limit:
+            break
+    return idx if idx.T else None
+
+
+def neighbour_quality_ok(db, pol: GuardPolicy):
+    """`ok(seg)`: a neighbour is a friendly merge partner only if the inventory says it is clean --
+    planarity, hairpin fraction, material and one-sheet fraction from the newest metric rows, and not
+    paused for spaghetti / holey / mushy / vacuum. An UNMEASURED metric passes (absence is neutral,
+    scheduler.shape_score's rule); a measured bad one does not."""
+    def last(seg, name):
+        r = db.execute("SELECT value FROM metric WHERE seg=? AND name=? ORDER BY id DESC LIMIT 1", (seg, name)).fetchone()
+        return None if r is None or r[0] is None else float(r[0])
+
+    def ok(seg: str) -> bool:
+        pl, fold = last(seg, "geo_planarity"), last(seg, "geo_fold_frac")
+        mat, one = last(seg, "material_frac"), last(seg, "onesheet_frac")
+        if pl is not None and pl < pol.merge_neigh_min_planarity:
+            return False
+        if fold is not None and fold > pol.merge_neigh_max_fold:
+            return False
+        if mat is not None and mat < 0.75:
+            return False
+        if one is not None and one < 0.9:
+            return False
+        r = db.execute("SELECT text_value FROM metric WHERE seg=? AND name='pause_reason' ORDER BY id DESC LIMIT 1", (seg,)).fetchone()
+        return not (r and r[0] and any(k in r[0].upper() for k in ("SPAGHETTI", "HOLEY", "MUSHY", "VACUUM")))
+    return ok
+
+
+# ----------------------------------------------------------------------------- CT sampler
+class ZarrSampler:
+    """CT(x, y, z) at pyramid level `level` from an OME-Zarr volume (array order z, y, x;
+    lattice coordinates are LEVEL-0 voxels). Nearest voxel, chunk-grouped gather, so 20-50 k
+    scattered points read each touched chunk once. Points outside the array read 0 (= air)."""
+
+    def __init__(self, zarr_path: str, level: int = 1):
+        import zarr
+        g = zarr.open(zarr_path, mode="r")
+        self.a = g[str(level)] if str(level) in g else g
+        self.f = 2 ** level
+
+    def __call__(self, xyz):
+        a = self.a
+        idx = np.rint(np.asarray(xyz) / self.f).astype(np.int64)[:, ::-1]        # (z, y, x)
+        out = np.zeros(len(idx), dtype=np.float32)
+        shp = np.array(a.shape[-3:])
+        inb = np.all((idx >= 0) & (idx < shp), axis=1)
+        ch = np.array(a.chunks[-3:])
+        cid = idx // ch
+        keys = {}
+        for n in np.nonzero(inb)[0]:
+            keys.setdefault(tuple(cid[n]), []).append(n)
+        for c, ns in keys.items():
+            lo = np.array(c) * ch
+            blk = np.asarray(a[tuple(slice(int(l0), int(min(l0 + s, m))) for l0, s, m in zip(lo, ch, shp, strict=True))])
+            ii = idx[ns] - lo
+            out[ns] = blk[ii[:, 0], ii[:, 1], ii[:, 2]]
+        return out
+
+
+# ----------------------------------------------------------------------------- load-time self-test
+# 2026-09-29 (coordinator/user directive): a planted defect per criterion, run through the ACTUAL
+# guard_round path plus a real record_artifact -> resolver readback (the FIX 1 gap this file's own
+# growth_degeneracy_2026-09-28.md documents), against a temp sqlite DB. Cached module-global, same
+# pattern as `stages.seed.self_test()`: `agent.py`'s `run_grow` calls this on EVERY grow task, not
+# only at process start, so a cached True/False must be free on repeat calls.
+_SELF_TEST_RESULT: tuple[bool, str] | None = None
+
+
+def self_test_reset() -> None:
+    """Test-only: clear the cached verdict so a test can re-run it under different conditions."""
+    global _SELF_TEST_RESULT
+    _SELF_TEST_RESULT = None
+
+
+def mark_broken(reason: str) -> None:
+    """Force the cached self-test verdict to FAILED, from OUTSIDE `self_test()` itself, and fire
+    the same MAJOR alert `self_test()` would have. This is the mechanism for "a guard that
+    cannot run must not look like a clean pass" (coordinator, 2026-09-29): `selfcross_check`
+    calls this the moment `pol.selfcross` is enabled in production and the real check could not
+    run (binary missing, subprocess error, timeout) -- a skip that would otherwise be silently
+    absorbed into `info['skipped']`/`info['error']` and treated as merely "no check this round".
+
+    Because `agent.run_grow` calls `GG.self_test()` before every grow assignment and just returns
+    the cached tuple, a live `mark_broken()` call takes effect on the NEXT grow claim on this
+    host, not only after a process restart -- a real self-intersection guard that has gone dark
+    must stop admitting grow work immediately, not merely be logged."""
+    global _SELF_TEST_RESULT
+    _SELF_TEST_RESULT = (False, reason)
+    try:
+        from .alerts import alert
+        alert(f"growth_guard marked BROKEN: {reason} -- refusing to admit grow work on this "
+              "host until the process restarts")
+    except Exception as e:                    # noqa: BLE001 - alerting must never mask the real failure
+        print(f"growth_guard.mark_broken: alert() itself failed: {type(e).__name__}: {e}")
+
+
+def self_test(vc_bin: str | None = None, selfcross_required: bool = False,
+             env: dict | None = None) -> tuple[bool, str]:
+    """Plant one synthetic defect per criterion (vacuum / hairpin fold / plan crumple / overlap
+    are REQUIRED to fire; selfx is checked whenever `vc_tifxyz_selfcross` can be resolved) and
+    require each fires on its own defect and leaves a clean region of the SAME lattice alone.
+    Then: record a tifxyz artifact to a temp DB exactly as `stages/grow.py` does, run
+    `guard_round` on a lattice guaranteed to be cropped, and confirm the DB's LATEST artifact row
+    for that segment is the CROPPED path -- the same query `scheduler.py`/
+    `stages.render.source_tifxyz()` use in production. A self-test that cannot show FIX 1 holding
+    must not be trusted to have shown it for real work.
+
+    `selfcross_required` (2), coordinator 2026-09-29: when the CALLER's own read of production
+    policy (`growth_guard.policy_from_db(db).selfcross`) says selfcross is enabled fleet-wide (or
+    for this host), selfx's FULL accuracy check (against the known-degenerate fixture) stops
+    being optional. "A guard that cannot run must not look like a clean pass."
+
+    `env` (production incident, 2026-09-29): the subprocess environment for the real binary --
+    `stages.grow.tool_env(fleet)`, carrying `LD_LIBRARY_PATH` for a portable vc_kit. 🔴 Whenever
+    `vc_bin`/the binary resolves AT ALL, a lightweight SMOKE invocation now runs UNCONDITIONALLY
+    (never gated on `selfcross_required`, and never on the packed test fixture -- which does not
+    ship in a production deploy, `tests/fixtures/` being a source-tree-only path, which is
+    EXACTLY why the previous version of this check passed at startup on every phi host while
+    production selfcross calls failed to load their shared library moments later). This closes
+    that test gap: self_test now proves the binary can actually EXECUTE, through the SAME env
+    production uses, before ever reporting a clean self-test.
+
+    Returns (ok, detail). On failure the caller (agent.py's `run_grow`) refuses to admit grow
+    work on this host until the process restarts, and this raises a MAJOR alert."""
+    global _SELF_TEST_RESULT
+    if _SELF_TEST_RESULT is not None:
+        return _SELF_TEST_RESULT
+    t0 = time.time()
+    try:
+        ok, detail = _run_self_test(vc_bin, selfcross_required, env)
+    except Exception as e:                       # noqa: BLE001 - a self-test that raises FAILED, it did not crash the caller
+        ok, detail = False, f"self-test raised {type(e).__name__}: {e}"
+    detail = f"{detail} ({(time.time() - t0) * 1000:.0f} ms)"
+    if not ok:
+        try:
+            from .alerts import alert
+            alert(f"growth_guard.self_test FAILED: {detail} -- refusing to admit grow work on "
+                  "this host until the process restarts")
+        except Exception as e:                    # noqa: BLE001 - alerting must never mask the real failure
+            print(f"growth_guard.self_test: alert() itself failed: {type(e).__name__}: {e}")
+    _SELF_TEST_RESULT = (ok, detail)
+    return _SELF_TEST_RESULT
+
+
+def _plane_xyz(h=30, w=30, pitch=20.0, z=5000.0, x0=1000.0, y0=1000.0):
+    j, i = np.meshgrid(np.arange(w), np.arange(h))
+    X = (x0 + j * pitch).astype(np.float32)
+    Y = (y0 + i * pitch).astype(np.float32)
+    Z = np.full_like(X, z)
+    return X, Y, Z
+
+
+def _selfx_fixture_check(fixture: Path, binp: str, env: dict | None = None) -> tuple[np.ndarray | None, dict]:
+    """Run the real `vc_tifxyz_selfcross` (at `binp`) against the packed, known-degenerate
+    cea9032 round-1 fixture. Factored out of `_run_self_test` so both the required and the
+    optional selfx branches share exactly one call."""
+    import tempfile
+    import tifffile
+    with tempfile.TemporaryDirectory() as td, np.load(fixture) as z:
+        for a in "xyz":
+            tifffile.imwrite(os.path.join(td, f"{a}.tif"), z[a])
+        tifffile.imwrite(os.path.join(td, "generations.tif"), z["generations"])
+        open(os.path.join(td, "meta.json"), "w").write(str(z["meta_json"].item()))
+        return selfcross_check(td, z["x"].shape,
+                               GuardPolicy(selfcross=True, selfcross_bin=binp, selfcross_env=env))
+
+
+def _selfx_smoke_check(binp: str, env: dict | None = None) -> dict:
+    """(Production incident, 2026-09-29.) Run the real binary ONCE, on a trivial synthetic clean
+    plane -- NOT the packed fixture, which is a source-tree-only path
+    (`tests/fixtures/growth_guard_selfcross_cea9032_r1.npz`) that does not ship in a production
+    deploy. That is exactly why the OLD self-test's optional branch (`elif binp and ... and
+    fixture.exists()`) silently never ran on any real phi host: `fixture.exists()` was always
+    False there, so the check was SKIPPED, not merely non-fatal -- self-test reported clean while
+    the exact same missing-`LD_LIBRARY_PATH` bug it should have caught fired on every real
+    selfcross call minutes later. This function exists so `_run_self_test` can require "the
+    binary actually executes through this environment" UNCONDITIONALLY, independent of whether
+    the fixture happens to be present. Returns just the `info` dict (`ran` is the load-bearing
+    key); the mask is irrelevant here (a clean plane has none)."""
+    import tempfile
+    import tifffile
+    X, Y, Z = _plane_xyz(5, 5)
+    with tempfile.TemporaryDirectory() as td:
+        for a, A in zip("xyz", (X, Y, Z), strict=True):
+            tifffile.imwrite(os.path.join(td, f"{a}.tif"), A)
+        Path(td, "meta.json").write_text(json.dumps({
+            "area_cm2": 0.0, "max_gen": 0, "scale": [0.05, 0.05], "format": "tifxyz",
+            "type": "seg", "uuid": "selfx_smoke", "source": "growth_guard._selfx_smoke_check"}))
+        _, info = selfcross_check(td, X.shape, GuardPolicy(selfcross=True, selfcross_bin=binp, selfcross_env=env))
+        return info
+
+
+def _run_self_test(vc_bin: str | None, selfcross_required: bool = False,
+                   env: dict | None = None) -> tuple[bool, str]:
+    problems: list[str] = []
+    checked: list[str] = []
+    VOX = 9.362
+
+    # ---- 1. vacuum: right third of the lattice is air ----
+    X, Y, Z = _plane_xyz(30, 30)
+    P, Vv = lattice_frame(X, Y, Z)
+    air = lambda p: np.where(np.asarray(p)[:, 0] > 1000 + 20 * 20, 0.0, 100.0)  # noqa: E731
+    m = vacuum_mask(P, Vv, air, GuardPolicy())
+    checked.append("vacuum")
+    if not m[:, 22:].any():
+        problems.append("vacuum: did not fire on the planted air region")
+    if m[:, :15].any():
+        problems.append("vacuum: fired on the clean (material) region")
+
+    # ---- 2. fold/hairpin: a 180-degree turn, exact construction as tests/test_growth_guard.py ----
+    h, w, bend = 60, 100, 60
+    j = np.arange(w)
+    fold = np.where(j < bend, j, bend - (j - bend))
+    X2 = (1000.0 + fold[None, :] * 20.0 + np.zeros((h, 1))).astype(np.float32)
+    Y2 = _plane_xyz(h, w)[1]
+    Z2 = (5000.0 + np.where(j < bend, 0.0, 6.0)[None, :] + np.zeros((h, 1))).astype(np.float32)
+    P2, V2 = lattice_frame(X2, Y2, Z2)
+    m = fold_mask(P2, V2, VOX, GuardPolicy(fold_radius_um=500.0))
+    checked.append("fold")
+    if not m[:, bend - 3:bend + 8].any():
+        problems.append("fold: did not fire near the planted hairpin")
+    if m[:, :40].any():
+        problems.append("fold: fired on the clean body")
+
+    # ---- 3. plan/crumple: gaussian noise on the right third ----
+    X3, Y3, Z3 = _plane_xyz(80, 80)
+    rng = np.random.default_rng(3)
+    Z3 = Z3.copy()
+    Z3[:, 62:] += rng.normal(0, 80.0, size=Z3[:, 62:].shape).astype(np.float32)
+    P3, V3 = lattice_frame(X3, Y3, Z3)
+    m = plan_mask(P3, V3, GuardPolicy())
+    checked.append("plan")
+    if not m[:, 62:].any():
+        problems.append("plan: did not fire on the planted crumple")
+    if m[:, :50].any():
+        problems.append("plan: fired on the clean region")
+
+    # ---- 4. overlap: a neighbour covers the right part of the lattice ----
+    X4, Y4, Z4 = _plane_xyz(70, 90)
+    Xn, Yn, Zn = _plane_xyz(70, 40, x0=1000.0 + 60 * 20.0)
+    idx = SegmentIndex(vox=4.0, deg=20.0)
+    idx.add("neighbour", Xn, Yn, Zn)
+    P4, V4 = lattice_frame(X4, Y4, Z4)
+    m = overlap_mask(P4, V4, idx, GuardPolicy())
+    checked.append("overlap")
+    if not m[:, 65:].any():
+        problems.append("overlap: did not fire on the covered region")
+    if m[:, :50].any():
+        problems.append("overlap: fired on the uncovered region")
+
+    # ---- 5. quad_flip: reuse the fold construction (a real orientation reversal at the hinge) ----
+    m = quad_flip_mask(P2, V2, GuardPolicy())
+    checked.append("quad_flip")
+    if m[:, :40].any() or m[:, 70:].any():
+        problems.append("quad_flip: fired away from the hinge transition")
+    # (a flip firing INSIDE the transition band is not asserted: the exact band width depends on
+    # plan_win and is not this test's job to pin down -- only that it stays off the clean wings)
+
+    # ---- 6. stretch: one column pulled far away ----
+    X6, Y6, Z6 = _plane_xyz(30, 30)
+    X6 = X6.copy()
+    X6[:, 20] += 500.0
+    P6, V6 = lattice_frame(X6, Y6, Z6)
+    m = stretch_mask(P6, V6, GuardPolicy())
+    checked.append("stretch")
+    if not m[:, 19:22].any():
+        problems.append("stretch: did not fire near the planted stretch")
+    if m[:, :15].any():
+        problems.append("stretch: fired on the clean region")
+
+    # ---- 7. wrap_spacing / curvature: umbilicus-relative checks, fake umbilicus_of_z ----
+    def umb0(z):
+        return np.zeros_like(z), np.zeros_like(z)
+    X7, Y7, Z7 = _plane_xyz(30, 30)
+    X7 = X7.copy()
+    X7[:, 15:] += 2000.0            # a radial jump at column 15
+    P7, V7 = lattice_frame(X7, Y7, Z7)
+    m = wrap_spacing_mask(P7, V7, umb0, VOX, GuardPolicy())
+    checked.append("wrap_spacing")
+    if m is None or not m[:, 13:17].any():
+        problems.append("wrap_spacing: did not fire on the planted radial jump")
+    if m is not None and m[:, :10].any():
+        problems.append("wrap_spacing: fired on the clean region")
+    m = curvature_mask(P2, V2, VOX, umb0, GuardPolicy(curvature_frac_th=0.9))
+    checked.append("curvature")
+    if m is None or not m.any():
+        problems.append("curvature: did not fire on the planted tight hairpin at a generous threshold")
+
+    # ---- 8. ridge_hit / seam: fake prediction sampler ----
+    X8, Y8, Z8 = _plane_xyz(30, 30)
+    P8, V8 = lattice_frame(X8, Y8, Z8)
+    pred_never = lambda pts: np.zeros(len(pts))  # noqa: E731
+    m = ridge_hit_mask(P8, V8, pred_never, GuardPolicy())
+    checked.append("ridge_hit")
+    if m is None or not m.all():
+        problems.append("ridge_hit: did not fire everywhere against a prediction that never matches")
+    pred_shift = lambda pts: (np.abs(np.asarray(pts)[:, 2] - np.where(  # noqa: E731
+        np.asarray(pts)[:, 0] > 1000 + 15 * 20.0, 5020.0, 5000.0)) < 0.6).astype(float)
+    m = seam_mask(P8, V8, pred_shift, GuardPolicy())
+    checked.append("seam")
+    if m is None or not m[:, 13:17].any():
+        problems.append("seam: did not fire on the planted coordinate jump")
+    if m is not None and m[:, :10].any():
+        problems.append("seam: fired on the clean region")
+
+    # ---- 8b. empty_space: same never-supported sampler, but must fire ONLY on the frontier ----
+    m = empty_space_mask(P8, V8, pred_never, GuardPolicy())
+    checked.append("empty_space")
+    if m is None or not m.any():
+        problems.append("empty_space: did not fire against a prediction that never matches")
+    band = frontier_band(V8, GuardPolicy().reach_rings)
+    if m is not None and not np.array_equal(m, m & band):
+        problems.append("empty_space: fired outside the frontier band it is defined over")
+
+    # ---- 9. roughness / flatten_feedback: segment-level, sanity only (no external threshold to plant against yet) ----
+    info = frontier_roughness(V8, GuardPolicy(), VOX)
+    checked.append("roughness")
+    if info.get("value") is None:
+        problems.append("roughness: produced no value on a valid lattice")
+
+    # ---- 10. selfx ----
+    # (production incident, 2026-09-29): the SMOKE check below is UNCONDITIONAL whenever the
+    # binary resolves AT ALL -- never gated on selfcross_required, never on the packed test
+    # fixture. That gate is exactly what let self-test pass on every phi host while production
+    # selfcross calls failed to load their shared library minutes later: `fixture.exists()` was
+    # always False in a real deploy (tests/fixtures/ is source-tree-only), so the OLD optional
+    # branch below never even ran there. "Make self_test ALWAYS execute the real binary once
+    # through the SAME env path production uses, whenever the binary is configured."
+    binp = vc_bin or shutil.which("vc_tifxyz_selfcross")
+    fixture = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "growth_guard_selfcross_cea9032_r1.npz"
+    if selfcross_required and not (binp and os.path.exists(binp)):
+        checked.append("selfx")
+        problems.append(f"selfx: selfcross is ENABLED in production but no binary resolved "
+                        f"(vc_bin={vc_bin!r}, PATH which={shutil.which('vc_tifxyz_selfcross')!r})")
+    elif binp and os.path.exists(binp):
+        checked.append("selfx")
+        smoke_info = _selfx_smoke_check(binp, env)
+        if not smoke_info.get("ran"):
+            problems.append(f"selfx: binary resolved but could not actually run through this "
+                            f"process's environment (env carries LD_LIBRARY_PATH? {bool(env)}) -- {smoke_info}")
+        # bonus accuracy check against the known-degenerate fixture, when it happens to ship
+        # (dev/CI boxes only -- never required for self-test to pass, so selfcross can still be
+        # enabled in a real deploy that never carries tests/fixtures/)
+        if fixture.exists():
+            sc_mask, sc_info = _selfx_fixture_check(fixture, binp, env)
+            if not sc_info.get("ran") or not (sc_info.get("density") or 0) > 0:
+                problems.append(f"selfx: real binary did not detect the known-degenerate fixture ({sc_info})")
+            if sc_mask is None or not sc_mask.any():
+                problems.append("selfx: mask empty on the known-degenerate fixture")
+
+    # ---- 11. FIX 1: the artifact-recording readback, through a temp DB, the SAME resolver ----
+    checked.append("artifact_readback")
+    import tempfile as _tf
+    with _tf.TemporaryDirectory() as td:
+        from .db import pipeline_db as _P_
+        P = _P_()
+        db = P.connect(os.path.join(td, "self_test.db"))
+        seg = "SELFTEST_seg"
+        P.upsert_segment(db, seg, scroll="SELFTEST", route="A")
+        # a lattice guaranteed to be cropped: half air
+        Xr, Yr, Zr = _plane_xyz(30, 30)
+        raw_dir = os.path.join(td, "raw")
+        os.makedirs(raw_dir, exist_ok=True)
+        import tifffile
+        for a, A in zip("xyz", (Xr, Yr, Zr), strict=True):
+            tifffile.imwrite(os.path.join(raw_dir, f"{a}.tif"), A)
+        open(os.path.join(raw_dir, "meta.json"), "w").write(json.dumps({
+            "area_cm2": 1.0, "max_gen": 1, "scale": [0.05, 0.05],
+            "format": "tifxyz", "type": "seg", "uuid": "self_test", "source": "self_test"}))
+        # mimic grow.py exactly: record the RAW artifact BEFORE the guard runs
+        P.record_artifact(db, seg, "grow", "tifxyz", raw_dir, None)
+        pol = GuardPolicy(enabled=True, vacuum=True, fold=False, plan=False, overlap=False)
+        dst, ginfo = guard_round(raw_dir, pol, VOX, GuardState(), sampler=air)
+        if dst == raw_dir:
+            problems.append("artifact_readback: setup failed, the planted vacuum region was not cropped")
+        else:
+            P.record_artifact(db, seg, "grow", "tifxyz", dst, None)   # the FIX 1 re-record
+        # the SAME query stages/render.py's source_tifxyz() / scheduler.py use to find a segment's surface
+        row = db.execute("SELECT path FROM artifact WHERE seg=? AND kind='tifxyz' ORDER BY mtime DESC, id DESC LIMIT 1", (seg,)).fetchone()
+        if row is None or "guarded_" not in row[0]:
+            problems.append(f"artifact_readback: resolver returned {row[0] if row else None!r}, "
+                            "not the guard-cropped path -- FIX 1 is not holding")
+
+    ok = not problems
+    detail = ("all clear: " if ok else "FAILED: ") + ", ".join(problems) if problems else f"{len(checked)} criteria checked: {', '.join(checked)}"
+    return ok, detail

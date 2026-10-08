@@ -1,0 +1,835 @@
+diff --git a/volume-cartographer/core/src/GrowPatch.cpp b/volume-cartographer/core/src/GrowPatch.cpp
+index 57a7ce82..e948b444 100644
+--- a/volume-cartographer/core/src/GrowPatch.cpp
++++ b/volume-cartographer/core/src/GrowPatch.cpp
+@@ -11,6 +11,7 @@
+ #include "vc/core/util/SurfacePatchIndex.hpp"
+ #include "vc/core/util/Tiff.hpp"
+ #include "vc/tracer/SurfaceModeling.hpp"
++#include "TracerSelfCollision.hpp"
+ #include "vc/core/util/SurfaceArea.hpp"
+ #include "vc/core/util/OMPThreadPointCollection.hpp"
+ #include "vc/core/util/LifeTime.hpp"
+@@ -1254,6 +1255,7 @@ enum LossType {
+     SURFACE_SDT,
+     SPACELINE,
+     PATCH_NORMAL,
++    SELF_REPEL,
+     COUNT
+ };
+ 
+@@ -1274,6 +1276,7 @@ struct LossSettings {
+         w[LossType::SURFACE_SDT] = 0.0f;
+         w[LossType::SPACELINE] = 0.0f;
+         w[LossType::PATCH_NORMAL] = 0.0f;
++        w[LossType::SELF_REPEL] = 0.0f;
+     }
+ 
+     struct ReferenceRaycastSettings {
+@@ -1285,6 +1288,11 @@ struct LossSettings {
+         double clearance_weight = 1.0;
+     } reference_raycast;
+ 
++    // In-solve self-collision (default OFF; see TracerSelfCollision.hpp). Soft term only: the hard
++    // rejection runs in the generation loop, not in the solve.
++    const vc_selfcoll::Guard* self_guard = nullptr;
++    double self_repel_clearance = 3.0;
++
+     bool reference_raycast_enabled() const {
+         return reference_raycast.surface && w[LossType::REFERENCE_RAY] > 0.0f;
+     }
+@@ -2233,6 +2241,31 @@ static int gen_corr_loss(ceres::Problem &problem, const cv::Vec2i &p, cv::Mat_<u
+ static int conditional_corr_loss(int bit, const cv::Vec2i &p, cv::Mat_<uint16_t> &loss_status,
+                                  ceres::Problem &problem, cv::Mat_<uint8_t> &state, cv::Mat_<cv::Vec3d> &loc, TraceData& trace_data, const LossSettings &settings);
+ 
++// SOFT self-repulsion (default OFF: needs settings.self_guard and w[SELF_REPEL] > 0). For vertex p, the
++// nearest point on every committed non-lattice-neighbour quad within self_repel_clearance becomes a
++// constant target of a one-sided clearance residual (the growing surface is its own reference surface).
++static int gen_self_repel_loss(ceres::Problem &problem, const cv::Vec2i &p,
++                               TraceParameters &params, const LossSettings &settings)
++{
++    if (!settings.self_guard)
++        return 0;
++    const float w = settings.w[LossType::SELF_REPEL];
++    if (w <= 0.0f || !(params.state(p) & STATE_LOC_VALID))
++        return 0;
++    const cv::Vec3d& x = params.dpoints(p);
++    if (x[0] == -1.0)
++        return 0;
++    std::array<cv::Vec3d, 4> q;
++    const int n = settings.self_guard->nearest_points(x, p[0], p[1], settings.self_repel_clearance, 4, q);
++    for (int t = 0; t < n; ++t) {
++        problem.AddResidualBlock(
++            new ceres::AutoDiffCostFunction<vc_selfcoll::SelfRepelCost, 1, 3>(
++                new vc_selfcoll::SelfRepelCost(q[t], settings.self_repel_clearance, static_cast<double>(w))),
++            nullptr, &params.dpoints(p)[0]);
++    }
++    return n;
++}
++
+ static int add_losses(ceres::Problem &problem, const cv::Vec2i &p, TraceParameters &params,
+     const TraceData &trace_data, const LossSettings &settings, int flags = LOSS_STRAIGHT | LOSS_DIST)
+ {
+@@ -2309,6 +2342,7 @@ static int add_losses(ceres::Problem &problem, const cv::Vec2i &p, TraceParamete
+ 
+     count += gen_reference_ray_loss(problem, p, params, trace_data, settings);
+     count += gen_surface_sdt_loss(problem, p, params, trace_data, settings);
++    count += gen_self_repel_loss(problem, p, params, settings);
+ 
+     return count;
+ }
+@@ -2564,6 +2598,7 @@ static int add_missing_losses(ceres::Problem &problem, cv::Mat_<uint16_t> &loss_
+ 
+     count += conditional_reference_ray_loss(15, p, loss_status, problem, params, trace_data, settings);
+     count += conditional_surface_sdt_loss(12, p, loss_status, problem, params, trace_data, settings);
++    count += gen_self_repel_loss(problem, p, params, settings);   // once per ROI vertex; no mask bit needed
+ 
+     return count;
+ }
+@@ -3179,6 +3214,31 @@ QuadSurface *tracer(Volume& volume, float scale, int level, cv::Vec3f origin, co
+     TraceData trace_data(direction_fields);
+     LossSettings loss_settings;
+     loss_settings.applyJsonWeights(params);
++
++    // In-solve self-collision prevention (default OFF => byte-identical behaviour; see TracerSelfCollision.hpp).
++    // params: "self_collision": {"enabled": bool, "hard": bool(true), "clearance": vox(3), "k": int(1),
++    //                            "soft_k": int(3), "weight": float(0 = no soft term), "maxedge": vox(60)}
++    vc_selfcoll::Params sc_params;
++    if (params.contains("self_collision") && params["self_collision"].is_object()) {
++        const utils::Json& sc = params["self_collision"];
++        auto num = [&](const char* k, double d) { return sc.contains(k) && sc[k].is_number() ? sc[k].get_double() : d; };
++        sc_params.enabled = sc.value("enabled", false);
++        sc_params.hard = sc.value("hard", true);
++        sc_params.clearance = std::max(0.0, num("clearance", sc_params.clearance));
++        sc_params.k = std::max(0, (int)num("k", sc_params.k));
++        sc_params.soft_k = std::max(0, (int)num("soft_k", sc_params.soft_k));
++        sc_params.weight = std::max(0.0, num("weight", sc_params.weight));
++        sc_params.maxedge = num("maxedge", sc_params.maxedge);
++        if (sc_params.enabled)
++            std::cout << "self_collision ENABLED: hard=" << sc_params.hard << " k=" << sc_params.k << " clearance="
++                      << sc_params.clearance << " soft_k=" << sc_params.soft_k << " weight=" << sc_params.weight
++                      << " maxedge=" << sc_params.maxedge << std::endl;
++    }
++    if (sc_params.enabled && sc_params.weight > 0.0) {
++        loss_settings.w[LossType::SELF_REPEL] = static_cast<float>(sc_params.weight);
++        loss_settings.self_repel_clearance = sc_params.clearance;
++    }
++    std::unique_ptr<vc_selfcoll::Guard> sc_guard;
+     const bool patch_normals_requested =
+         (params.contains("patch_normal_path") && params["patch_normal_path"].is_string()) ||
+         (params.contains("patch_normal_dir") && params["patch_normal_dir"].is_string()) ||
+@@ -4669,6 +4729,16 @@ QuadSurface *tracer(Volume& volume, float scale, int level, cv::Vec3f origin, co
+ 
+     std::cout << "lets start fringe: " << fringe.size() << std::endl;
+ 
++    if (sc_params.enabled) {
++        // After resume load / pre-loop local solves: the hash + snapshot are built from the state as inherited.
++        auto sc_t0 = std::chrono::steady_clock::now();
++        sc_guard = std::make_unique<vc_selfcoll::Guard>(sc_params, trace_params.dpoints, trace_params.state);
++        if (sc_params.weight > 0.0)
++            loss_settings.self_guard = sc_guard.get();
++        std::cout << "self_collision: guard built in "
++                  << std::chrono::duration<double>(std::chrono::steady_clock::now() - sc_t0).count() << " s" << std::endl;
++    }
++
+     while (!fringe.empty()) {
+         bool global_opt = generation <= 10 && !resume_surf;
+ 
+@@ -4708,7 +4778,9 @@ QuadSurface *tracer(Volume& volume, float scale, int level, cv::Vec3f origin, co
+         bool used_area_fully_valid = true;
+         for (int j = used_area.y; j < used_area.br().y && used_area_fully_valid; ++j) {
+             for (int i = used_area.x; i < used_area.br().x; ++i) {
+-                if ((trace_params.state(j, i) & STATE_LOC_VALID) == 0) {
++                // STATE_FAIL (set only by the self-collision guard) marks a deliberately rejected cell; it is not a hole
++                // to be filled, so it must not flip rectangular-frontier growth into hole-fill mode.
++                if ((trace_params.state(j, i) & STATE_LOC_VALID) == 0 && (trace_params.state(j, i) & STATE_FAIL) == 0) {
+                     used_area_fully_valid = false;
+                     break;
+                 }
+@@ -4735,7 +4807,12 @@ QuadSurface *tracer(Volume& volume, float scale, int level, cv::Vec3f origin, co
+                     }
+                 }
+             }
+-        } else {
++        }
++        // With the self-collision guard enabled a rejected cell can leave a hole in the bounding rectangle
++        // (e.g. a ring corner that was never attempted). Baseline hole-fill mode would then drop the ring
++        // frontier entirely (measured: fringe 136 -> 2 and area halved); so with the guard on, the fringe
++        // candidates are ALWAYS generated as well (append_candidate de-duplicates). Guard OFF: unchanged.
++        if (used_area_fully_valid || sc_guard) {
+             // For a rectangular patch, keep the existing fast frontier behavior.
+             for (const auto& p : fringe) {
+                 for (const auto& n : neighs) {
+@@ -4954,6 +5031,32 @@ QuadSurface *tracer(Volume& volume, float scale, int level, cv::Vec3f origin, co
+             }
+         }
+ 
++        if (sc_guard) {
++            // Sequential end-of-generation self-collision resolution: reject new vertices that make a
++            // transverse crossing, roll back moved old vertices that do.
++            const std::vector<cv::Vec2i> sc_rejected = sc_guard->resolve(succ_gen_ps, global_opt);
++            if (!sc_rejected.empty()) {
++                const std::unordered_set<cv::Vec2i> rej(sc_rejected.begin(), sc_rejected.end());
++                auto is_rej = [&](const cv::Vec2i& q) { return rej.count(q) != 0; };
++                fringe.erase(std::remove_if(fringe.begin(), fringe.end(), is_rej), fringe.end());
++                succ_gen_ps.erase(std::remove_if(succ_gen_ps.begin(), succ_gen_ps.end(), is_rej), succ_gen_ps.end());
++                succ -= (int)sc_rejected.size();
++                succ_gen -= (int)sc_rejected.size();
++                for (const auto& q : sc_rejected) {
++                    generations(q) = 0;
++                    static const cv::Vec2i nb[] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
++                    for (const auto& off : nb) {
++                        cv::Vec2i n2 = q + off;
++                        if (n2[0] >= 0 && n2[0] < trace_params.dpoints.rows && n2[1] >= 0 && n2[1] < trace_params.dpoints.cols &&
++                            (trace_params.state(n2) & STATE_LOC_VALID))
++                            update_surface_normal(n2, trace_params.dpoints, trace_params.state, surface_normals);
++                    }
++                }
++            }
++            if (generation % 10 == 0)
++                sc_guard->print_summary("self_collision");
++        }
++
+         cands.resize(0);
+ 
+         // --- Speed Reporting ---
+@@ -4997,6 +5100,8 @@ QuadSurface *tracer(Volume& volume, float scale, int level, cv::Vec3f origin, co
+     }  // end while fringe is non-empty
+     delete timer;
+ 
++    if (sc_guard)
++        sc_guard->print_summary("self_collision FINAL");
+     QuadSurface* surf = create_surface_from_state();
+ 
+     const double area_est_vx2 = vc::surface::computeSurfaceAreaVox2(*surf);
+diff --git a/volume-cartographer/core/src/TracerSelfCollision.hpp b/volume-cartographer/core/src/TracerSelfCollision.hpp
+new file mode 100644
+index 00000000..3ec67bcf
+--- /dev/null
++++ b/volume-cartographer/core/src/TracerSelfCollision.hpp
+@@ -0,0 +1,441 @@
++// In-solve self-collision prevention for the GrowPatch tracer (header-only).
++//
++// The tracer has no test of the growing surface against ITSELF. This guard adds one, with the
++// SAME definition of a defect as the shipped census (vc_tifxyz_selfcross): a non-adjacent
++// TRANSVERSE triangle-triangle contact, both diagonals of every quad, float32 coordinates,
++// maxedge-filtered quads. It reuses vc_selfcross::tri_tri verbatim; coplanar / grazing contacts
++// (two wraps pressed together) are never a rejection reason.
++//
++// Mechanism (all sequential, deterministic; the parallel solve only READS the committed state):
++//   * a uniform-grid hash of every valid quad's bounding box (cell = `cell` voxels);
++//   * a committed snapshot `snap` of every vertex position as of the end of the previous generation;
++//   * at the end of each generation `resolve()` collects the DIRTY vertices (new this generation, or
++//     moved by any solve since the snapshot), refreshes their incident quads in the hash, and tests
++//     each against the hash. A conflicting NEW vertex is rejected (state = PROCESSING|FAIL, point
++//     reset to (-1,-1,-1), never retried: the frontier does not grind on it); a conflict whose only
++//     dirty culprits are OLD moved vertices is rolled back to the snapshot (rollback of moved
++//     vertices; D3 never shrinks the surface, it only declines an unsafe move). Repeat to a fixpoint.
++//   * optional SOFT term (`weight` > 0): near-point repulsion against the nearest point of every
++//     non-lattice-neighbour quad closer than `clearance` voxels (see nearest_points()).
++//
++// Default OFF: nothing in this file runs unless params.json has self_collision.enabled = true.
++#pragma once
++
++#include "../../apps/src/vc_tifxyz_selfcross_impl.hpp"
++
++#include <opencv2/core/mat.hpp>
++#include <opencv2/core/matx.hpp>
++
++#include <algorithm>
++#include <array>
++#include <chrono>
++#include <cmath>
++#include <cstdint>
++#include <cstdio>
++#include <unordered_map>
++#include <vector>
++
++namespace vc_selfcoll {
++
++struct Params {
++    bool enabled = false;
++    bool hard = true;          // hard candidate rejection + moved-vertex rollback
++    double clearance = 3.0;    // voxels; soft term only
++    int k = 1;                 // lattice (Chebyshev) exclusion for the HARD test; 1 == detector default
++    int soft_k = 3;            // lattice exclusion for the soft term
++    double weight = 0.0;       // soft residual weight; 0 = no soft term
++    double maxedge = 60.0;     // voxels; quads with a longer edge are not tested (detector default)
++    double cell = 40.0;        // hash cell, voxels
++    int window = 10;           // dirty-scan half-window around each new vertex (local solves reach radius 8)
++    int max_iter = 1000;   // safety only: every pass kills >= 1 alive dirty vertex, so the fixpoint terminates; hitting this is announced
++};
++
++struct Stats {
++    long gens = 0, dirty = 0, dirty_new = 0, dirty_moved = 0;
++    long quads_tested = 0, pairs_tested = 0, crossings = 0;
++    long rejected_new = 0, reverted_moved = 0, iter_cap_hits = 0;
++    double seconds = 0;
++};
++
++struct Cand { int i, j; };
++
++class Guard {
++public:
++    using Vec3 = vc_selfcross::Vec3;
++    Params prm;
++    Stats st;
++
++    Guard(const Params& p, cv::Mat_<cv::Vec3d>& pts, cv::Mat_<uint8_t>& state)
++        : prm(p), P_(&pts), S_(&state) {
++        snap_ = pts.clone();
++        mark_ = cv::Mat_<uint8_t>(pts.size(), (uint8_t)0);
++        rows_ = pts.rows; cols_ = pts.cols;
++        for (int i = 0; i + 1 < rows_; ++i)
++            for (int j = 0; j + 1 < cols_; ++j)
++                if (vert_ok(i, j) && vert_ok(i + 1, j) && vert_ok(i, j + 1) && vert_ok(i + 1, j + 1))
++                    register_quad(i, j);
++    }
++
++    // ---- committed (thread-safe to read during the parallel solve) --------------------------------
++    // Nearest points on non-lattice-neighbour committed quads within `radius` of position x for vertex (vi,vj).
++    // Reads only hash + snap, which change solely inside resolve() (sequential).
++    int nearest_points(const cv::Vec3d& x, int vi, int vj, double radius, int max_pts,
++                       std::array<cv::Vec3d, 4>& out) const {
++        const double r = radius;
++        int c0[3], c1[3];
++        for (int a = 0; a < 3; ++a) { c0[a] = cell_of(x[a] - r); c1[a] = cell_of(x[a] + r); }
++        std::vector<uint32_t> ids;
++        for (int k = c0[2]; k <= c1[2]; ++k)
++            for (int j = c0[1]; j <= c1[1]; ++j)
++                for (int i = c0[0]; i <= c1[0]; ++i) {
++                    auto it = cells_.find(key(i, j, k));
++                    if (it != cells_.end()) ids.insert(ids.end(), it->second.begin(), it->second.end());
++                }
++        std::sort(ids.begin(), ids.end());
++        ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
++        struct Hit { double d2; cv::Vec3d q; };
++        std::vector<Hit> hits;
++        const int K = prm.soft_k;
++        for (uint32_t id : ids) {
++            const int qi = (int)(id / (uint32_t)cols_), qj = (int)(id % (uint32_t)cols_);
++            if (qi >= vi - K - 1 && qi <= vi + K && qj >= vj - K - 1 && qj <= vj + K) continue;
++            Vec3 c[4];
++            if (!quad_pts_snap(qi, qj, c)) continue;
++            const Vec3 xx{x[0], x[1], x[2]};
++            const Vec3 tri[2][3] = {{c[0], c[1], c[3]}, {c[0], c[3], c[2]}};
++            for (int t = 0; t < 2; ++t) {
++                Vec3 q = closest_on_tri(xx, tri[t][0], tri[t][1], tri[t][2]);
++                Vec3 d = q - xx;
++                double d2 = vc_selfcross::dot(d, d);
++                if (d2 < r * r) hits.push_back({d2, cv::Vec3d(q.x, q.y, q.z)});
++            }
++        }
++        std::sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) { return a.d2 < b.d2; });
++        int n = std::min<int>((int)hits.size(), std::min(max_pts, 4));
++        for (int t = 0; t < n; ++t) out[t] = hits[t].q;
++        return n;
++    }
++
++    // ---- sequential end-of-generation resolution ------------------------------------------------
++    // new_pts: vertices that became valid this generation. full: scan the whole grid for moved vertices
++    // (global-optimisation generations). Returns the vertices that were REJECTED (caller must drop them
++    // from fringe / counters). Modifies P (reverts, rejects), S (rejects).
++    std::vector<cv::Vec2i> resolve(const std::vector<cv::Vec2i>& new_pts, bool full) {
++        const double t0 = now();
++        ++st.gens;
++        cv::Mat_<cv::Vec3d>& P = *P_;
++        cv::Mat_<uint8_t>& S = *S_;
++        std::vector<cv::Vec2i> rejected;
++
++        // 1. dirty set
++        std::vector<cv::Vec2i> dirty;
++        std::vector<uint8_t> is_new;
++        auto consider = [&](int i, int j, bool nw) {
++            if (i < 0 || j < 0 || i >= rows_ || j >= cols_) return;
++            uint8_t& m = mark_(i, j);
++            if (m) { if (nw && m == 1) { m = 2; } return; }
++            if (!(S(i, j) & STATE_LOC_VALID_)) return;
++            if (!nw && P(i, j) == snap_(i, j)) return;
++            m = nw ? 2 : 1;
++            dirty.push_back({i, j});
++        };
++        for (const auto& p : new_pts) consider(p[0], p[1], true);
++        if (full) {
++            for (int i = 0; i < rows_; ++i) for (int j = 0; j < cols_; ++j) consider(i, j, false);
++        } else {
++            for (const auto& p : new_pts)
++                for (int di = -prm.window; di <= prm.window; ++di)
++                    for (int dj = -prm.window; dj <= prm.window; ++dj)
++                        consider(p[0] + di, p[1] + dj, false);
++        }
++        // is_new from marks; deterministic order
++        std::sort(dirty.begin(), dirty.end(), [](const cv::Vec2i& a, const cv::Vec2i& b) {
++            return a[0] != b[0] ? a[0] < b[0] : a[1] < b[1]; });
++        for (const auto& d : dirty) {
++            const bool nw = mark_(d[0], d[1]) == 2;
++            is_new.push_back(nw);
++            nw ? ++st.dirty_new : ++st.dirty_moved;
++        }
++        st.dirty += (long)dirty.size();
++        if (!prm.hard) {
++            // soft-only: just commit
++            for (const auto& d : dirty) { snap_(d[0], d[1]) = P(d[0], d[1]); mark_(d[0], d[1]) = 0; }
++            refresh_incident(dirty);
++            st.seconds += now() - t0;
++            return rejected;
++        }
++
++        auto dirty_idx = [&](int i, int j) -> int {   // binary search in the sorted dirty list
++            auto it = std::lower_bound(dirty.begin(), dirty.end(), cv::Vec2i(i, j),
++                [](const cv::Vec2i& a, const cv::Vec2i& b) { return a[0] != b[0] ? a[0] < b[0] : a[1] < b[1]; });
++            if (it != dirty.end() && (*it)[0] == i && (*it)[1] == j) return (int)(it - dirty.begin());
++            return -1;
++        };
++        std::vector<uint8_t> alive(dirty.size(), 1);
++
++        // 2. refresh hash for the incident quads of all dirty vertices
++        refresh_incident(dirty);
++
++        // 3. fixpoint
++        for (int iter = 0;; ++iter) {
++            std::vector<uint32_t> qs = incident_quads(dirty, alive);
++            struct Conf { int qi, qj, ri, rj; };
++            std::vector<Conf> conf;
++            for (uint32_t q : qs) {
++                const int qi = (int)(q / (uint32_t)cols_), qj = (int)(q % (uint32_t)cols_);
++                ++st.quads_tested;
++                std::vector<uint32_t> others = query(qi, qj);
++                for (uint32_t o : others) {
++                    const int oi = (int)(o / (uint32_t)cols_), oj = (int)(o % (uint32_t)cols_);
++                    if (std::abs(oi - qi) <= prm.k && std::abs(oj - qj) <= prm.k) continue;
++                    ++st.pairs_tested;
++                    if (quads_cross(qi, qj, oi, oj)) conf.push_back({qi, qj, oi, oj});
++                }
++            }
++            if (conf.empty()) break;
++            if (iter >= prm.max_iter) { ++st.iter_cap_hits; std::fprintf(stderr, "self_collision: ANNOUNCE iteration safety cap %d hit with %zu unresolved conflicts\n", prm.max_iter, conf.size()); break; }
++            st.crossings += (long)conf.size();
++            // culprits: alive dirty corners of both quads of each conflicting pair
++            std::vector<int> cul_new, cul_moved;
++            auto add_corners = [&](int qi, int qj) {
++                for (int di = 0; di < 2; ++di) for (int dj = 0; dj < 2; ++dj) {
++                    int idx = dirty_idx(qi + di, qj + dj);
++                    if (idx >= 0 && alive[idx]) (is_new[idx] ? cul_new : cul_moved).push_back(idx);
++                }
++            };
++            for (const auto& c : conf) { add_corners(c.qi, c.qj); add_corners(c.ri, c.rj); }
++            auto uniq = [](std::vector<int>& v) { std::sort(v.begin(), v.end()); v.erase(std::unique(v.begin(), v.end()), v.end()); };
++            uniq(cul_new); uniq(cul_moved);
++            std::vector<int> act;
++            if (!cul_new.empty()) {
++                // reject new vertices first; moved vertices are only reverted if a conflict survives
++                for (int idx : cul_new) {
++                    const cv::Vec2i d = dirty[idx];
++                    reject(d);
++                    rejected.push_back(d);
++                    alive[idx] = 0;
++                    act.push_back(idx);
++                    ++st.rejected_new;
++                }
++            } else {
++                for (int idx : cul_moved) {
++                    const cv::Vec2i d = dirty[idx];
++                    P(d[0], d[1]) = snap_(d[0], d[1]);
++                    alive[idx] = 0;      // back at its committed position: no longer dirty
++                    act.push_back(idx);
++                    ++st.reverted_moved;
++                }
++            }
++            std::vector<cv::Vec2i> touched;
++            for (int idx : act) touched.push_back(dirty[idx]);
++            refresh_incident(touched);
++        }
++        // 4. commit
++        for (size_t t = 0; t < dirty.size(); ++t) {
++            const auto& d = dirty[t];
++            snap_(d[0], d[1]) = P(d[0], d[1]);   // rejected: (-1,-1,-1); reverted: already equal
++            mark_(d[0], d[1]) = 0;
++        }
++        st.seconds += now() - t0;
++        return rejected;
++    }
++
++    void print_summary(const char* tag = "self_collision") const {
++        std::printf("%s: gens %ld dirty %ld (new %ld moved %ld) quads_tested %ld pairs_tested %ld "
++                    "crossings_found %ld rejected_new %ld reverted_moved %ld iter_cap_hits %ld guard_s %.2f\n",
++                    tag, st.gens, st.dirty, st.dirty_new, st.dirty_moved, st.quads_tested, st.pairs_tested,
++                    st.crossings, st.rejected_new, st.reverted_moved, st.iter_cap_hits, st.seconds);
++    }
++
++    // exposed for tests / the harness: does quad (qi,qj) transversally cross any non-adjacent quad?
++    bool quad_has_crossing(int qi, int qj) {
++        for (uint32_t o : query(qi, qj)) {
++            const int oi = (int)(o / (uint32_t)cols_), oj = (int)(o % (uint32_t)cols_);
++            if (std::abs(oi - qi) <= prm.k && std::abs(oj - qj) <= prm.k) continue;
++            if (quads_cross(qi, qj, oi, oj)) return true;
++        }
++        return false;
++    }
++
++private:
++    static constexpr int STATE_LOC_VALID_ = 1;
++    static constexpr int STATE_PROCESSING_ = 2;
++    static constexpr int STATE_FAIL_ = 8;
++
++    cv::Mat_<cv::Vec3d>* P_;
++    cv::Mat_<uint8_t>* S_;
++    cv::Mat_<cv::Vec3d> snap_;
++    cv::Mat_<uint8_t> mark_;
++    int rows_ = 0, cols_ = 0;
++    std::unordered_map<uint64_t, std::vector<uint32_t>> cells_;
++    std::unordered_map<uint32_t, std::array<int32_t, 6>> reg_;
++
++    static double now() {
++        return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
++    }
++
++    int cell_of(double x) const { return (int)std::floor(x / prm.cell); }
++    static uint64_t key(int i, int j, int k) {
++        const uint64_t OFF = 1u << 19;
++        return ((uint64_t)(k + OFF) << 42) | ((uint64_t)(j + OFF) << 21) | (uint64_t)(i + OFF);
++    }
++
++    bool vert_ok(int i, int j) const {
++        if (i < 0 || j < 0 || i >= rows_ || j >= cols_) return false;
++        if (!((*S_)(i, j) & STATE_LOC_VALID_)) return false;
++        const cv::Vec3d& p = (*P_)(i, j);
++        return p[0] != -1.0;
++    }
++
++    void reject(const cv::Vec2i& d) {
++        (*S_)(d[0], d[1]) = (uint8_t)(STATE_PROCESSING_ | STATE_FAIL_);
++        (*P_)(d[0], d[1]) = cv::Vec3d(-1, -1, -1);
++    }
++
++    // float32 corners, exactly as the saved tifxyz would hold them
++    bool quad_pts_from(const cv::Mat_<cv::Vec3d>& M, int i, int j, Vec3 c[4], bool check_state) const {
++        if (i < 0 || j < 0 || i + 1 >= rows_ || j + 1 >= cols_) return false;
++        const int di[4] = {0, 0, 1, 1}, dj[4] = {0, 1, 0, 1};   // p00 p01 p10 p11
++        for (int t = 0; t < 4; ++t) {
++            if (check_state && !vert_ok(i + di[t], j + dj[t])) return false;
++            const cv::Vec3d& p = M(i + di[t], j + dj[t]);
++            if (p[0] == -1.0) return false;
++            c[t] = Vec3{(double)(float)p[0], (double)(float)p[1], (double)(float)p[2]};
++        }
++        if (prm.maxedge > 0) {
++            const Vec3 &p00 = c[0], &p01 = c[1], &p10 = c[2], &p11 = c[3];
++            double e = std::max(std::max(vc_selfcross::norm(p01 - p00), vc_selfcross::norm(p11 - p01)),
++                       std::max(std::max(vc_selfcross::norm(p10 - p11), vc_selfcross::norm(p00 - p10)),
++                                std::max(vc_selfcross::norm(p11 - p00), vc_selfcross::norm(p10 - p01))));
++            if (e > prm.maxedge) return false;
++        }
++        return true;
++    }
++    bool quad_pts(int i, int j, Vec3 c[4]) const { return quad_pts_from(*P_, i, j, c, true); }
++    bool quad_pts_snap(int i, int j, Vec3 c[4]) const { return quad_pts_from(snap_, i, j, c, false); }
++
++    void unregister_quad(uint32_t id) {
++        auto it = reg_.find(id);
++        if (it == reg_.end()) return;
++        const auto& r = it->second;
++        for (int k = r[2]; k <= r[5]; ++k) for (int j = r[1]; j <= r[4]; ++j) for (int i = r[0]; i <= r[3]; ++i) {
++            auto c = cells_.find(key(i, j, k));
++            if (c == cells_.end()) continue;
++            auto& v = c->second;
++            auto f = std::find(v.begin(), v.end(), id);
++            if (f != v.end()) { *f = v.back(); v.pop_back(); }
++            if (v.empty()) cells_.erase(c);
++        }
++        reg_.erase(it);
++    }
++    void register_quad(int i, int j) {
++        const uint32_t id = (uint32_t)i * (uint32_t)cols_ + (uint32_t)j;
++        unregister_quad(id);
++        Vec3 c[4];
++        if (!quad_pts(i, j, c)) return;
++        double lo[3] = {1e30, 1e30, 1e30}, hi[3] = {-1e30, -1e30, -1e30};
++        for (int t = 0; t < 4; ++t) {
++            const double v[3] = {c[t].x, c[t].y, c[t].z};
++            for (int a = 0; a < 3; ++a) { lo[a] = std::min(lo[a], v[a]); hi[a] = std::max(hi[a], v[a]); }
++        }
++        std::array<int32_t, 6> r;
++        for (int a = 0; a < 3; ++a) {
++            r[a] = cell_of(lo[a] - vc_selfcross::TOUCH_TOL);
++            r[3 + a] = cell_of(hi[a] + vc_selfcross::TOUCH_TOL);
++        }
++        for (int k = r[2]; k <= r[5]; ++k) for (int j2 = r[1]; j2 <= r[4]; ++j2) for (int i2 = r[0]; i2 <= r[3]; ++i2)
++            cells_[key(i2, j2, k)].push_back(id);
++        reg_[id] = r;
++    }
++    void refresh_incident(const std::vector<cv::Vec2i>& vs) {
++        for (const auto& v : vs)
++            for (int a = -1; a <= 0; ++a) for (int b = -1; b <= 0; ++b) {
++                const int qi = v[0] + a, qj = v[1] + b;
++                if (qi >= 0 && qj >= 0 && qi + 1 < rows_ && qj + 1 < cols_) register_quad(qi, qj);
++            }
++    }
++    std::vector<uint32_t> incident_quads(const std::vector<cv::Vec2i>& vs, const std::vector<uint8_t>& alive) const {
++        std::vector<uint32_t> q;
++        for (size_t t = 0; t < vs.size(); ++t) {
++            if (!alive[t]) continue;
++            for (int a = -1; a <= 0; ++a) for (int b = -1; b <= 0; ++b) {
++                const int qi = vs[t][0] + a, qj = vs[t][1] + b;
++                if (qi >= 0 && qj >= 0 && qi + 1 < rows_ && qj + 1 < cols_ && reg_.count((uint32_t)qi * (uint32_t)cols_ + (uint32_t)qj))
++                    q.push_back((uint32_t)qi * (uint32_t)cols_ + (uint32_t)qj);
++            }
++        }
++        std::sort(q.begin(), q.end());
++        q.erase(std::unique(q.begin(), q.end()), q.end());
++        return q;
++    }
++    std::vector<uint32_t> query(int qi, int qj) const {
++        std::vector<uint32_t> out;
++        auto it = reg_.find((uint32_t)qi * (uint32_t)cols_ + (uint32_t)qj);
++        if (it == reg_.end()) return out;
++        const auto& r = it->second;
++        for (int k = r[2]; k <= r[5]; ++k) for (int j = r[1]; j <= r[4]; ++j) for (int i = r[0]; i <= r[3]; ++i) {
++            auto c = cells_.find(key(i, j, k));
++            if (c != cells_.end()) out.insert(out.end(), c->second.begin(), c->second.end());
++        }
++        std::sort(out.begin(), out.end());
++        out.erase(std::unique(out.begin(), out.end()), out.end());
++        const uint32_t self = (uint32_t)qi * (uint32_t)cols_ + (uint32_t)qj;
++        out.erase(std::remove(out.begin(), out.end(), self), out.end());
++        return out;
++    }
++
++    bool quads_cross(int ai, int aj, int bi, int bj) const {
++        Vec3 A[4], B[4];
++        if (!quad_pts(ai, aj, A) || !quad_pts(bi, bj, B)) return false;
++        for (int diag = 0; diag < 2; ++diag) {
++            vc_selfcross::Tri ta[2], tb[2];
++            fill(A, diag, ta); fill(B, diag, tb);
++            for (int x = 0; x < 2; ++x) for (int y = 0; y < 2; ++y)
++                if (vc_selfcross::tri_tri(ta[x], tb[y]).verdict == vc_selfcross::TRANSVERSE) return true;
++        }
++        return false;
++    }
++    static void fill(const Vec3 c[4], int diag, vc_selfcross::Tri t[2]) {
++        const Vec3 &p00 = c[0], &p01 = c[1], &p10 = c[2], &p11 = c[3];
++        if (diag == 0) { t[0] = {p00, p01, p11, 0, 0, 0}; t[1] = {p00, p11, p10, 0, 0, 1}; }
++        else           { t[0] = {p00, p01, p10, 0, 0, 0}; t[1] = {p01, p11, p10, 0, 0, 1}; }
++    }
++
++    // Ericson, Real-Time Collision Detection 5.1.5
++    static Vec3 closest_on_tri(const Vec3& p, const Vec3& a, const Vec3& b, const Vec3& c) {
++        using vc_selfcross::dot;
++        Vec3 ab = b - a, ac = c - a, ap = p - a;
++        double d1 = dot(ab, ap), d2 = dot(ac, ap);
++        if (d1 <= 0 && d2 <= 0) return a;
++        Vec3 bp = p - b; double d3 = dot(ab, bp), d4 = dot(ac, bp);
++        if (d3 >= 0 && d4 <= d3) return b;
++        double vc = d1 * d4 - d3 * d2;
++        if (vc <= 0 && d1 >= 0 && d3 <= 0) return a + ab * (d1 / (d1 - d3));
++        Vec3 cp = p - c; double d5 = dot(ab, cp), d6 = dot(ac, cp);
++        if (d6 >= 0 && d5 <= d6) return c;
++        double vb = d5 * d2 - d1 * d6;
++        if (vb <= 0 && d2 >= 0 && d6 <= 0) return a + ac * (d2 / (d2 - d6));
++        double va = d3 * d6 - d5 * d4;
++        if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0)
++            return b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)));
++        double den = 1.0 / (va + vb + vc);
++        return a + ab * (vb * den) + ac * (vc * den);
++    }
++};
++
++// Soft residual: w * max(0, clearance - |x - q|), q a constant nearest point on a non-neighbour quad.
++struct SelfRepelCost {
++    SelfRepelCost(const cv::Vec3d& q, double c, double w) : q_(q), c_(c), w_(w) {}
++    template <typename T>
++    bool operator()(const T* x, T* r) const {
++        using std::sqrt;
++        T d2 = (x[0] - q_[0]) * (x[0] - q_[0]) + (x[1] - q_[1]) * (x[1] - q_[1]) + (x[2] - q_[2]) * (x[2] - q_[2]);
++        if (d2 >= c_ * c_) { r[0] = T(0.0); return true; }
++        r[0] = T(w_) * (T(c_) - sqrt(d2 + T(1e-12)));
++        return true;
++    }
++    cv::Vec3d q_;
++    double c_, w_;
++};
++
++}  // namespace vc_selfcoll
+diff --git a/volume-cartographer/core/test/CMakeLists.txt b/volume-cartographer/core/test/CMakeLists.txt
+index a797df5c..dea8b699 100644
+--- a/volume-cartographer/core/test/CMakeLists.txt
++++ b/volume-cartographer/core/test/CMakeLists.txt
+@@ -853,6 +853,9 @@ vc_add_test(NAME test_atlas LIBS doctest::doctest vc_atlas)
+ # with the command-line tool so the tested code is the shipped code).
+ vc_add_test(NAME test_tifxyz_selfcross LIBS doctest::doctest opencv_core)
+ 
++# In-solve self-collision guard (header-only, core/src; reuses the census kernel above).
++vc_add_test(NAME test_tracer_selfcollision LIBS doctest::doctest opencv_core)
++
+ # End-to-end CLI contract for the same tool: exit codes, report
+ # serialization, collection envelope. Needs the binary, so it only exists
+ # in configurations that build the apps -- the test shards configure with
+diff --git a/volume-cartographer/core/test/test_tracer_selfcollision.cpp b/volume-cartographer/core/test/test_tracer_selfcollision.cpp
+new file mode 100644
+index 00000000..11535bfa
+--- /dev/null
++++ b/volume-cartographer/core/test/test_tracer_selfcollision.cpp
+@@ -0,0 +1,164 @@
++// Fixtures for the in-solve self-collision guard (core/src/TracerSelfCollision.hpp).
++//
++// Each fixture states the trap it exists to pin down. The central one is COUNTERFACTUAL: the same
++// synthetic folding sheet is censused WITHOUT the guard (must show transverse crossings, i.e. this test
++// is seen to fail first) and WITH it (must show none, using the shipped census kernel as the judge).
++
++#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
++#include "vc_test.hpp"
++
++#include "../src/TracerSelfCollision.hpp"
++
++#include <opencv2/core/mat.hpp>
++
++#include <vector>
++
++using vc_selfcoll::Guard;
++using vc_selfcoll::Params;
++
++namespace {
++
++constexpr uint8_t VALID = 1;
++
++struct Grid {
++    cv::Mat_<cv::Vec3d> P;
++    cv::Mat_<uint8_t> S;
++    explicit Grid(int r, int c) : P(r, c, cv::Vec3d(-1, -1, -1)), S(r, c, (uint8_t)0) {}
++    void set(int i, int j, double x, double y, double z) { P(i, j) = {x, y, z}; S(i, j) = VALID; }
++    cv::Mat_<cv::Vec3f> asF() const {
++        cv::Mat_<cv::Vec3f> F(P.size(), cv::Vec3f(-1, -1, -1));
++        for (int i = 0; i < P.rows; ++i)
++            for (int j = 0; j < P.cols; ++j)
++                if ((S(i, j) & VALID) && P(i, j)[0] != -1.0) F(i, j) = cv::Vec3f(P(i, j));
++        return F;
++    }
++    size_t transverse() const {
++        std::vector<vc_selfcross::Contact> out;
++        size_t n = 0;
++        for (int d = 0; d < 2; ++d) {
++            out.clear();
++            n += vc_selfcross::census(asF(), d, 40.0, 1, 60.0, 1, out).transverse;
++        }
++        return n;
++    }
++    int nvalid() const { int n = 0; for (int i = 0; i < S.rows; ++i) for (int j = 0; j < S.cols; ++j) n += (S(i, j) & VALID) != 0; return n; }
++};
++
++constexpr int COLS = 12;
++constexpr double H = 10.0;   // lattice spacing, voxels
++
++// rows 0..9: flat sheet z=0. Rows 10..15 then fold back OVER it and through it: row 10 lies above the sheet
++// (z=+2), rows 11.. below it (z = 2 - 6*(r-10)), all at y = 87 - 15*(r-9) < 90 (offset 3 so the crossing is not exactly on a mesh edge row) i.e. over the sheet, so the quads
++// between rows 10 and 11 pierce the z=0 plane in the interior of the flat sheet.
++void fill_flat(Grid& g, int rows) {
++    for (int i = 0; i < rows; ++i) for (int j = 0; j < COLS; ++j) g.set(i, j, H * j, H * i, 0.0);
++}
++void fill_fold_row(Grid& g, int r) {
++    for (int j = 0; j < COLS; ++j) g.set(r, j, H * j, 87.0 - 15.0 * (r - 9), 2.0 - 6.0 * (r - 10));
++}
++
++Params on() { Params p; p.enabled = true; return p; }
++
++}  // namespace
++
++TEST_CASE("fixture self-check: the folding sheet really crosses without the guard") {
++    Grid g(16, COLS);
++    fill_flat(g, 10);
++    CHECK(g.transverse() == 0);
++    for (int r = 10; r < 16; ++r) fill_fold_row(g, r);
++    CHECK(g.transverse() > 0);   // this is the assertion that fails first if the fixture is wrong
++}
++
++TEST_CASE("hard guard keeps a folding sheet crossing-free") {
++    Grid g(16, COLS);
++    fill_flat(g, 10);
++    Guard guard(on(), g.P, g.S);
++    int rejected = 0;
++    for (int r = 10; r < 16; ++r) {
++        fill_fold_row(g, r);
++        std::vector<cv::Vec2i> nw;
++        for (int j = 0; j < COLS; ++j) nw.push_back({r, j});
++        rejected += (int)guard.resolve(nw, false).size();
++        CHECK(g.transverse() == 0);          // judged by the shipped census, after EVERY generation
++    }
++    CHECK(rejected > 0);                      // the guard acted
++    CHECK(g.nvalid() < 16 * COLS);            // and those cells are really gone from the state
++    for (int i = 0; i < 16; ++i) for (int j = 0; j < COLS; ++j)
++        if (!(g.S(i, j) & VALID)) CHECK(g.P(i, j)[0] == -1.0);   // rejected points reset (never saved as valid)
++    for (int i = 0; i < 10; ++i) for (int j = 0; j < COLS; ++j) CHECK(g.S(i, j) == VALID);   // D3: old cells kept
++}
++
++TEST_CASE("a benign growing sheet is never rejected (no false rejections)") {
++    Grid g(16, COLS);
++    fill_flat(g, 4);
++    Guard guard(on(), g.P, g.S);
++    for (int r = 4; r < 16; ++r) {
++        for (int j = 0; j < COLS; ++j) g.set(r, j, H * j, H * r, 0.2 * std::sin(0.3 * r + 0.2 * j));
++        std::vector<cv::Vec2i> nw;
++        for (int j = 0; j < COLS; ++j) nw.push_back({r, j});
++        CHECK(guard.resolve(nw, false).empty());
++    }
++    CHECK(guard.st.rejected_new == 0);
++    CHECK(g.nvalid() == 16 * COLS);
++}
++
++TEST_CASE("coplanar contact between wraps is NOT a rejection reason, nor is plain proximity") {
++    // sheet A rows 0..5 at z=0; sheet B (rows 9..14, a gap of invalid rows between) grown afterwards.
++    for (double dz : {0.0, 1.5}) {   // 0.0: pressed flat (coplanar); 1.5: parallel and close, no contact
++        Grid g(16, COLS);
++        for (int i = 0; i < 6; ++i) for (int j = 0; j < COLS; ++j) g.set(i, j, H * j, H * i, 0.0);
++        Guard guard(on(), g.P, g.S);
++        for (int i = 9; i < 15; ++i) {
++            for (int j = 0; j < COLS; ++j) g.set(i, j, H * j, H * (i - 9), dz);
++        }
++        std::vector<cv::Vec2i> nw;
++        for (int i = 9; i < 15; ++i) for (int j = 0; j < COLS; ++j) nw.push_back({i, j});
++        CHECK(guard.resolve(nw, false).empty());
++        CHECK(guard.st.rejected_new == 0);
++        CHECK(g.transverse() == 0);
++    }
++}
++
++TEST_CASE("a MOVED old vertex that would cross is rolled back to its committed position") {
++    Grid g(16, COLS);
++    for (int i = 0; i < 6; ++i) for (int j = 0; j < COLS; ++j) g.set(i, j, H * j, H * i, 0.0);          // sheet A, z = 0
++    for (int i = 9; i < 15; ++i) for (int j = 0; j < COLS; ++j) g.set(i, j, H * j, H * (i - 9), 6.0);   // sheet B, z = 6
++    Guard guard(on(), g.P, g.S);
++    CHECK(g.transverse() == 0);
++    const cv::Vec3d before = g.P(3, 5);
++    g.P(3, 5) = cv::Vec3d(H * 5, H * 3, 12.0);    // a solve drives a sheet-A vertex up through sheet B
++    CHECK(g.transverse() > 0);                      // fixture check: the unguarded move does cross
++    auto rej = guard.resolve({}, true);   // full scan: no new vertices to centre a window on
++    CHECK(rej.empty());                              // an old vertex is never deleted (D3) ...
++    CHECK(g.P(3, 5) == before);                      // ... only declined
++    CHECK(g.S(3, 5) == VALID);
++    CHECK(guard.st.reverted_moved >= 1);
++    CHECK(g.transverse() == 0);
++}
++
++TEST_CASE("a moved old vertex that does not cross is committed, not reverted") {
++    Grid g(16, COLS);
++    for (int i = 0; i < 6; ++i) for (int j = 0; j < COLS; ++j) g.set(i, j, H * j, H * i, 0.0);
++    Guard guard(on(), g.P, g.S);
++    g.P(3, 5) = cv::Vec3d(H * 5 + 1.0, H * 3 - 1.0, 0.5);
++    const cv::Vec3d moved = g.P(3, 5);
++    guard.resolve({}, true);
++    CHECK(g.P(3, 5) == moved);
++    CHECK(guard.st.reverted_moved == 0);
++}
++
++TEST_CASE("soft term: nearest points ignore lattice neighbours and respect the clearance") {
++    Grid g(16, COLS);
++    for (int i = 0; i < 6; ++i) for (int j = 0; j < COLS; ++j) g.set(i, j, H * j, H * i, 0.0);          // z = 0
++    for (int i = 9; i < 15; ++i) for (int j = 0; j < COLS; ++j) g.set(i, j, H * j, H * (i - 9), 2.0);   // z = 2
++    Params p = on(); p.weight = 1.0; p.clearance = 3.0;
++    Guard guard(p, g.P, g.S);
++    std::array<cv::Vec3d, 4> q;
++    // vertex (10,5) of sheet B: sheet A is 2 voxels away (< 3) and not a lattice neighbour
++    int n = guard.nearest_points(g.P(10, 5), 10, 5, 3.0, 4, q);
++    CHECK(n >= 1);
++    CHECK(std::abs(q[0][2]) < 1e-9);
++    // its own sheet (only 2 rows away: inside soft_k = 3) must not count
++    n = guard.nearest_points(g.P(10, 5), 10, 5, 0.5, 4, q);
++    CHECK(n == 0);
++}
