@@ -91,3 +91,17 @@ RAM/disk guards: `--ram-need-gb` (40), `--ram-floor-gb` (12), `--min-free-gb` (6
 * **Resume report.** Each state file records the planning inputs (`planned_with`: allowed GPUs, `--max-height`, VRAM). On resume with different inputs the run says explicitly whether the pending jobs were KEPT (default) or RE-PLANNED (`--replan-pending-on-resume`; old jobs `cancelled`, `provenance: resume_replan`).
 * **Route A timing.** `--routea-after-first-fit auto|on|off`: auto = Route A (and its multi-GB input fetch) starts only once the first Route B fit is running when the measured link is below `--min-link-mb-s`.
 * **Cards** (`PLAN VRAM:` lines; model 3.97 + 0.00208 GiB/slice, margin 1.5): 4060 Ti 16 -> 4,800 slices; RTX 4090 24 -> 8,600; RTX 5090 32 (31.3 usable) -> 12,400 (a 13,000-slice scroll needs 2 stripes); V100 32 -> 12,600; **RTX PRO 5000 48 (47.0) -> 19,900: whole-scroll fits**; A100 40 -> 16,300; A100/H100 80 -> 35,000+. Beyond the two measured points the model is an extrapolation.
+
+## Track limit (2^24) — LIFTED by default, automatic fallback (2026-10-08, user: "didn't we patch that? ... try, with an automatic fallback")
+* **Origin.** `torch.multinomial` on CUDA refuses more than 2^24 categories (`RuntimeError: number of categories cannot exceed 2^24`); a full-height PHerc0191 pool has
+  22,757,127 tracks. Fixed in `spiral-fitting/tracks.py` by `_multinomial_chunked` (villa b408d54c: exact two-level sampling, no ceiling).
+* **What was stale.** The planner's stripe-height cap (`ladder.tracks_height`), the DETECT-EARLY kill (`box8.py`) and the `multinomial` failure class were written before the fix and
+  kept enforcing the old limit (0191 split 9,100 + 4,100; a >16.7 M-track fit would have been killed although the deployed code samples it correctly).
+* **Now.** `ladder.load_config()` lifts the limit (`limits.multinomial_categories` -> 2^40) when the deployed `spiral-fitting/tracks.py` contains `def _multinomial_chunked`; the plan
+  line `track limit:` says so. `ROUTEB_KEEP_TRACK_LIMIT=1` keeps the old cap. Heights are then `min(span, VRAM model, max-height)`.
+* **Fallback (automatic).** If a fit nevertheless fails with the real error text `cannot exceed 2^24` (classification is STRICT while lifted: other failures that merely pass
+  through `_multinomial_chunked`, e.g. an OOM, keep their own class), the old cap is restored for the REST of the run, the interval is re-covered under it, and it is logged:
+  console `*** TRACK-LIMIT FALLBACK ENGAGED ... ***`, event `track_limit_fallback` in `box8/events.jsonl`, and a marker `<ROUTEB_HOME>/box8/track_limit_fallback.json`
+  (a restart re-engages it before planning).
+* **UNVALIDATED end to end.** No fit over 2^24 tracks has been seen to run to completion in this pipeline; the first one is the validation. The VRAM model (3.97 + 0.00208 GiB/slice) was
+  fitted on pools <= 14.4 M tracks (PHerc0211); a 22.8 M-track fit may need more. An OOM there is handled by the ordinary ladder.

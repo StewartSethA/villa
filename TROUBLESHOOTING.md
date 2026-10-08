@@ -22,7 +22,7 @@ First: read the last 30 lines of the failing stage's log (`routeA_work/logs/`, `
 | `FETCH FAIL ... HTTP 404` on tracks | scroll has no published tracks (846B, 1203, 1218, 1447, 1545, Paris4) | extract tracks first |
 | `fetch: ... size N != server Content-Length` | upstream file replaced | re-run `routeB/tools/make_specs.py`, check `pins.json` |
 | fit log ends in `CUDA out of memory` and the chain says `chunk N exited rc=1` then resumes | flow-grid memory grows with the z span (fix: `model_flow_voxel_resolution` 32, automatic above 6,000 slices) and the per-iteration leak (FINDINGS 30.16) | the chain restarts from the last autosave; if `NO PROGRESS` appears use a narrower `--stripe-width` or `--fit-overrides` |
-| `RuntimeError: number of categories cannot exceed 2^24` | torch.multinomial ceiling on > 16.7 M tracks (PHerc0191 full width) | fixed in `spiral-fitting/tracks.py` (villa b408d54c), present in this branch |
+| `RuntimeError: number of categories cannot exceed 2^24` | torch.multinomial ceiling on > 16.7 M tracks (PHerc0191 full width) | fixed in `spiral-fitting/tracks.py` (villa b408d54c), present in this branch; the planner now LIFTS the cap by default with an automatic fallback (BOX8_NOTES.md "Track limit") |
 | `fit: spiral_outward_sense for X is unknown` | registry had none | pass `--sense CW|ACW` after an A/B |
 | `render: unusable render ... (no CT chunks present for this region?)` | the chunk fetch got 404s (masked/absent chunks) or the tile lies outside the scan | check `assets/.fetched/<S>:volume:chunks:*.json` `absent` count |
 | `cuModuleLoadData failed with 222` (render) | NVRTC newer than the driver supports | lock pins `nvidia-cuda-nvrtc-cu12==12.6.*`; do not upgrade |

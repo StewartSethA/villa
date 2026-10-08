@@ -2,7 +2,7 @@
 reading the scroll specs; unit-tested with fake GPUs / disks / RAM (routeB/tests/test_planner.py).  `routeB_run.sh --mode box8 --dry-run` prints it.
 
 WHAT IT DECIDES
-  1. stripe height per scroll   = min(span, VRAM model (ladder.computed_height: peak GiB ~ 3.97 + 0.00208 x slices), 2^24-track limit, --max-height)
+  1. stripe height per scroll   = min(span, VRAM model (ladder.computed_height: peak GiB ~ 3.97 + 0.00208 x slices), 2^24-track limit [lifted by default when tracks.py has _multinomial_chunked; automatic fallback], --max-height)
   2. GPU schedule               = ONE GPU PER SCROLL, SMALLEST FIRST (SPT: most scrolls finished per dollar), every GPU busy; once fewer unstarted jobs remain than
                                   GPUs, the largest remaining scrolls are split into z-STRIPES across the idle GPUs (LPT tail balancing; the split is accepted only
                                   if it shortens the simulated makespan).  The parallel unit is the z-stripe: fit_spiral is single-GPU.

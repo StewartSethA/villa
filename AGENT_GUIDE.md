@@ -79,7 +79,7 @@ Flow, not state: compare `out/STATUS.json` job counts across two reads a few min
 **Failure catalogue (class -> what the scheduler does -> what you do).**
 | class (from fit.log / exit) | scheduler | you |
 |---|---|---|
-| `multinomial` (2^24 tracks; detected in ~5 min from `loaded N tracks`) | kills, re-covers at the track-limit height (never a memory retry) | nothing; check `descended_to` in the state |
+| `multinomial` (2^24 tracks; detected in ~5 min from `loaded N tracks`) | [only when the limit is NOT lifted, or as the automatic fallback] kills, re-covers at the track-limit height (never a memory retry) | nothing; check `descended_to` in the state |
 | `oom` (CUDA) | one memory-lean retry (fewer tracks/step), then 0.75x height descent, floor 1,000 slices | if it reaches the floor the scroll is `failed` with reason: smaller `--max-height`, or a bigger card |
 | `host_oom` (RSS guard / SIGKILL) | as oom | lower concurrent fits: raise `--ram-need-gb` |
 | `stall` (no log growth 40 min) | kill, resume once, then descend | `nvidia-smi`, `dmesg`, disk full? |

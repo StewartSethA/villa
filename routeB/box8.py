@@ -784,7 +784,7 @@ class Scheduler:
         elif rc == 0:
             att["class"] = "ok"
         else:
-            att["class"] = L.classify(txt, rc, stalled, host_oom)
+            att["class"] = L.classify(txt, rc, stalled, host_oom, strict_multinomial=bool((self.cfg.get("_track_limit") or {}).get("lifted")))
             att["log_tail"] = txt[-600:]
         j["attempts"].append(att)
         return att["class"], att
@@ -835,6 +835,19 @@ class Scheduler:
             else:
                 self.gov.fit_end(j["id"], False)
                 d = L.decide(self.cfg, j, cls, sc["shell"], j.get("dbm_bytes"))
+                _tl = self.cfg.get("_track_limit") or {}
+                if _tl.get("new_fallback"):
+                    _tl["new_fallback"] = False
+                    msg = (f"TRACK-LIMIT FALLBACK ENGAGED by {j['id']}: with the 2^24 ceiling LIFTED the fit still raised 'number of categories cannot exceed 2^24' "
+                           f"({j.get('n_loaded')} tracks loaded). The old cap (2^24 tracks per stripe) is back in force for the REST of this run; this interval is "
+                           f"re-covered under it. The chunked multinomial in tracks.py did NOT protect this fit: report it.")
+                    say("*** " + msg + " ***", "box8")
+                    self.ev("track_limit_fallback", job=j["id"], n_loaded=j.get("n_loaded"))
+                    try:
+                        (self.H / "box8").mkdir(parents=True, exist_ok=True)
+                        (self.H / "box8" / "track_limit_fallback.json").write_text(json.dumps({"job": j["id"], "n_loaded": j.get("n_loaded"), "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "msg": msg}, indent=1))
+                    except OSError as e:
+                        say(f"cannot write the track-limit fallback marker: {e}", "box8")
                 self.ev("failure", job=j["id"], cls=cls, decision=d["action"], why=d["why"], tail=att.get("log_tail", "")[-300:])
                 say(f"{j['id']}: FAILED class={cls} -> {d['action'].upper()}: {d['why']}", "box8")
                 if d["action"] == "retry":
@@ -1724,6 +1737,11 @@ def main(argv=None) -> int:
         a.no_plan = True                                 # a smoke is not priced by the full-fit planner
     legacy = bool(a.legacy_ladder or a.ladder)
     cfg = L.load_config(a.ladder_config, a.ladder)
+    _mk = home() / "box8" / "track_limit_fallback.json"
+    if L.restore_fallback_marker(cfg, _mk):
+        say(f"TRACK-LIMIT FALLBACK restored from {_mk}: the 2^24 cap stays in force on this restart (an earlier fit hit the ceiling even with it lifted)", "box8")
+    _tl = cfg.get("_track_limit") or {}
+    say("track limit: " + _tl.get("why", "unknown") + (" Fallback to the old cap is ARMED (automatic on the first 'cannot exceed 2^24' failure; logged + persisted)." if _tl.get("lifted") and not _tl.get("fallback_engaged") else ""), "box8")
     auto_speed(a)
     cfg["gpu_speed"] = a.gpu_speed
     if not legacy:

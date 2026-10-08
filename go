@@ -13,7 +13,7 @@
 #      ROUTEB_PLAN_GB (GB the link check assumes, default 40)  ROUTEB_NO_WATCH=1  BUDGET_BOX_START
 # No set -e (repo convention): every step is checked and fails LOUD.
 REPO=${ROUTEB_REPO:-https://github.com/StewartSethA/villa.git}
-BRANCH=${ROUTEB_BRANCH:-routeAB-deploy-v5}
+BRANCH=${ROUTEB_BRANCH:-routeAB-deploy-v5.1}
 DEST=${ROUTEB_DIR:-$HOME/routeAB}
 T_START=$(date +%s)
 DATA_BASE=https://dl.ash2txt.org/datasets/spiral_datasets/PHerc0826/20250821151701/tracks

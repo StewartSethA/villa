@@ -50,13 +50,43 @@ def load_config(path: Path | str | None = None, ladder: str | list | None = None
     cfg["_plan"] = {}
     if pd and (p.parent / pd).exists():
         cfg["_plan"] = json.loads((p.parent / pd).read_text())
+    cfg["_track_limit"] = lift_track_limit_if_fixed(cfg)
     return cfg
+
+
+TRACKS_PY = ROOT / "spiral-fitting" / "tracks.py"
+LIFTED_CATEGORIES = 2 ** 40          # "no ceiling": the chunked multinomial has none; kept finite so the arithmetic below still works
+
+
+def lift_track_limit_if_fixed(cfg: dict, tracks_py: Path | str | None = None, environ: dict | None = None) -> dict:
+    """The 2^24-category ceiling of torch.multinomial was FIXED in spiral-fitting/tracks.py (`_multinomial_chunked`, villa b408d54c: exact two-level
+    decomposition, no ceiling).  The planner's stripe-height cap, the DETECT-EARLY kill and the 'multinomial' failure class were written before that
+    fix and kept enforcing the old limit (PHerc0191 was split 9,100 + 4,100 for no reason, and a >16.7 M-track fit would be KILLED although the
+    deployed code samples it correctly).  So: when the deployed tracks.py contains the fix, the limit is lifted, loudly.  ROUTEB_KEEP_TRACK_LIMIT=1
+    keeps the old limit.  UNVALIDATED END TO END: no >2^24-track fit has yet been seen to run to completion on a GPU in THIS pipeline; the first
+    one is the validation (watch `loaded N tracks` then the first sampling step)."""
+    import os
+    env = os.environ if environ is None else environ
+    tp = Path(tracks_py or TRACKS_PY)
+    lim = cfg.get("limits", {}).get("multinomial_categories")
+    if env.get("ROUTEB_KEEP_TRACK_LIMIT") == "1":
+        return {"lifted": False, "why": "ROUTEB_KEEP_TRACK_LIMIT=1: the 2^24-track limit stays in force", "limit": lim}
+    try:
+        fixed = "def _multinomial_chunked" in tp.read_text()
+    except OSError as e:
+        return {"lifted": False, "why": f"cannot read {tp} ({e}): the 2^24-track limit stays in force (announced, not silent)", "limit": lim}
+    if not fixed:
+        return {"lifted": False, "why": f"{tp.name} has no _multinomial_chunked: the 2^24-track limit stays in force", "limit": lim}
+    cfg.setdefault("limits", {})["multinomial_categories"] = LIFTED_CATEGORIES
+    return {"lifted": True, "limit": LIFTED_CATEGORIES, "was": lim,
+            "why": "tracks.py has _multinomial_chunked (villa b408d54c): the 2^24-track limit is LIFTED (stripe heights are no longer capped by it, DETECT-EARLY will not kill "
+                   ">16.7 M-track fits). UNVALIDATED end to end: the first fit over 2^24 tracks is the validation."}
 
 
 PLAN_KEY = {"full": "full", "w13000": "13000", "q4500": "4500", "sw2800": "2800"}
 
 
-def classify(log_tail: str, rc: int | None, stalled: bool = False, host_oom: bool = False) -> str:
+def classify(log_tail: str, rc: int | None, stalled: bool = False, host_oom: bool = False, strict_multinomial: bool = False) -> str:
     """Order matters: a multinomial error is checked before OOM (its traceback can mention allocation), env before generic."""
     if stalled:
         return "stall"
@@ -64,6 +94,10 @@ def classify(log_tail: str, rc: int | None, stalled: bool = False, host_oom: boo
         return "host_oom"
     for name, rx in PATTERNS:
         if rx.search(log_tail or ""):
+            # strict_multinomial (the 2^24 limit is LIFTED): only the real error text counts.  The bare word "multinomial" also appears in tracebacks of
+            # OTHER failures that pass through `_multinomial_chunked` (an OOM, say), which must keep their own class.
+            if name == "multinomial" and strict_multinomial and not re.search(r"cannot exceed 2\^24", log_tail or ""):
+                continue
             return name
     return "unknown"
 
@@ -167,6 +201,8 @@ def decide(cfg: dict, job: dict, cls: str, shell: int, dbm_bytes: float | None =
     job["lineage_attempts"] += 1
     if job["lineage_attempts"] >= a["max_attempts_per_interval"]:
         return {"action": "fail", "why": f"attempt budget {a['max_attempts_per_interval']} spent on this interval (last class {cls})"}
+    if cls == "multinomial":
+        engage_track_limit_fallback(cfg, job)       # no-op unless the limit was lifted and this is the first overflow
     if cls in ("env", "tiles"):
         return {"action": "fail", "why": f"{cls} fault is terminal: descending the ladder cannot fix it"}
     if cls == "unknown":
@@ -343,3 +379,34 @@ def card_table(margin_gib: float = 1.5) -> list[tuple]:
         h = computed_height(usable, margin_gib)
         out.append((name, nominal, usable, h, max(1, -(-FULL_SPAN // h)) if h < FULL_SPAN else 1))
     return out
+
+
+ORIG_CATEGORIES = 2 ** 24
+
+
+def engage_track_limit_fallback(cfg: dict, job: dict | None = None) -> bool:
+    """The lifted 2^24-track limit was tried and a fit really hit `number of categories cannot exceed 2^24`: restore the old cap for the REST of the run
+    (every later height decision and the DETECT-EARLY kill use it again).  Returns True the first time (caller logs + persists), else False."""
+    tl = cfg.get("_track_limit") or {}
+    if not tl.get("lifted") or tl.get("fallback_engaged"):
+        return False
+    cfg.setdefault("limits", {})["multinomial_categories"] = ORIG_CATEGORIES
+    tl["fallback_engaged"] = True
+    tl["fallback_job"] = (job or {}).get("id")
+    tl["fallback_n_loaded"] = (job or {}).get("n_loaded")
+    tl["new_fallback"] = True
+    cfg["_track_limit"] = tl
+    return True
+
+
+def restore_fallback_marker(cfg: dict, marker: Path | str) -> bool:
+    """A restart must remember that the fallback was already needed: the marker file written by box8 re-engages it before planning."""
+    try:
+        d = json.loads(Path(marker).read_text())
+    except (OSError, ValueError):
+        return False
+    if engage_track_limit_fallback(cfg, {"id": d.get("job")}):
+        cfg["_track_limit"]["new_fallback"] = False
+        cfg["_track_limit"]["restored_from"] = str(marker)
+        return True
+    return False

@@ -77,8 +77,24 @@ def meminfo() -> tuple[float, float]:
     return d.get("MemAvailable", 0.0), d.get("MemTotal", 0.0)
 
 
-def pull_lines(home: Path, env=None) -> list[str]:
-    """Copy-paste commands for the USER'S machine, every line <= 100 chars, no heredoc, no continuation backslash.  Address from SSH_CONNECTION / VAST_* / RUNPOD_* else placeholders."""
+def _repo_raw_base() -> str:
+    """raw.githubusercontent base of THIS checkout's branch (so the user's machine can curl pull_box8.py), placeholders if unknown."""
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    def g(*a):
+        try:
+            return subprocess.run(["git", "-C", str(root), *a], capture_output=True, text=True, timeout=5).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return ""
+    url, br = g("config", "--get", "remote.origin.url"), g("rev-parse", "--abbrev-ref", "HEAD")
+    m = re.search(r"github\.com[:/]+([^/]+/[^/.]+?)(?:\.git)?$", url)
+    return f"https://raw.githubusercontent.com/{m.group(1)}/{br}" if (m and br and br != "HEAD") else "https://raw.githubusercontent.com/<OWNER>/<REPO>/<BRANCH>"
+
+
+def pull_lines(home: Path, env=None, full: bool = False) -> list[str]:
+    """Copy-paste commands for the USER'S machine, every line <= 100 chars, no heredoc, no continuation backslash.  Address from SSH_CONNECTION / VAST_* /
+    RUNPOD_* else placeholders.  Lines 0-1 are always H= and P= (the DIRECT address).  full=True adds: fetch pull_box8.py from the branch, the verified pull
+    command, the vast.ai SSH-PROXY variant (instance id from VAST_CONTAINERLABEL -> `vastai ssh-url <id>`), and a plain-rsync fallback."""
     e = os.environ if env is None else env
     ip, port = "<BOX-IP>", "<PORT>"
     if e.get("SSH_CONNECTION"):
@@ -92,9 +108,27 @@ def pull_lines(home: Path, env=None) -> list[str]:
         ip = e["RUNPOD_PUBLIC_IP"]
         port = e.get("RUNPOD_TCP_PORT_22") or port
     user = "root" if (e.get("USER") in (None, "root") or os.geteuid() == 0) else e.get("USER", "root")
-    return [f"H={user}@{ip}", f"P={port}", f"RH={home}",
-            'while :;do rsync -aH --partial --append-verify -e "ssh -p $P" $H:$RH/out/ out/;sleep 60;done',
-            "./routeB_pull.sh --host $H --port $P --remote-home $RH --dest out --final"]
+    base = [f"H={user}@{ip}", f"P={port}", f"RH={home}"]
+    if not full:
+        return base + ['while :;do rsync -aH --partial --append-verify -e "ssh -p $P" $H:$RH/out/ out/;sleep 60;done',
+                       "./routeB_pull.sh --host $H --port $P --remote-home $RH --dest out --final"]
+    label = e.get("VAST_CONTAINERLABEL", "")
+    iid = label.split(".", 1)[1] if label.startswith("C.") else (e.get("CONTAINER_ID", "") or "<INSTANCE-ID>")
+    pull = "python3 pull_box8.py --host $H --port $P --remote-home $RH --dest out --poll 120 --final"
+    return base + [
+        "# A) DIRECT.  On YOUR machine (needs ssh + rsync + python3; verifies md5, marks units pulled, resumable):",
+        "B=" + _repo_raw_base(),
+        "curl -fsSL $B/pull_box8.py -o pull_box8.py",
+        pull,
+        "# B) via the vast.ai SSH PROXY (if the direct port is blocked).  Get its host/port from the instance 'Connect' dialog,",
+        f"#    or with the vast CLI:  vastai ssh-url {iid}   (prints ssh://root@sshN.vast.ai:PORT).  Then:",
+        "H=root@sshN.vast.ai",
+        "P=<PROXY-PORT>",
+        pull,
+        "# C) no script at all (checksum afterwards with: python3 pull_box8.py --verify-only --dest out):",
+        'while :;do rsync -aH --partial --append-verify -e "ssh -p $P" $H:$RH/out/ out/;sleep 60;done',
+        "# add  -i ~/.ssh/<your key>  to the ssh/pull commands if you use a key file (both pull_box8.py -i and rsync -e 'ssh -i ..')",
+    ]
 
 
 def newest_area(sd: Path):
@@ -565,6 +599,7 @@ def main(argv=None) -> int:
     ap.add_argument("--plain", action="store_true")
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--ctl-status", action="store_true")
+    ap.add_argument("--pull", action="store_true", help="print the full pull block for the USER'S machine (direct + vast.ai proxy) and exit")
     ap.add_argument("--brief", action="store_true", help="compact AND without the event stream (<= 28 lines)")
     ap.add_argument("--full", action="store_true", help="the long dashboard / the long diagnostic snapshot (default is ONE SCREEN: <= 40 lines x 100 columns)")
     a = ap.parse_args(argv)
