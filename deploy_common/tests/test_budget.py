@@ -32,7 +32,7 @@ def test_spent_formula(tmp_path):
 
 
 def test_soft_cap_stops_new_fits_and_running_finish(tmp_path):
-    g, c = mk(tmp_path)
+    g, c = mk(tmp_path, max_run_hours=0)       # isolates the money cap from the 12 h default run limit
     launched = []
     for i in range(8):
         ok, _ = g.may_launch(f"f{i}", expected_h=5.0, payload_gb=1.0)
@@ -100,3 +100,34 @@ def test_scaled_clock():
     import time as _t
     _t.sleep(0.05)
     assert 100 < c() < 400                           # 0.05 s real = ~180 simulated s
+
+
+def test_max_run_hours_refuses_launch_that_would_end_late(tmp_path):
+    g, c = mk(tmp_path, max_run_hours=5.0, soft_usd=1000.0, hard_usd=2000.0)
+    c.adv_h(3)
+    ok, why = g.may_launch("a", 1.5)
+    assert ok, why
+    ok, why = g.may_launch("b", 2.5)          # 3 + 2.5 = 5.5 h > 5 h
+    assert not ok and "max run time" in why
+    assert g.status()["max_run_hours"] == 5.0
+
+
+def test_max_run_hours_zero_is_unlimited(tmp_path):
+    g, c = mk(tmp_path, max_run_hours=0, soft_usd=1e6, hard_usd=2e6)
+    c.adv_h(100)
+    assert g.may_launch("a", 50)[0]
+
+
+def test_rates_file_env_flag_precedence_and_describe(tmp_path, monkeypatch):
+    f = tmp_path / "b.json"
+    f.write_text(json.dumps({"hour_usd": 7.0, "max_run_hours": 9, "swap_directions": True}))
+    kw = B.Rates.from_file(f)
+    r = B.Rates.from_env(**kw)
+    assert r.hour_usd == 7.0 and r.max_run_hours == 9 and (r.ingress_per_tb, r.egress_per_tb) == (4.0, 2.7)
+    monkeypatch.setenv("BUDGET_HOUR_USD", "8")
+    assert B.Rates.from_env(**B.Rates.from_file(f)).hour_usd == 8.0
+    assert "max run time 9" in r.describe()
+    f.write_text(json.dumps({"bogus": 1}))
+    import pytest
+    with pytest.raises(ValueError):
+        B.Rates.from_file(f)

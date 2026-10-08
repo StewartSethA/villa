@@ -663,6 +663,8 @@ def build_parser():
     g.add_argument("--ingress-per-tb", type=float, default=None, help="box DOWNLOADS from the web, USD/TB (default 2.70)")
     g.add_argument("--egress-per-tb", type=float, default=None, help="box UPLOADS to us (our payload pull), USD/TB (default 4.00)")
     g.add_argument("--swap-directions", action="store_true")
+    g.add_argument("--max-run-hours", type=float, default=None, help="wall-clock hours since rental start; no fit is launched whose projected end passes it, running fits wind down (default 12; 0 = unlimited)")
+    g.add_argument("--budget-config", default=None, help="json file with any of hour_usd, soft_usd, hard_usd, max_run_hours, ingress_per_tb, egress_per_tb, swap_directions (precedence: defaults < file < BUDGET_* env < flags)")
     g.add_argument("--box-start", type=float, default=None, help="epoch seconds when the rental started (default: first ledger write)")
     g.add_argument("--clock-scale", type=float, default=None, help="REHEARSAL: simulated seconds per real second (3600 = 1 s is 1 billed hour)")
     return ap
@@ -684,8 +686,13 @@ def main(argv=None) -> int:
     B = _budget()
     if a.swap_directions:
         os.environ["BUDGET_SWAP_DIRECTIONS"] = "1"
-    rates = B.Rates.from_env(**{k: v for k, v in dict(hour_usd=a.hour_usd, ingress_per_tb=a.ingress_per_tb, egress_per_tb=a.egress_per_tb,
-                                                      soft_usd=a.soft, hard_usd=a.hard).items() if v is not None})
+    kw = B.Rates.from_file(a.budget_config) if a.budget_config else {}
+    kw.update({k: v for k, v in dict(hour_usd=a.hour_usd, ingress_per_tb=a.ingress_per_tb, egress_per_tb=a.egress_per_tb,
+                                     soft_usd=a.soft, hard_usd=a.hard, max_run_hours=a.max_run_hours).items() if v is not None})
+    if a.swap_directions:
+        kw["swap_directions"] = True
+    rates = B.Rates.from_env(**kw)
+    say(rates.describe(), "budget")
     H = home()
     clock = B.ScaledClock(a.clock_scale) if a.clock_scale else time.time
     import tempfile

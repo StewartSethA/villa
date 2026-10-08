@@ -47,15 +47,32 @@ class Rates:
     soft_usd: float = 45.0
     hard_usd: float = 49.0
     overrun_frac: float = 0.25
+    max_run_hours: float = 12.0            # wall-clock limit since rental start: no launch whose projected end passes it; 0 = no limit
+
+    @classmethod
+    def from_file(cls, path) -> dict:
+        """Settings from ONE json file ({"hour_usd":..,"soft_usd":..,"hard_usd":..,"max_run_hours":..,"ingress_per_tb":..,"egress_per_tb":..,
+        "swap_directions":bool}); precedence: defaults < file < BUDGET_* env < CLI flags."""
+        d = json.loads(Path(path).read_text())
+        bad = set(d) - set(cls.__dataclass_fields__) - {"swap_directions", "_doc"}
+        if bad:
+            raise ValueError(f"unknown budget setting(s) {sorted(bad)} in {path}")
+        return {k: v for k, v in d.items() if k != "_doc"}
+
+    def describe(self) -> str:
+        return (f"BUDGET SETTINGS: machine ${self.hour_usd}/h | soft stop ${self.soft_usd} | hard stop ${self.hard_usd} | max run time "
+                f"{self.max_run_hours if self.max_run_hours else 'unlimited'} h | ingress (box downloads) ${self.ingress_per_tb}/TB | "
+                f"egress (box uploads) ${self.egress_per_tb}/TB | overrun assumption {self.overrun_frac:.0%}")
 
     @classmethod
     def from_env(cls, **kw) -> "Rates":
+        swap = kw.pop("swap_directions", False)
         r = cls(**kw)
         for env, attr in (("BUDGET_HOUR_USD", "hour_usd"), ("BUDGET_INGRESS_PER_TB", "ingress_per_tb"), ("BUDGET_EGRESS_PER_TB", "egress_per_tb"),
-                          ("BUDGET_SOFT_USD", "soft_usd"), ("BUDGET_HARD_USD", "hard_usd")):
+                          ("BUDGET_SOFT_USD", "soft_usd"), ("BUDGET_HARD_USD", "hard_usd"), ("BUDGET_MAX_RUN_HOURS", "max_run_hours")):
             if os.environ.get(env):
                 setattr(r, attr, float(os.environ[env]))
-        if os.environ.get("BUDGET_SWAP_DIRECTIONS") == "1":
+        if swap or os.environ.get("BUDGET_SWAP_DIRECTIONS") == "1":
             r.ingress_per_tb, r.egress_per_tb = r.egress_per_tb, r.ingress_per_tb
         if r.hard_usd < r.soft_usd:
             raise ValueError(f"hard cap {r.hard_usd} below soft cap {r.soft_usd}")
@@ -178,9 +195,12 @@ class Governor:
         """Decision for a candidate fit; always logged (a refusal is announced, never silent)."""
         with self.lock:
             p = self.projected(expected_h, payload_gb, ingress_gb)
-            ok = p["projected_total"] <= self.r.soft_usd and not self.hard_stop()
+            end_h = self.hours() + p["horizon_h"]
+            late = bool(self.r.max_run_hours) and end_h > self.r.max_run_hours
+            ok = p["projected_total"] <= self.r.soft_usd and not self.hard_stop() and not late
             why = (f"{'LAUNCH' if ok else 'REFUSE'} {fid}: projected ${p['projected_total']:.2f} (spent ${p['spent']:.2f} + horizon {p['horizon_h']:.2f} h x "
-                   f"${self.r.hour_usd}/h + payload {p['payload_gb']:.1f} GB egress) vs soft cap ${self.r.soft_usd:.2f}")
+                   f"${self.r.hour_usd}/h + payload {p['payload_gb']:.1f} GB egress) vs soft cap ${self.r.soft_usd:.2f}"
+                   + (f"; projected end {end_h:.2f} h > max run time {self.r.max_run_hours} h" if late else ""))
             self._log("decision", fid=fid, ok=ok, why=why, **p)
             return ok, why
 
@@ -193,8 +213,8 @@ class Governor:
 
     def status(self) -> dict:
         p = self.projected()
-        return {**p, "hours": self.hours(), "ingress_gb": self.ingress_gb, "egress_gb": self.egress_gb, "soft": self.r.soft_usd, "hard": self.r.hard_usd,
-                "hard_stop": self.hard_stop()}
+        return {**p, "hours": self.hours(), "ingress_gb": self.ingress_gb, "egress_gb": self.egress_gb, "soft": self.r.soft_usd, "hard": self.r.hard_usd, "max_run_hours": self.r.max_run_hours,
+                "past_max_run": bool(self.r.max_run_hours) and self.hours() >= self.r.max_run_hours, "hard_stop": self.hard_stop()}
 
 
 class ScaledClock:

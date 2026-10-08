@@ -32,3 +32,16 @@ Total expected < 1 TB; 12 TB leaves a large margin, so the only disk guard is `-
 
 ## What box8 does NOT do
 No flatten/render/ink (that is the shakedown's stage 3 and the fleet's job), no D6 validation, recto only, no vacuum filter; sense/shell are the registry's (scrolls whose sense is unknown are SKIPPED with the reason). Expected-hour figures are EXTRAPOLATED (one converged full fit, n = 1); the 2800-slice factor is unmeasured.
+
+## Governor settings (all configurable; printed at start as "BUDGET SETTINGS: ...")
+Precedence: built-in defaults < `--budget-config FILE.json` < `BUDGET_*` env < CLI flags.
+| setting | default | CLI flag | env | file key |
+|---|---|---|---|---|
+| machine $/h | 2.33 (8xV100) | `--hour-usd` | BUDGET_HOUR_USD | hour_usd |
+| soft stop (no new fits when the projection reaches it) | $45 | `--soft` | BUDGET_SOFT_USD | soft_usd |
+| hard stop | $49 | `--hard` | BUDGET_HARD_USD | hard_usd |
+| MAX RUN TIME (h since rental start; no launch whose projected end passes it, running fits finish, then the run winds down; 0 = unlimited) | 12 | `--max-run-hours` | BUDGET_MAX_RUN_HOURS | max_run_hours |
+| ingress, box downloads from the web, $/TB | 2.70 | `--ingress-per-tb` | BUDGET_INGRESS_PER_TB | ingress_per_tb |
+| egress, box uploads to us, $/TB | 4.00 | `--egress-per-tb` | BUDGET_EGRESS_PER_TB | egress_per_tb |
+| swap the two directions | off | `--swap-directions` | BUDGET_SWAP_DIRECTIONS=1 | swap_directions |
+RAM/disk guards: `--ram-need-gb` (40), `--ram-floor-gb` (12), `--min-free-gb` (200). Max run time is a launch gate, not a kill: a fit already running is never killed for it.
