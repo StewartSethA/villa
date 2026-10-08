@@ -327,3 +327,19 @@ def jobs_for_height(cfg: dict, scroll: str, shell: int, z0: int, z1: int, height
     if height >= z1 - z0:
         return plan(cfg, scroll, shell, z0, z1, start=0)
     return plan(cfg, scroll, shell, z0, z1, start=dyn_rung(cfg, height, overlap))
+
+
+# ---------------------------------------------------------------- reference cards: usable VRAM and the height model's max stripe
+# usable = what torch sees after the driver/context (nvidia-smi memory.total is a little larger); RTX 5090 / 4090 / A100 / H100 figures are the vendor sizes minus the usual
+# ~0.4-0.7 GiB (5090 31.3 as given by the coordinator's rental listing); 4060 Ti 15.58 is MEASURED here.  The height is the MODEL's (3.97 + 0.00208 GiB per slice, margin 1.5 GiB),
+# which was fitted on two points (9.8 GiB @ 2,800 slices on a 4060 Ti, ~31 GiB @ 13,000 on a V100 32 GB): beyond them it is an extrapolation.
+CARDS = [("RTX 4060 Ti 16 GB", 16, 15.58), ("RTX 4090 24 GB", 24, 23.5), ("RTX 5090 32 GB", 32, 31.3), ("V100 32 GB", 32, 31.7), ("RTX PRO 5000 48 GB", 48, 47.0),
+         ("A100 40 GB", 40, 39.4), ("A100 80 GB", 80, 79.2), ("H100 80 GB", 80, 79.6)]
+
+
+def card_table(margin_gib: float = 1.5) -> list[tuple]:
+    out = []
+    for name, nominal, usable in CARDS:
+        h = computed_height(usable, margin_gib)
+        out.append((name, nominal, usable, h, max(1, -(-FULL_SPAN // h)) if h < FULL_SPAN else 1))
+    return out

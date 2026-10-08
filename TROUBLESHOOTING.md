@@ -46,3 +46,12 @@ First: read the last 30 lines of the failing stage's log (`routeA_work/logs/`, `
 | `!!! DOWNLOAD TIME DOMINATES` in the plan | staging the inputs takes > 50 % of the compute wall at this link/object rate; GPUs beyond K wait for data and are billed | follow the printed RECOMMENDATION: `routeB_ctl.sh gpus <fewer>`, a faster-ingress box, or a z window; `--link-mb-s` to plan with a known rate |
 | `FETCH RATE CHANGE: ... SLOWER THAN PLANNED` | a real fetch took > 1.5x its plan | same; the re-plan that follows shows what still fits |
 | `link probe FAILED` | the probe URL is unreachable from the box | the quoted 107 MB/s stays in force and is labelled QUOTED; fix the network or pass `--link-mb-s` |
+| `DESTROY THIS BOX, or re-run with --accept-slow-link` (exit 5) | data-host ingress < `--min-link-mb-s` (20 MB/s) | read the diagnosis line: BOX LINK slow -> destroy/re-rent; SOURCE slow -> try later or accept; `--accept-slow-link` continues with fewer GPUs |
+| `ALARM [idle:gpuN] ... waiting for DATA` | GPU N idle > 3 min, its scroll is still downloading | expected on a slow link; `routeB_ctl.sh gpus <fewer>` stops paying for waiting GPUs |
+| `ALARM [fetch_stall]` | < 50 KB/s ingress for 3 min while fetching | link down or source throttling: `routeB_watch.sh --once`, re-probe shows in `box8/link/trend.jsonl` |
+| tmux session `routeb` already exists | the bootstrap was run twice | it will NOT start a second run; `bash ~/routeAB/routeB_watch.sh` or `tmux attach -t routeb` |
+| dashboard empty / `box8 not started yet` | the env is still building (first minutes) or ROUTEB_HOME differs | `cat ~/.routeb_home`; `tmux attach -t routeb` for the raw console |
+| `GPU SMOKE TEST FAILED` / `no kernel image for sm_120` | this torch build has no kernels for the card (Blackwell needs cu128/cu129) | `--torch-cuda cu128` (auto-selected for compute capability >= 12 or driver CUDA >= 12.8); read `box8/gpusmoke.json` |
+| `FILL-IDLE limited: N idle GPU(s) stay idle` | no pending job can be split into stripes >= `--fill-min-height` | expected; they start when the next scroll arrives; lower `--fill-min-height` only knowingly |
+| `RESUME <scroll>: planning inputs CHANGED ... KEPT` | resumed with another `--gpus` / `--max-height` / VRAM | add `--replan-pending-on-resume` to re-plan the pending jobs |
+| `prefetch handed over` shows few GB | the env built quickly or the link is slow | normal; the scheduler continues the same downloads |

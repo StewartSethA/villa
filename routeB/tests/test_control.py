@@ -325,7 +325,8 @@ def test_replan_prints_allowed_of_total_and_wall(tmp_path, monkeypatch):
     assert "allowed 3 of 8 GPU(s)" in txt and ">= " in txt and "h wall on the allowed set" in txt
 
 
-def test_link_probe_override_failure_and_success(monkeypatch, capsys):
+def test_link_probe_override_failure_and_success(monkeypatch, capsys, tmp_path):
+    monkeypatch.setenv("ROUTEB_HOME", str(tmp_path))
     host = P.Host([P.Gpu("0", 40.0)])
     a = B8.build_parser().parse_args(["--scrolls", "PHerc0211"])
     monkeypatch.setattr(B8, "LINK_FN", lambda url: (42.0, "64 MB in 1.5 s over 8 connections"))

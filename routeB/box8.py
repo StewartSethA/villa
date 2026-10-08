@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+import inspect
 import json
 import os
 import re
@@ -170,6 +171,14 @@ class Scheduler:
         self.gpu_mem_fn = None                           # tests: gpu -> memory.used MiB
         self._mem_cache = (0.0, {})
         self.priority: list[str] = []
+        self.alarms: dict[str, dict] = {}
+        self.idle_since: dict[str, float] = {}
+        self.rx_hist: list[tuple[float, int]] = []
+        self.rx_fn = None                                # tests: () -> cumulative rx bytes
+        self.link_base: float | None = None
+        self.link_state = "ok"
+        self.link_probe_fn = None                        # tests: () -> measurement dict
+        self.last_shrink = 0.0
         self.replan_log: list[str] = []
         self._warned_unknown_gpus: set[str] = set()
         self.disk_fn = (lambda: (10e12, 10e12)) if a.fake_gpus else real_disk_fn(self.H)
@@ -181,6 +190,10 @@ class Scheduler:
         self.procs: dict[str, subprocess.Popen] = {}
         self.stop_reason: str | None = None
         self.fetch_fn = fetch_fn or self._fetch_real
+        try:
+            self.stripe_mode = (not a.no_stripe_staging) and len(inspect.signature(self.fetch_fn).parameters) >= 3
+        except (TypeError, ValueError):
+            self.stripe_mode = False
         self.job_cmd = job_cmd
         self.refused_announced: set[str] = set()
         self.gpus: list[str] = []
@@ -209,13 +222,20 @@ class Scheduler:
         ok = [j for j in js if j["status"] == "done"]
         atomic_json(self.D / "state" / f"{scroll}.json", {
             "scroll": scroll, "shell": sc["shell"], "fetched": sc["fetched"], "fetch_failed": sc.get("fetch_failed"), "finalized": sc.get("finalized"),
-            "rung_succeeded": {j["tag"]: j["rung_name"] for j in ok}, "jobs": js})
+            "rung_succeeded": {j["tag"]: j["rung_name"] for j in ok}, "planned_with": self.planned_with(), "jobs": js})
+
+    def planned_with(self) -> dict:
+        """The planning inputs recorded in each state file: a resume compares them with the current run and says what it did with the pending jobs."""
+        gp = sorted(self.allowed_init if self.allowed_init is not None else self.gpus, key=str)
+        return {"gpus": gp, "max_height": getattr(self.a, "max_height", None), "vram": round(self.host.min_vram, 1) if self.host else None}
 
     def load_state(self, scroll: str) -> bool:
         p = self.D / "state" / f"{scroll}.json"
         if not p.exists():
             return False
         st = json.loads(p.read_text())
+        self._resumed_with = getattr(self, "_resumed_with", {})
+        self._resumed_with[scroll] = st.get("planned_with")
         self.scrolls[scroll].update(fetched=st.get("fetched", False), finalized=None)
         for j in st["jobs"]:
             if j["status"] in ("running", "deferred", "hard_stopped"):
@@ -248,6 +268,7 @@ class Scheduler:
         sc = {"fetched": False, "fetching": False, "shell": int(sp["shell_outer_winding_idx"]), "finalized": None}
         self.scrolls[scroll] = sc
         if self.load_state(scroll):
+            self._resume_report(scroll)
             return
         dbm = sum(v for k, v in sp["tracks"]["files"].items() if k.endswith(".dbm"))
         if self.cfg.get("dynamic") and not first_rung:
@@ -269,6 +290,44 @@ class Scheduler:
         self.ev("plan", scroll=scroll, rung=self.cfg["rungs"][start]["name"], why=why, jobs=[j["id"] for j in jobs])
         self.save(scroll)
 
+    def _resume_report(self, scroll: str):
+        """A resumed scroll keeps its old jobs: say so, and say it LOUDLY when --gpus / --max-height / VRAM differ from the run that planned them."""
+        pend = [j for j in self.jobs.values() if j["scroll"] == scroll and j["status"] == "pending" and not j["attempts"]]
+        old, now = self._resumed_with.get(scroll), self.planned_with()
+        if old is None:
+            say(f"RESUME {scroll}: the state file has no planning record (older build): {len(pend)} pending job(s) KEPT as planned then", "resume")
+            return
+        diff = {k: (old.get(k), now.get(k)) for k in now if old.get(k) != now.get(k)}
+        if not diff:
+            say(f"RESUME {scroll}: --gpus / --max-height / VRAM unchanged: {len(pend)} pending job(s) kept", "resume")
+            return
+        what = "; ".join(f"{k}: {a_} -> {b_}" for k, (a_, b_) in diff.items())
+        if not (self.a.replan_pending_on_resume and self.cfg.get("dynamic")):
+            say(f"RESUME {scroll}: planning inputs CHANGED ({what}); the {len(pend)} pending job(s) {[j['id'] for j in pend][:6]} were KEPT as planned "
+                f"(NOT re-planned; pass --replan-pending-on-resume to re-plan them)", "resume")
+            self.ev("resume_kept", scroll=scroll, changed=what, pending=[j["id"] for j in pend])
+            return
+        vram = self.host.min_vram if self.host else 40.0
+        h, why = L.start_height_for(self.cfg, scroll, vram, self.cfg["full_span_z"], max_height=getattr(self.a, "max_height", L.FULL_SPAN))
+        n_new = 0
+        for j in pend:
+            new = L.jobs_for_height(self.cfg, scroll, self.scrolls[scroll]["shell"], j["z0"], j["z1"], min(h, j["z1"] - j["z0"]), PL.OVERLAP)
+            if len(new) == 1 and (new[0]["z0"], new[0]["z1"], new[0]["tag"]) == (j["z0"], j["z1"], j["tag"]):
+                continue
+            if any(k["id"] in self.jobs for k in new):
+                continue
+            j["status"], j["cancelled_by"] = "cancelled", "resume_replan"
+            for k in new:
+                self.scale_expected(k)
+                k["provenance"] = "resume_replan"
+                k["parent"] = j["id"]
+                k["dbm_bytes"] = j.get("dbm_bytes")
+                self.jobs[k["id"]] = k
+                self.order.append(k["id"])
+                n_new += 1
+        say(f"RESUME {scroll}: planning inputs CHANGED ({what}); RE-PLANNED the pending jobs at height {h} ({why}): {len(pend)} cancelled/kept -> {n_new} new job(s)", "resume")
+        self.ev("resume_replanned", scroll=scroll, changed=what, new_jobs=n_new)
+
     # ---- fetch
     def fetch_est_h(self, scroll: str) -> float:
         """Planned hours to stage `scroll` (planner.fetch_time at the current link/objects rate)."""
@@ -279,12 +338,72 @@ class Scheduler:
         except Exception:                                # noqa: BLE001
             return 0.0
 
-    def _fetch_real(self, scroll: str) -> float:
+    def _fetch_real(self, scroll: str, z0=None, z1=None) -> float:
+        """Stage `scroll` for [z0, z1) (default: the whole requested range): tracks (skipped when already verified) + the lasagna chunks of that z-range only."""
         from . import cli
         ns = SimpleNamespace(with_crossings=False, full_lasagna=False)
         before = _total_net(self.H)
-        cli.stage_fetch(scroll, UP_LO if self.a.z0 is None else self.a.z0, UP_HI if self.a.z1 is None else self.a.z1, ns)
+        lo = z0 if z0 is not None else (UP_LO if self.a.z0 is None else self.a.z0)
+        hi = z1 if z1 is not None else (UP_HI if self.a.z1 is None else self.a.z1)
+        cli.stage_fetch(scroll, lo, hi, ns)
         return max(0.0, _total_net(self.H) - before) / 1e9
+
+    def job_ready(self, j: dict, _d: int = 0) -> bool:
+        """A job can start when its inputs are on disk: the whole scroll is staged, the job itself was staged, or its parent (whose z-range contains it) was."""
+        if j.get("ready") or self.scrolls[j["scroll"]]["fetched"]:
+            return True
+        par = self.jobs.get(j.get("parent") or "")
+        return bool(par) and _d < 6 and self.job_ready(par, _d + 1)
+
+    def fetch_worker_stripes(self, scroll: str):
+        """Per-stripe staging: stripes in z order; stripe 1 (tracks + its lasagna chunks) lands first and its fit can start while the next stripes' chunks keep downloading."""
+        sc = self.scrolls[scroll]
+        t_s0 = time.time()
+        est_h = self.fetch_est_h(scroll)
+        total_gb = 0.0
+        while True:
+            with self.cv:
+                nxt = sorted((self.jobs[i] for i in self.order if self.jobs[i]["scroll"] == scroll and self.jobs[i]["status"] == "pending" and not self.job_ready(self.jobs[i])),
+                             key=lambda x: (x["z0"], x["z1"]))
+                nxt = nxt[0] if nxt else None
+            if nxt is None:
+                break
+            err = None
+            for attempt in (1, 2, 3):
+                try:
+                    gb = self.fetch_fn(scroll, nxt["z0"], nxt["z1"])
+                    self.gov.transfer(box_download_gb=gb, what=f"fetch {scroll} z[{nxt['z0']},{nxt['z1']})")
+                    total_gb += gb
+                    with self.cv:
+                        nxt["ready"] = True
+                        self.save(scroll)
+                        self.cv.notify_all()
+                    self.ev("job_ready", job=nxt["id"], gb=gb)
+                    say(f"{nxt['id']}: inputs staged ({gb:.2f} GB new, {time.time() - t_s0:.0f} s since the scroll's fetch began): the fit can start", "stage")
+                    err = None
+                    break
+                except BaseException as e:               # noqa: BLE001
+                    err = f"{type(e).__name__}: {e}"
+                    say(f"FETCH FAILED {nxt['id']} (attempt {attempt}/3): {err[:300]}", "box8")
+                    time.sleep(5 if attempt < 3 else 0)
+            if err:
+                with self.cv:
+                    sc["fetching"], sc["fetch_failed"] = False, err
+                    for j in self.jobs.values():
+                        if j["scroll"] == scroll and j["status"] == "pending":
+                            j["status"], j["fail_why"] = "failed", f"fetch failed: {err[:200]}"
+                    self.cv.notify_all()
+                self.ev("fetch_failed", scroll=scroll, err=err)
+                with self.cv:
+                    self.save(scroll)
+                return
+        with self.cv:
+            sc["fetching"] = False
+            sc["fetched"] = all(self.job_ready(j) for j in self.jobs.values() if j["scroll"] == scroll and j["status"] == "pending")
+            self.cv.notify_all()
+            self.save(scroll)
+        self._observe_fetch(scroll, total_gb, time.time() - t_s0, est_h)
+        self.ev("fetched", scroll=scroll, gb=total_gb)
 
     def fetch_worker(self, scroll: str):
         sc = self.scrolls[scroll]
@@ -358,7 +477,7 @@ class Scheduler:
             time.sleep(min(1.0, self.a.poll_s))
             with self.cv:
                 todo = [s for s in self.order_scrolls() if not self.scrolls[s]["fetched"] and not self.scrolls[s]["fetching"] and not self.scrolls[s].get("fetch_failed")
-                        and any(self.jobs[i]["scroll"] == s and self.jobs[i]["status"] == "pending" for i in self.order)]
+                        and any(self.jobs[i]["scroll"] == s and self.jobs[i]["status"] == "pending" and not self.job_ready(self.jobs[i]) for i in self.order)]
                 if not todo:
                     if all(sc["fetched"] or sc.get("fetch_failed") for sc in self.scrolls.values()):
                         return
@@ -377,15 +496,17 @@ class Scheduler:
                 held = sum(self.staged_gb.values())
                 if used0 + held + need > hw or free < need:
                     msg = f"STAGING {s} BLOCKED by disk: base {used0:.0f} + held {held:.0f} + need {need:.0f} > high-water {hw:.0f} GB (free {free:.0f} GB); waits for a payload to be pulled"
+                    self._raise("stage_blocked", msg)
                     if blocked_msg.get(s) != int(held):
                         blocked_msg[s] = int(held)
                         say(msg, "stage")
                         self.ev("stage_blocked", scroll=s, held_gb=held, need_gb=need)
                     continue
+                self._clear("stage_blocked")
                 self.scrolls[s]["fetching"] = True
                 self.staged_gb[s] = need
             self.ev("stage", scroll=s, need_gb=need)
-            self.fpool.submit(self.fetch_worker, s)
+            self.fpool.submit(self.fetch_worker_stripes if self.stripe_mode else self.fetch_worker, s)
 
     def order_scrolls(self) -> list[str]:
         seen = []
@@ -442,9 +563,10 @@ class Scheduler:
                         idle_warned = time.time()
                     self.cv.wait(timeout=2)
                     continue
+                self._maybe_fill_idle()
                 self._maybe_tail_split()
                 pend = [self.jobs[i] for i in self.order if self.jobs[i]["status"] == "pending"]
-                ready = [j for j in pend if self.scrolls[j["scroll"]]["fetched"]]
+                ready = [j for j in pend if self.job_ready(j)]
                 if self.tail_done:
                     ready.sort(key=lambda j: -j["expected_h"])          # tail: largest first (LPT)
                 for j in ready:
@@ -477,6 +599,54 @@ class Scheduler:
                         say("NOT LAUNCHED (budget): " + why, "budget")
                     self.save(j["scroll"])
                 self.cv.wait(timeout=5)
+
+    def _maybe_fill_idle(self):
+        """--fill-idle-gpus (caller holds self.cv): allowed GPUs idle, jobs ready fewer than idle GPUs, and another scroll still downloading -> re-split the NOT-YET-STARTED ready
+        jobs into more z-stripes (each >= --fill-min-height, overlap as in the tail split) so every idle GPU gets one.  Old pending job -> `cancelled`, new jobs carry
+        provenance 'fill_idle'.  Running and finished jobs, and retries, are never touched."""
+        if not self.a.fill_idle_gpus or not self.cfg.get("dynamic") or self.paused or self.stop_launch:
+            return
+        al = self.allowed_set()
+        idle = [g for g in al if g not in self.busy]
+        pend = [self.jobs[i] for i in self.order if self.jobs[i]["status"] == "pending"]
+        ready = [j for j in pend if self.job_ready(j)]
+        waiting = [j for j in pend if not self.job_ready(j)]
+        if not idle or not waiting or len(ready) >= len(idle):
+            return
+        need = len(idle) - len(ready)
+        hmin = max(self.a.fill_min_height, PL.GRID)
+        done_any = []
+        for j in sorted([x for x in ready if not x["attempts"]], key=lambda x: -(x["z1"] - x["z0"])):
+            if need <= 0:
+                break
+            shell = self.scrolls[j["scroll"]]["shell"]
+            best = None
+            for k in range(need + 1, 1, -1):
+                ps = PL.pieces_for(self.cfg, j, k, shell)
+                if len(ps) >= 2 and all(p_["z1"] - p_["z0"] >= hmin for p_ in ps):
+                    best = ps
+                    break
+            if not best:
+                continue
+            j["status"], j["cancelled_by"] = "cancelled", "fill_idle"
+            for p_ in best:
+                p_["provenance"], p_["parent"], p_["dbm_bytes"] = "fill_idle", j["id"], j.get("dbm_bytes")
+                self.scale_expected(p_)
+                self.jobs[p_["id"]] = p_
+                self.order.append(p_["id"])
+            need -= len(best) - 1
+            done_any.append((j, best))
+            self.save(j["scroll"])
+        for j, best in done_any:
+            msg = (f"FILL-IDLE: {len(idle)} allowed GPU(s) idle while {sorted({w['scroll'] for w in waiting})} download: {j['id']} (not started, {j['z1'] - j['z0']} slices) -> "
+                   f"{len(best)} stripes of ~{best[0]['z1'] - best[0]['z0']} slices ({sum(b_['expected_h'] for b_ in best):.1f} vs {j['expected_h']:.1f} GPU-h)")
+            say(msg, "fill")
+            self.ev("fill_idle", job=j["id"], pieces=[b_["id"] for b_ in best])
+        key = (len(idle), len(ready), need)
+        if need > 0 and getattr(self, "_fill_warned", None) != key:
+            self._fill_warned = key
+            say(f"FILL-IDLE limited: {need} idle GPU(s) stay idle (no pending job can be split into stripes >= --fill-min-height {hmin}); they start when the next scroll arrives", "fill")
+            self.ev("fill_idle_limited", idle=len(idle), still_idle=need)
 
     def _maybe_tail_split(self):
         """LPT tail balancing (caller holds self.cv).  Once fewer unstarted jobs remain than GPUs, split the largest remaining scrolls into z-stripes across the
@@ -831,12 +1001,153 @@ class Scheduler:
                 units = [d for d in (self.out / sc).iterdir() if d.is_dir()] if (self.out / sc).is_dir() else []
                 if self.a.free_inputs_on == "done" or (units and all((d / "PULLED.json").exists() for d in units)):
                     self.release_inputs(sc)
+            try:
+                self.check_alarms()
+            except Exception as e:                       # noqa: BLE001 - an alarm bug must not stop the monitor
+                say(f"alarm check error {type(e).__name__}: {e}", "alarm")
             self.write_status()
             if (self.D / "STOP").exists() and not self.stop_reason:
                 self._hard_stop("STOP file present (operator request)")
             elif self.gov.hard_stop() and not self.stop_reason:
                 self.gov.note_hard_stop()
                 self._hard_stop(f"HARD BUDGET STOP: spent ${self.gov.spent():.2f} (+unpulled payload) >= ${self.gov.r.hard_usd}")
+
+    # ---- D11 alarms: idle capacity beside a queue is a fault, announced loudly
+    @staticmethod
+    def _rx_bytes() -> int:
+        tot = 0
+        try:
+            for line in open("/proc/net/dev").read().splitlines()[2:]:
+                name, rest = line.split(":", 1)
+                if name.strip() != "lo":
+                    tot += int(rest.split()[0])
+        except (OSError, ValueError, IndexError):
+            pass
+        return tot
+
+    def _raise(self, key: str, text: str, sev: str = "red"):
+        if key not in self.alarms:
+            self.alarms[key] = {"since": time.time(), "text": text, "sev": sev}
+            say(f"ALARM [{key}] {text}", "alarm")
+            self.ev("alarm", key=key, text=text)
+        else:
+            self.alarms[key]["text"] = text
+
+    def _clear(self, key: str):
+        if key in self.alarms:
+            say(f"ALARM CLEARED [{key}] after {time.time() - self.alarms[key]['since']:.0f} s", "alarm")
+            self.ev("alarm_clear", key=key)
+            del self.alarms[key]
+
+    def _idle_cause(self, gpu: str, pend: list) -> str:
+        if self.paused:
+            return "launching is PAUSED (control dir)"
+        if time.time() < self.foreign_skip.get(gpu, 0.0):
+            return "a foreign process holds VRAM on this GPU"
+        ready = [j for j in pend if self.job_ready(j)]
+        if ready:
+            ok, why = self._ram_ok()
+            if not ok:
+                return why
+            return f"{len(ready)} ready job(s) but the budget governor / admission is refusing (see 'NOT LAUNCHED' lines)"
+        fetching = [k for k, sc in self.scrolls.items() if sc["fetching"]]
+        if fetching:
+            return f"waiting for DATA: {', '.join(fetching)} still fetching (download slower than the GPUs; consider fewer GPUs)"
+        if "stage_blocked" in self.alarms:
+            return "STAGING BLOCKED by the disk high-water mark (nothing pulled yet)"
+        return "no job is staged: the stager has not started a fetch (fetch-parallel / fetch-ahead limits or disk)"
+
+    def check_alarms(self):
+        now = time.time()
+        lim = self.a.idle_alarm_s
+        with self.cv:
+            pend = [self.jobs[i] for i in self.order if self.jobs[i]["status"] == "pending"]
+            al = self.allowed_set()
+            fetching = [k for k, sc in self.scrolls.items() if sc["fetching"]]
+        for g in self.gpus:
+            key = f"idle:gpu{g}"
+            if g in al and g not in self.busy and pend and not self.stop_launch and not self.stop_reason:
+                self.idle_since.setdefault(g, now)
+                if now - self.idle_since[g] > lim:
+                    self._raise(key, f"GPU {g} IDLE {now - self.idle_since[g]:.0f} s beside {len(pend)} pending job(s): {self._idle_cause(g, pend)}")
+            else:
+                self.idle_since.pop(g, None)
+                self._clear(key)
+        rx = (self.rx_fn or self._rx_bytes)()
+        self.rx_hist.append((now, rx))
+        self.rx_hist = [x for x in self.rx_hist if now - x[0] <= lim + 30]
+        if fetching and self.rx_hist and now - self.rx_hist[0][0] >= lim * 0.95:
+            rate = (rx - self.rx_hist[0][1]) / max(1e-6, now - self.rx_hist[0][0])
+            if rate < 50e3:
+                self._raise("fetch_stall", f"fetch of {', '.join(fetching)} NOT PROGRESSING: {rate / 1e3:.0f} KB/s network ingress over the last {now - self.rx_hist[0][0]:.0f} s "
+                            f"(link down, source throttling, or the fetch pool is stuck)")
+            else:
+                self._clear("fetch_stall")
+        elif not fetching:
+            self._clear("fetch_stall")
+        try:
+            atomic_json(self.out / "ALERTS.json", {"t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "alarms": [{"key": k, **v} for k, v in self.alarms.items()]})
+        except OSError:
+            pass
+
+    # ---- link re-probe: trend, degrade/recover announcements, auto-shrink through the control dir
+    def link_check_once(self) -> dict | None:
+        from . import linkcheck as LK
+        m = self.link_probe_fn() if self.link_probe_fn else LK.measure_hosts(sorted(self.scrolls)[0], link_fn())
+        d = m["data"]["mbs"]
+        LK.trend_append(self.H, d, m["second"]["mbs"])
+        if d is None:
+            say(f"link re-probe FAILED ({m['data']['why']})", "link")
+            return m
+        if self.link_base is None:
+            self.link_base = d
+        base, mn = self.link_base, self.a.min_link_mb_s
+        if self.host is not None:
+            self.host.net_down_mb_s = d
+            self.host.link_measured = True
+        say(f"link re-probe {d:.0f} MB/s (start {base:.0f}; {LK.diagnose(m, mn)})", "link")
+        if self.link_state == "ok" and (d < 0.6 * base or d < mn):
+            self.link_state = "degraded"
+            say(f"LINK DEGRADED: {d:.0f} MB/s vs {base:.0f} MB/s at start (gate {mn:g})", "link")
+            self.ev("link_degraded", mbs=d, base=base)
+            self._raise("link", f"link DEGRADED to {d:.0f} MB/s (was {base:.0f})", "yellow")
+            self._maybe_autoshrink(d)
+            threading.Thread(target=self.replan, args=(f"link degraded to {d:.0f} MB/s",), daemon=True).start()
+        elif self.link_state == "degraded" and d >= 0.85 * base and d >= mn:
+            self.link_state = "ok"
+            say(f"LINK RECOVERED: {d:.0f} MB/s (start {base:.0f})", "link")
+            self.ev("link_recovered", mbs=d)
+            self._clear("link")
+            threading.Thread(target=self.replan, args=(f"link recovered to {d:.0f} MB/s",), daemon=True).start()
+        return m
+
+    def _maybe_autoshrink(self, d: float):
+        """When staging now dominates (remaining transfer > 0.5 x remaining compute wall), shrink the allowed GPUs via control/gpus (never below 1; at most once per 30 min)."""
+        if self.a.no_auto_shrink or time.time() - self.last_shrink < 1800 or self.host is None:
+            return
+        with self.cv:
+            al = sorted(self.allowed_set(), key=lambda x: int(x) if str(x).isdigit() else 0)
+            need_gb = sum(PL.scroll_facts(k, self.cfg, self.host, self.a.z0 or UP_LO, self.a.z1 or UP_HI).fetch_gb for k, sc in self.scrolls.items()
+                          if not sc["fetched"] and any(j["scroll"] == k and j["status"] == "pending" for j in self.jobs.values()))
+            gpu_h = sum(j["expected_h"] for j in self.jobs.values() if j["status"] == "pending")
+        if need_gb <= 0 or not al:
+            return
+        from . import linkcheck as LK
+        sh = LK.shrink_for({"data": {"mbs": d}}, need_gb, gpu_h, len(al), self.a.fetch_parallel)
+        if sh["gpus"] < len(al):
+            self.last_shrink = time.time()
+            self.control.mkdir(parents=True, exist_ok=True)
+            (self.control / "gpus").write_text(",".join(al[:sh["gpus"]]) + "\n")
+            say(f"AUTO-SHRINK via the control dir: link {d:.0f} MB/s cannot feed {len(al)} GPUs ({need_gb:.0f} GB left to stage vs {gpu_h:.0f} GPU-h of work): "
+                f"allowed GPUs -> {al[:sh['gpus']]}; routeB_ctl.sh gpus ... overrides", "link")
+            self.ev("autoshrink", gpus=al[:sh["gpus"]], mbs=d)
+
+    def link_loop(self):
+        while not self.done_evt.wait(self.a.link_reprobe_s):
+            try:
+                self.link_check_once()
+            except Exception as e:                       # noqa: BLE001
+                say(f"link re-probe error {type(e).__name__}: {e}", "link")
 
     def write_status(self):
         by = {}
@@ -937,7 +1248,7 @@ class Scheduler:
             for sc_, g_ in groups.items():                 # release times: a job cannot start before its scroll is staged (idle GPUs waiting for data cost the box bill)
                 rh = 0.0 if self.scrolls[sc_]["fetched"] else self.fetch_est_h(sc_)
                 for j_ in g_["jobs"]:
-                    j_["_ready_h"] = rh
+                    j_["_ready_h"] = 0.0 if self.job_ready(j_) else rh
             for g in sorted(al, key=str):
                 jid = self.busy.get(g)
                 avail.append(self.gov.remaining_h(self.gov.running[jid]) if jid in self.gov.running else 0.0)
@@ -978,6 +1289,9 @@ class Scheduler:
                 lines.append(f"REPLAN RESTORED {sc} (capacity is back)")
             slots, sw = self._routea_slots_now()
             lines.append(f"REPLAN Route A: {slots} slot(s) = {sw}")
+            nfill = sum(1 for j_ in self.jobs.values() if j_.get("provenance") == "fill_idle")
+            if self.a.fill_idle_gpus or nfill:
+                lines.append(f"REPLAN fill-idle: {'ON' if self.a.fill_idle_gpus else 'off'}, {nfill} stripe job(s) created by fill_idle so far (min height {self.a.fill_min_height})")
             lines.append(f"REPLAN disk: free {self._disk_state()[1]:.0f} of {self._disk_state()[0]:.0f} GB, staged inputs {sum(self.staged_gb.values()):.0f} GB")
             for sc in groups:
                 self.save(sc)
@@ -1031,10 +1345,19 @@ class Scheduler:
         self.ev("routea_rescale", slots=slots)
         self.routea_expected_exit = False
 
+    def routea_should_wait(self) -> bool:
+        """--routea-after-first-fit: on = always wait for the first Route B fit; off = start Route A at once; auto = wait only when the link is below the gate (a slow link must
+        not be shared with Route A's multi-GB input fetch before the first fit has its data)."""
+        m = self.a.routea_after_first_fit
+        if m != "auto":
+            return m == "on"
+        link = self.link_base if self.link_base is not None else (self.host.net_down_mb_s if self.host is not None else 1e9)
+        return link < self.a.min_link_mb_s
+
     def _routea_thread(self):
         a = self.a
         t0 = time.time()
-        while not self.done_evt.is_set() and not self.busy and time.time() - t0 < 1800:
+        while self.routea_should_wait() and not self.done_evt.is_set() and not self.busy and time.time() - t0 < 1800:
             time.sleep(2)                                    # start after the first fit is on a GPU: the fits come first
         if self.done_evt.is_set() or self.stop_reason:
             return
@@ -1089,6 +1412,8 @@ class Scheduler:
                 (self.control / "STOP").unlink()
             self.apply_control("CONTROL (startup)")
             threading.Thread(target=self.control_loop, daemon=True, name="control").start()
+        if self.a.link_reprobe_s > 0 and not self.dry and (not self.a.fake_gpus or self.link_probe_fn):
+            threading.Thread(target=self.link_loop, daemon=True, name="link").start()
         if getattr(self.a, "routea", False) and (not self.a.fake_gpus or os.environ.get("ROUTEB_TEST_ROUTEA")):
             threading.Thread(target=self._routea_thread, daemon=True, name="routea").start()
         ths = [threading.Thread(target=self.worker, args=(g,), name=f"gpu{g}") for g in self.gpus]
@@ -1159,6 +1484,23 @@ def build_parser():
     ap.add_argument("--control-poll-s", type=float, default=10.0, help="how often the control dir <home>/box8/control/ is re-read")
     ap.add_argument("--link-mb-s", type=float, default=None, help="aggregate ingress MB/s; skips the probe (default: measure 8 parallel 8 MB range reads of a real input at start)")
     ap.add_argument("--no-link-probe", action="store_true", help="do not measure the link; use the quoted 860 Mbps")
+    ap.add_argument("--min-link-mb-s", type=float, default=20.0, help="GATE: a data-host ingress below this STOPS the run (exit 5, nothing fetched) unless --accept-slow-link")
+    ap.add_argument("--accept-slow-link", action="store_true", help="continue on a slow link; the planner auto-shrinks --gpus / --fetch-parallel to what the link can feed")
+    ap.add_argument("--link-reprobe-s", type=float, default=600.0, help="re-measure the link this often during the run (0 = never); trend in box8/link/trend.jsonl")
+    ap.add_argument("--no-auto-shrink", action="store_true", help="do not shrink the allowed GPUs through the control dir when the link degrades")
+    ap.add_argument("--idle-alarm-s", type=float, default=180.0, help="D11: an allowed GPU idle this long beside pending work, or a fetch with no network progress this long, raises a red alarm")
+    ap.add_argument("--torch-cuda", default="auto", choices=["auto", "cu126", "cu128", "cu129"],
+                    help="torch build for the env: cu126 = validated; Blackwell (compute capability >= 12) auto-selects cu129 (same torch 2.13.0, UNVALIDATED numerically); "
+                         "cu128 = torch 2.11.0, UNVALIDATED. The GPU kernel smoke test must pass before any fetch or fit")
+    ap.add_argument("--fill-idle-gpus", action="store_true",
+                    help="(default OFF) when allowed GPUs idle while the next scroll downloads, re-split the NOT-YET-STARTED jobs of the staged scroll into more z-stripes so every idle GPU "
+                         "gets one. Trade-off: stripes cost ~1.1-1.35x the GPU-h of the whole-scroll fit and add seams, but idle GPUs bill the same wall-clock; running/finished jobs are never touched")
+    ap.add_argument("--fill-min-height", type=int, default=2800, help="smallest stripe the fill may create (2800 = the known-good 16 GB size; never below)")
+    ap.add_argument("--replan-pending-on-resume", action="store_true", help="on resume with a changed --gpus/--max-height/VRAM, re-plan the pending jobs instead of keeping them")
+    ap.add_argument("--routea-after-first-fit", default="auto", choices=["auto", "on", "off"],
+                    help="start Route A (and its input fetch) only once the first Route B fit is running: auto = on when the link is below --min-link-mb-s")
+    ap.add_argument("--no-stripe-staging", action="store_true",
+                    help="stage a scroll's inputs as ONE unit (default: per stripe; a stripe fit starts as soon as the tracks file and ITS lasagna z-range have landed)")
     ap.add_argument("--fake-gpus", type=int, default=0, help="TEST ONLY: N logical workers, no nvidia-smi, no RAM guard")
     ap.add_argument("--order", default="spt", choices=["given", "spt", "lpt"], help="queue order: shortest expected first (default; most scrolls finished per $) | as listed | longest first")
     ap.add_argument("--legacy-ladder", action="store_true", help="old static ladder (full -> sw2800), no planner/admission/tail split; also implied by --ladder")
@@ -1271,48 +1613,44 @@ def physical_cores(a) -> int:
     return max(1, (os.cpu_count() or 2) // 2)
 
 
-def measure_link(url: str, n_conn: int = 8, chunk: int = 8 << 20, timeout: float = 60.0) -> tuple[float | None, str]:
-    """Aggregate ingress MB/s: n_conn parallel HTTP Range requests of `chunk` bytes at distinct offsets of one real input file (n_conn x chunk = 64 MB at the defaults)."""
-    import urllib.request
-    from concurrent.futures import ThreadPoolExecutor as TPE
-
-    def one(i):
-        rq = urllib.request.Request(url, headers={"Range": f"bytes={i * chunk}-{(i + 1) * chunk - 1}"})
-        with urllib.request.urlopen(rq, timeout=timeout) as r:
-            return len(r.read())
-
-    t0 = time.time()
-    try:
-        with TPE(n_conn) as ex:
-            got = sum(ex.map(one, range(n_conn)))
-    except Exception as e:                      # noqa: BLE001 - announced; the quoted rate stays in force
-        return None, f"{type(e).__name__}: {e}"
-    dt = max(time.time() - t0, 1e-6)
-    return got / 1e6 / dt, f"{got / 1e6:.0f} MB in {dt:.1f} s over {n_conn} connections"
+def measure_link(url: str, n_conn: int = 8, chunk: int = 8 << 20, timeout: float = 60.0, budget_s: float | None = None):
+    from . import linkcheck
+    return linkcheck.measure_link(url, n_conn, chunk, timeout, budget_s)
 
 
-def probe_link(a, host, scroll: str) -> None:
-    """Replace the quoted link rate by a measured one (announced either way)."""
+def link_fn():
+    """Probe function for linkcheck.measure_hosts; tests patch LINK_FN(url) -> (MB/s | None, why)."""
+    if LINK_FN is None:
+        return None
+    return lambda url, budget_s: LINK_FN(url)
+
+
+def probe_link(a, host, scroll: str) -> dict | None:
+    """Measure the link (both hosts) or reuse a fresh <home>/box8/link/first.json written by routeB.linkcheck before the env was built; set the planner's link rate;
+    return the measurement dict (or None when it could not be measured: announced, the quoted rate stays)."""
+    from . import linkcheck
     if a.link_mb_s:
         host.net_down_mb_s, host.link_measured = a.link_mb_s, True
         say(f"link {a.link_mb_s:g} MB/s from --link-mb-s", "link")
-        return
-    if a.no_link_probe or a.fake_gpus:
+        return {"data": {"mbs": a.link_mb_s, "why": "--link-mb-s"}, "second": {"mbs": None, "why": "not probed"}, "t": time.time()}
+    if a.no_link_probe or (a.fake_gpus and LINK_FN is None):
         say(f"link NOT measured ({'--no-link-probe' if a.no_link_probe else 'fake GPUs'}): using the quoted {host.net_down_mb_s:.0f} MB/s", "link")
-        return
-    try:
-        sp = spec(scroll)
-        name = next(k for k in sp["tracks"]["files"] if k.endswith(".dbm"))
-        url = sp["tracks"]["base_url"] + name
-    except Exception as e:                      # noqa: BLE001
-        say(f"link NOT measured (no probe url: {e}); using the quoted {host.net_down_mb_s:.0f} MB/s", "link")
-        return
-    mbs, why = (LINK_FN or measure_link)(url)
-    if mbs is None:
-        say(f"link probe FAILED ({why}); using the quoted {host.net_down_mb_s:.0f} MB/s", "link")
-        return
-    host.net_down_mb_s, host.link_measured = mbs, True
-    say(f"link MEASURED {mbs:.0f} MB/s ({why}) vs quoted {860 / 8:.0f} MB/s", "link")
+        return None
+    first = linkcheck.load_first(home())
+    m = first["measured"] if first else linkcheck.measure_hosts(scroll, link_fn())
+    d = m["data"]["mbs"]
+    if d is None and m["second"]["mbs"] is None:
+        say(f"link probe FAILED (data: {m['data']['why']}; second: {m['second']['why']}); using the quoted {host.net_down_mb_s:.0f} MB/s", "link")
+        return None
+    if d is None:
+        say(f"link probe: data host failed ({m['data']['why']}); using the quoted {host.net_down_mb_s:.0f} MB/s", "link")
+        return m
+    host.net_down_mb_s, host.link_measured = d, True
+    say(f"link MEASURED {d:.0f} MB/s data host ({m['data']['why']}); second host "
+        f"{'n/a' if m['second']['mbs'] is None else format(m['second']['mbs'], '.0f') + ' MB/s'}; quoted {860 / 8:.0f} MB/s", "link")
+    if not first:
+        linkcheck.trend_append(home(), d, m["second"]["mbs"])
+    return m
 
 
 LINK_FN = None                                  # tests patch this
@@ -1346,7 +1684,7 @@ def build_host(a, H: Path, gpus=None, allowed=None) -> PL.Host:
         say(l, "disk")
     h = PL.Host(allowed, phys_cores=physical_cores(a), ram_gb=ram, disk_total_gb=total, disk_free_gb=free, disk_high_water_frac=a.disk_high_water,
                 fetch_files_per_s=a.fetch_files_per_s, fetch_parallel=a.fetch_parallel, fetch_ahead=a.fetch_ahead, ram_per_fit_gb=a.ram_need_gb,
-                reserve_cores=a.routea_reserve_cores)
+                reserve_cores=a.routea_reserve_cores, stripe_staging=not a.no_stripe_staging)
     h.all_gpus = list(gpus)
     h.disk_lines = lines
     h.env_in_base = not (a.disk_free_gb is not None)        # df of the real home already counts the env; an override does not
@@ -1392,7 +1730,18 @@ def main(argv=None) -> int:
     gov = B.Governor(Path(tempfile.mkdtemp(prefix="box8_dry_")) if a.dry_run else H / "box8" / "budget", rates, clock=clock, box_start=a.box_start, say=lambda m: say(m, "budget"))
     names = all_scroll_names() if a.scrolls in ("auto", "all") else [s.strip() for s in a.scrolls.split(",") if s.strip()]
     sch = Scheduler(a, cfg, gov)
-    sch.dry = a.dry_run                                  # a dry run reads state (if any) but writes nothing
+    sch.dry = a.dry_run
+    pf = H / "box8" / "prefetch.json"
+    if not a.dry_run and pf.exists():                    # bytes the early prefetch pulled before this process existed: account the ingress once
+        try:
+            d_ = json.loads(pf.read_text())
+            if not d_.get("accounted"):
+                gov.transfer(box_download_gb=float(d_.get("gb", 0.0)), what="early prefetch")
+                d_["accounted"] = True
+                pf.write_text(json.dumps(d_, indent=1))
+                say(f"early prefetch: {d_.get('gb', 0):.2f} GB already on disk ({len(d_.get('done', []))} stripe(s)); accounted as ingress", "box8")
+        except (OSError, ValueError):
+            pass                                  # a dry run reads state (if any) but writes nothing
     run_names, not_runnable = [], []
     for s in names:
         why = skip_reason(s)
@@ -1410,13 +1759,37 @@ def main(argv=None) -> int:
     sch.gpus = [g.idx for g in host.all_gpus]
     sch.allowed_init = {g.idx for g in host.gpus}
     ng = max(1, len(host.gpus))                          # the ALLOWED set: wall and budget projection use it, not every card on the box
-    probe_link(a, host, run_names[0])
+    m_link = probe_link(a, host, run_names[0])
+    if m_link and m_link["data"]["mbs"] is not None:
+        from . import linkcheck as LK
+        d_ = m_link["data"]["mbs"]
+        if d_ < a.min_link_mb_s and not a.accept_slow_link:
+            print(LK.box([f"LINK CHECK   VERDICT: BAD   data host {d_:.1f} MB/s < --min-link-mb-s {a.min_link_mb_s:g}", f"diagnosis: {LK.diagnose(m_link, a.min_link_mb_s)}", "",
+                          "DESTROY THIS BOX, or re-run with --accept-slow-link to continue anyway."]), flush=True)
+            return 5
+        if d_ < a.min_link_mb_s or (d_ < 2 * a.min_link_mb_s and a.accept_slow_link):
+            fb = LK.load_first(H)
+            sh = (fb or {}).get("shrink")
+            if not sh:
+                facts_ = [PL.scroll_facts(s_, cfg, host, z0, z1) for s_ in run_names]
+                sh = LK.shrink_for(m_link, sum(f.fetch_gb for f in facts_), sum(L.fit_hours(f.name, f.shell, f.z1 - f.z0) for f in facts_), len(host.gpus), a.fetch_parallel)
+            if a.accept_slow_link and not a.gpus and sh["gpus"] < len(host.gpus):
+                say(f"AUTO-SHRINK (slow link {d_:.1f} MB/s accepted): allowed GPUs {len(host.gpus)} -> {sh['gpus']}, --fetch-parallel {a.fetch_parallel} -> {sh['fetch_parallel']}", "link")
+                host.gpus = host.gpus[:sh["gpus"]]
+                a.fetch_parallel = host.fetch_parallel = sh["fetch_parallel"]
+    sch.allowed_init = {g.idx for g in host.gpus}
+    if m_link and m_link["data"]["mbs"] is not None:
+        sch.link_base = m_link["data"]["mbs"]
     plan = None
     if not legacy and not a.no_plan:
         plan = PL.make_plan(host, rates, run_names, cfg, z0, z1, a.plan_frac, a.max_height, [x for x in (a.priority or "").split(",") if x] or None, sch.heights_path, a.order)
         slots, sw = PL.routea_slots(host.phys_cores, ng, a.routea_reserve_cores, host.ram_gb, a.ram_need_gb, host.ram_reserve_gb, a.routea_ram_per_grow_gb, a.routea_slots)
         ra = (f"PLAN Route A on the spare cores: {'ON' if a.routea else 'OFF (--no-routea)'}; {slots} grow slot(s) = {sw}" if a.routea else "PLAN Route A: OFF (--no-routea)")
         print(PL.render(host, rates, plan, not_runnable, ra), flush=True)
+        if a.fill_idle_gpus:
+            print(f"PLAN --fill-idle-gpus ON: while the next scroll downloads, idle allowed GPUs get z-stripes of the staged scroll (each >= {a.fill_min_height} slices). "
+                  f"TRADE-OFF: stripes cost ~1.1-1.35x the GPU-h of the whole-scroll fit and add seams/overlap (200 slices); the box bills wall-clock, so idle GPUs cost the same as busy ones. "
+                  f"Never touches running or finished jobs.", flush=True)
         if plan["keep"]:
             a.planned_makespan_h = plan["p50"]["makespan_h"]
         sch.ev("plan", keep=plan["keep"], deferred=plan["deferred"])

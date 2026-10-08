@@ -7,42 +7,60 @@ Two one-command pipelines, identical on a local GPU/CPU box and on a rented mach
 | **Route A** | guarded surface **growth** from seeds with the production guard stack (VC3D tracer kit, self-collision guard, degeneracy resume gate) | `git clone -b routeAB-deploy --depth 1 https://github.com/StewartSethA/villa.git && cd villa && ./routeA_run.sh --scrolls PHerc0332,PHerc0211 --seeds 8 --hours 6` | CPU only; bash, tar, curl/wget/python3 |
 | **Route B** | **spiral fit** of whole windings -> tiles -> flatten -> render -> **ink** -> export | `git clone -b routeAB-deploy --depth 1 https://github.com/StewartSethA/villa.git && cd villa && ./routeB_run.sh --scrolls PHerc0211,PHerc0125 --stripe-width 4500` | NVIDIA GPU (driver >= 525), g++ >= 13, curl/wget |
 
-## Cloud quickstart (rented multi-GPU box): the two one-liners
-Target box: 8 x A100 40 GB, 192 threads, 516 GB RAM, ~934 GB NVMe, Ubuntu with outbound HTTPS. Budget $50 (soft stop $45 / hard stop $49; billed machine $4.276/h + disk $0.525/h + $2.70/TB in + $4/TB out).
+## Cloud quickstart (rented multi-GPU box): ONE line, then a live dashboard
+Target: 8 x A100 40 GB, 192 threads, 516 GB RAM, ~934 GB NVMe, Ubuntu, outbound HTTPS, root or sudo.
+Budget $50 (soft stop $45 / hard stop $49; billed machine $4.276/h + disk $0.525/h + $2.70/TB in).
 
-**0. Box setup (once, as root; ssh in with your key):** needs `git rsync curl g++ >= 13` and a data disk with >= 300 GB free.
+**On the box (paste this one line):**
 ```
-ssh -p <PORT> root@<BOX-IP>                      # add your public key to the box's authorized_keys first (the provider console or ssh-copy-id)
-df -h                                            # pick the NVMe mount (e.g. /workspace); everything lives under ROUTEB_HOME on it
-apt-get update && apt-get install -y git rsync curl g++-13 && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100   # skip if `g++ --version` is already >= 13
-nvidia-smi -L                                    # must list the 8 GPUs (driver >= 525)
+curl -fsSL https://raw.githubusercontent.com/StewartSethA/villa/routeAB-deploy-v5/go|bash -s run
 ```
-**1. On the box (starts everything, returns immediately; log in `box8.log`):**
-```
-git clone --branch routeAB-deploy-v3 --depth 1 <REPO-URL> routeAB && cd routeAB && \
-  BUDGET_BOX_START=$(date +%s) ROUTEB_HOME=/workspace/routeB nohup ./routeB_run.sh --mode box8 > /workspace/box8.log 2>&1 &
-```
-With no `--scrolls` this plans **every runnable eligible scroll**, defers (explicitly, in the printed plan) what does not fit 80 % of the budget at the p90 case, runs Route B on the GPUs (one scroll per GPU, smallest first, tail split into z-stripes) and Route A on the spare cores, and writes everything downloadable to **`$ROUTEB_HOME/out/`**. Preview without launching: add `--dry-run` (prints plan, stagger timeline, expected payload arrivals, disk timeline, $ per scroll). Tune: `--gpu-speed`, `--hour-usd 4.276 --disk-gb 934 --disk-usd-per-16gb-hour 0.009`, `--soft 45 --hard 49 --max-run-hours 12`, `--no-routea`, `--scrolls A,B`.
+What it does, in this order:
+0. **Link check first (about 13 s, before apt/uv/pip/compile):** 8 parallel range reads from the real data
+   host (dl.ash2txt.org) and from a CDN (tells "box link slow" from "source slow"); prints a verdict box
+   (MB/s, hours to fetch the plan, box dollars idling, GOOD / MARGINAL / BAD). Below `--min-link-mb-s`
+   (default 20) it STOPS with exit 5 and "DESTROY THIS BOX or re-run with --accept-slow-link", nothing built.
+   With `--accept-slow-link` the planner shrinks `--gpus` / `--fetch-parallel` to what the link can feed.
+   The link is re-probed every 10 min; degrade/recover is announced and GPUs auto-shrink via the control dir.
+1. prints the GPUs and chooses the torch wheel from the hardware (cu128 for Blackwell / driver CUDA >= 12.8, else cu126);
+   installs git rsync curl tmux g++>=13; 2. clones the branch; 3. starts the run detached in tmux session
+   `routeb` (ROUTEB_HOME and BUDGET_BOX_START are passed inside the tmux command; the resolved home is printed);
+4. attaches the live dashboard. Ctrl-C detaches only the watcher.
+   Inside the run: link check -> early prefetch of the first scroll's stripes while the env builds -> GPU kernel
+   smoke + speed test on every GPU (a failure stops the run before anything is fetched) -> per-stripe staging:
+   the first stripe's fit starts as soon as its own data has landed. Optional: `--fill-idle-gpus` (see BOX8_NOTES).
 
-**2. On YOUR machine (pull everything as it arrives; resumable; re-run any time):**
-```
-./routeB_pull.sh --host root@<BOX-IP> --port <PORT> -i <KEY> --remote-home /workspace/routeB --dest ./out --final
-# the same thing without any script (checksum verification afterwards):
-while :; do rsync -aH --partial --append-verify --exclude '.tmp_*' -e "ssh -p <PORT>" root@<BOX-IP>:/workspace/routeB/out/ ./out/; sleep 60; done
-python3 pull_box8.py --verify-only --dest ./out
-```
-**Scaling back / forward on the fly (no restart):** the scheduler re-reads `$ROUTEB_HOME/box8/control/` every ~10 s.
-```
-./routeB_ctl.sh --home /workspace/routeB status          # allowed GPUs, jobs, budget, the latest REPLAN
-./routeB_ctl.sh --home /workspace/routeB gpus 0,1,2      # use ONLY these GPUs from now on (running fits on the others finish); `gpus 0,1,2,3,4,5,6,7` grows back
-./routeB_ctl.sh --home /workspace/routeB drain 5         # finish GPU 5's current fit, then stop using it
-./routeB_ctl.sh --home /workspace/routeB kill 5          # SIGTERM GPU 5's fit; its z-interval is re-queued and resumes from the last autosave (never lost); GPU 5 stays out
-./routeB_ctl.sh --home /workspace/routeB stop            # graceful: no new launches, running fits finish, the run ends (re-run the same command to resume)
-./routeB_ctl.sh --home /workspace/routeB pause | resume
-```
-Every change re-plans the unstarted work (tail split for the new GPU count, Route A slots = cores - 2 x allowed GPUs - reserve, RAM, disk) and prints `REPLAN ...` lines (also in `box8/control/PLAN.txt`): scrolls that no longer fit 80 % of the remaining budget/time at the p90 case are DEFERRED explicitly, and re-admitted when GPUs come back. Running fits are never cut off by a re-plan. The plan also measures the link at start (`--link-mb-s` / `--no-link-probe`), prices the GPUs' idle wait for data, and prints `!!! DOWNLOAD TIME DOMINATES` with a recommendation (fewer GPUs / faster box) when staging exceeds half the compute time. Start-up: `--gpus 1,2,..` picks the initial set; a GPU already holding VRAM from a foreign process (e.g. a llama-server; `--foreign-mib` 1500) is warned about and skipped unless `--force-gpus`. The old hard stop (kills running fits) is still `touch $ROUTEB_HOME/box8/STOP`.
+Extra run flags go after `run`, e.g. `bash -s run --accept-slow-link --gpus 0,1,2,3` (`--dry-run` = plan only).
 
-Layout of `out/`: `<scroll>/<tag>/{files, PAYLOAD.json (size+md5 of every file), DONE}` per finished stripe (written the moment it finishes), `<scroll>/{SCROLL.json,DONE}`, `routeA/<scroll>__<seg>/...`, `STATUS.json`, `ALLDONE.json`. Mark-and-free: the puller writes `PULLED.json` per unit on the box; the box then deletes that scroll's fetched inputs. Stop the box: `touch $ROUTEB_HOME/box8/STOP` (running fits get SIGTERM; finished units stay pullable). Details: `SCHEDULING.md`, `BOX8_NOTES.md`, `AGENT_GUIDE.md`, `TROUBLESHOOTING.md`.
+**Dashboard (reattach any time, from any ssh session):**
+```
+bash ~/routeAB/routeB_watch.sh
+bash ~/routeAB/routeB_watch.sh --plain
+bash ~/routeAB/routeB_watch.sh --once
+```
+It redraws every ~5 s: budget and the clock from the REAL box start, link MB/s + trend, disk, RAM, one row
+per GPU (util, VRAM, scroll/stripe, step, it/s, ETA, rung, OOM-ladder descents), fetch rows per scroll,
+Route A slots/segments/cm2, payload units (DONE, GB, pulled), an ALERTS area (failures grouped by reason,
+stalls, STAGING BLOCKED, a GPU idle >3 min beside pending work, a fetch with no network progress for 3 min),
+the exact PULL commands for your machine, and a time-ordered event stream. `--once` prints one block with
+STATUS, budget, link, GPUs, alerts and the log tail: paste it back for diagnosis. Raw console: `tmux attach -t routeb`.
+
+**On YOUR machine (the dashboard prints these with the box address filled in):**
+```
+H=root@<BOX-IP>
+P=<PORT>
+RH=/workspace/routeB
+R=$RH/out/
+mkdir -p out
+while :;do rsync -aH --partial --append-verify -e "ssh -p $P" $H:$R out/;sleep 60;done
+./routeB_pull.sh --host $H --port $P --remote-home $RH --dest out --final
+```
+(the last line, with md5 verification and PULLED marking, needs a repo checkout on your machine.)
+
+Scale back on the fly: `./routeB_ctl.sh status|gpus 0,1,2|drain N|kill N|stop|pause|resume` (see BOX8_NOTES.md).
+Layout of `out/`: `<scroll>/<tag>/{files, PAYLOAD.json (size+md5 of every file), DONE}` per finished stripe,
+`<scroll>/{SCROLL.json,DONE}`, `routeA/<scroll>__<seg>/...`, `STATUS.json`, `ALERTS.json`, `ALLDONE.json`.
+Hard stop: `touch $ROUTEB_HOME/box8/STOP`. Details: `SCHEDULING.md`, `BOX8_NOTES.md`, `AGENT_GUIDE.md`, `TROUBLESHOOTING.md`.
 
 Route B options: `--stripe-width 4500|7500|13500|full`, `--smoke` (proof-sized run), `--stages fetch,fit,tiles,ink,export`, `--help`.
 Both scripts download everything they need (pinned and hash/size-verified, resumable) into `./routeA_work/` or `./routeB_work/` (`ROUTEB_HOME`, `--workdir`).

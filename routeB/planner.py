@@ -62,6 +62,7 @@ class Host:
     ram_per_fit_gb: float = 40.0               # host RSS per fit 22-40 GB (measured on a 4060 Ti box and a V100 box)
     ram_reserve_gb: float = 30.0
     reserve_cores: int = 4
+    stripe_staging: bool = True                 # inputs are staged per stripe (tracks, then each stripe's lasagna chunks); False = whole scroll at once
 
     @property
     def n(self) -> int:
@@ -212,6 +213,37 @@ def fetch_time(host: Host, f: Facts) -> float:
     return max(by_obj, by_net)
 
 
+def stage_schedule(host: Host, f: Facts, jobs: list[dict], t0: float) -> float:
+    """Per-stripe staging: the tracks file first, then the lasagna chunks of each stripe in z order.  Sets job['_ready_t'] (when that stripe's fit may start) and returns the time the
+    whole scroll is staged.  With host.stripe_staging False every job is ready only when the whole scroll is."""
+    share = host.net_down_mb_s / max(1, host.fetch_parallel)
+    if not getattr(host, "stripe_staging", True) or len(jobs) <= 1:
+        done = t0 + fetch_time(host, f)
+        for j in jobs:
+            j["_ready_t"] = done
+        return done
+    t = t0 + f.tracks_gb * 1000.0 / share / 3600.0
+    for j in sorted(jobs, key=lambda x: (x["z0"], x["z1"])):
+        sl = j["z1"] - j["z0"] + 512
+        las_t = max(LAS_OBJ_PER_SLICE * sl / host.fetch_files_per_s / 3600.0, LAS_GB_PER_SLICE * sl * 1000.0 / share / 3600.0)
+        t += las_t
+        j["_ready_t"] = t
+    return t
+
+
+def vram_lines(host: Host, margin_gib: float = 1.5) -> list[str]:
+    """The height model's max stripe per card: this box's cards first, then the reference table."""
+    out = []
+    mem = sorted({round(g.vram_gib, 1) for g in host.gpus})
+    for m in mem:
+        h = L.computed_height(m, margin_gib)
+        n = 1 if h >= L.FULL_SPAN else -(-L.FULL_SPAN // h)
+        out.append(f"PLAN VRAM: this box {sum(1 for g in host.gpus if round(g.vram_gib, 1) == m)} x {m} GiB -> max stripe {h:,} slices "
+                   f"({'a 13,000-slice scroll fits one GPU' if n == 1 else f'a 13,000-slice scroll needs >= {n} stripes'}); model {L.VRAM_A_GIB} + {L.VRAM_B_GIB_PER_SLICE:.5f} GiB/slice, margin {margin_gib} GiB")
+    out.append("PLAN VRAM reference (usable GiB -> max stripe): " + "; ".join(f"{n} {u:g} -> {h:,}" for n, _nom, u, h, _k in L.card_table(margin_gib)))
+    return out
+
+
 def download_report(host: Host, rates, plan: dict, frac: float = 0.5) -> list[str]:
     """Link line + per-scroll fetch vs compute + LOUD warnings when download time dominates (fetch_h > frac x compute_h) with a recommendation."""
     out = []
@@ -289,13 +321,28 @@ def simulate(host: Host, facts: list[Facts], cfg: dict, q: str = "p50", tail: bo
                 gb_out += s["pay"]
         while fetching and fetching[0][0] <= t + 1e-12:
             td, _s, sc = heapq.heappop(fetching)
-            S[sc]["state"], S[sc]["ready"] = "ready", td
+            if sc != "#wake":
+                S[sc]["state"], S[sc]["ready"] = "ready", td
         while pulls and pulls[0][0] <= t + 1e-12:
             tp, _s, sc = heapq.heappop(pulls)
             s = S[sc]
             s["pulled"] = tp
             used -= s["f"].input_gb + s["pay"]
             disk_log.append((round(tp, 3), round(used, 1)))
+        # ---- tail balancing first (so a split scroll is staged stripe by stripe)
+        if tail and not tail_done and 0 < n_pending() < n and free:
+            allj = [j for sc in order for j in S[sc]["jobs"]]
+            avail = [t] * len(free) + [e for e, _s, _g, _j in running]
+            newj, nn = tail_split(cfg, avail, allj, shells, q)
+            if nn:
+                notes += [f"t={t:.2f} h: {x}" for x in nn]
+                for sc in order:
+                    S[sc]["jobs"] = [j for j in newj if j["scroll"] == sc]
+                par = {j["id"]: j for j in allj}
+                for j in newj:
+                    if "_ready_t" not in j and j.get("parent") in par and "_ready_t" in par[j["parent"]]:
+                        j["_ready_t"] = par[j["parent"]]["_ready_t"]
+            tail_done = True
         # ---- stager: fetch ahead while the disk and the lookahead allow
         for sc in order:
             s = S[sc]
@@ -310,7 +357,8 @@ def simulate(host: Host, facts: list[Facts], cfg: dict, q: str = "p50", tail: bo
                 notes.append(f"t={t:.2f} h: staging {sc} blocked by the disk high-water mark ({used:.0f} + {need:.0f} > {host.high_water_gb:.0f} GB)") if not any(
                     x.startswith(f"t=") and f"staging {sc} blocked" in x for x in notes) else None
                 break
-            ft = fetch_time(host, s["f"])
+            t_done = stage_schedule(host, s["f"], s["jobs"], t)
+            ft = t_done - t
             s["state"] = "fetching"
             s["fetch_t0"] = t
             used += need
@@ -320,26 +368,21 @@ def simulate(host: Host, facts: list[Facts], cfg: dict, q: str = "p50", tail: bo
             fetch_log.append({"scroll": sc, "t0_h": round(t, 3), "t1_h": round(t + ft, 3), "gb": round(s["f"].fetch_gb, 1), "objects": s["f"].las_objects})
             seq += 1
             heapq.heappush(fetching, (t + ft, seq, sc))
-        # ---- tail balancing, then dispatch
-        if tail and not tail_done and 0 < n_pending() < n and free:
-            allj = [j for sc in order for j in S[sc]["jobs"]]
-            avail = [t] * len(free) + [e for e, _s, _g, _j in running]
-            newj, nn = tail_split(cfg, avail, allj, shells, q)
-            if nn:
-                notes += [f"t={t:.2f} h: {x}" for x in nn]
-                for sc in order:
-                    S[sc]["jobs"] = [j for j in newj if j["scroll"] == sc]
-            tail_done = True
+            for j_ in s["jobs"]:                                   # wake the loop when each stripe's inputs have landed
+                seq += 1
+                heapq.heappush(fetching, (j_["_ready_t"], seq, "#wake"))
+        # ---- dispatch
         while free:
-            cand = [sc for sc in order if S[sc]["state"] == "ready" and S[sc]["jobs"]]
+            rdy = lambda c: [j for j in S[c]["jobs"] if j.get("_ready_t") is not None and j["_ready_t"] <= t + 1e-9]
+            cand = [sc for sc in order if S[sc]["state"] in ("fetching", "ready") and rdy(sc)]
             if not cand:
                 break
             if tail_done or n_pending() < n:      # tail: largest first
-                sc = max(cand, key=lambda c: max(hours(j, q) for j in S[c]["jobs"]))
-                j = max(S[sc]["jobs"], key=lambda x: hours(x, q))
+                sc = max(cand, key=lambda c: max(hours(j, q) for j in rdy(c)))
+                j = max(rdy(sc), key=lambda x: hours(x, q))
             else:
                 sc = cand[0]
-                j = S[sc]["jobs"][0]
+                j = sorted(rdy(sc), key=lambda x: (x["z0"], x["z1"]))[0]
             S[sc]["jobs"].remove(j)
             g = free.pop(0)
             seq += 1
@@ -359,8 +402,12 @@ def simulate(host: Host, facts: list[Facts], cfg: dict, q: str = "p50", tail: bo
         idle_gpu_h += (nt - t) * len(free) if n_pending() else 0.0
         t = nt
     mk = max([s["t1_h"] for s in sched] or [0.0])
+    first_fit = min([x["t0_h"] for x in sched] or [0.0])
+    filled = []
+    for st_ in sorted({x["t0_h"] for x in sched}):
+        filled.append((st_, sum(1 for x in sched if x["t0_h"] <= st_ < x["t1_h"])))
     end_all = max([mk] + [s["pulled"] or 0 for s in S.values()])
-    return {"q": q, "makespan_h": mk, "all_pulled_h": end_all, "sched": sched, "fetch": fetch_log, "arrivals": arrivals, "disk_peak_gb": round(peak, 1), "disk_log": disk_log,
+    return {"q": q, "first_fit_h": first_fit, "gpus_filled": filled, "makespan_h": mk, "all_pulled_h": end_all, "sched": sched, "fetch": fetch_log, "arrivals": arrivals, "disk_peak_gb": round(peak, 1), "disk_log": disk_log,
             "gb_in": gb_in, "gb_out": gb_out, "idle_gpu_h_before_tail": round(idle_gpu_h, 2), "notes": notes, "blocked": blocked, "n_gpus_used": n,
             "gpu_h": sum(s["h"] for s in sched), "n_jobs": len(sched)}
 
@@ -517,6 +564,9 @@ def render(host: Host, rates, plan: dict, runnable_note: list[str] | None = None
         s50 = [x for x in plan["p50"]["sched"] if x["scroll"] == nme]
         s90 = [x for x in plan["p90"]["sched"] if x["scroll"] == nme]
         P(f"  {nme:<10} {f.shell:>5} {f.tracks_gb:>6.1f} {f.input_gb:>7.0f} {f.height:>6} {len(s50):>4} {sum(x['h'] for x in s50):>9.1f} {sum(x['h'] for x in s90):>9.1f}  {f.height_why}")
+    ff = plan["p50"]
+    P(f"PLAN time to first fit {ff['first_fit_h']:.2f} h ({'per-stripe staging: tracks + stripe 1 lasagna first' if getattr(host, 'stripe_staging', True) else 'whole-scroll staging'}); "
+      "GPUs busy over time (p50): " + ", ".join(f"{n_} @ {t_:.2f} h" for t_, n_ in ff["gpus_filled"][:12]))
     for key, lab in (("p50", "p50"), ("p90", "p90")):
         sim, mon = plan[key], plan["m" + key[1:]]
         P(f"PLAN {lab}: makespan {sim['makespan_h']:.2f} h (all pulled {sim['all_pulled_h']:.2f} h), {sim['n_jobs']} job(s), {sim['gpu_h']:.1f} GPU-h on {sim['n_gpus_used']} GPU(s), "
@@ -538,6 +588,7 @@ def render(host: Host, rates, plan: dict, runnable_note: list[str] | None = None
     for a in sorted(plan["p50"]["arrivals"], key=lambda x: x["t_h"]):
         P(f"  t={a['t_h']:>6.2f} h  out/{a['id']}/  {a['gb']:.2f} GB")
     P("PLAN disk timeline (p50, GB used incl. env; <t h: GB>): " + " ".join(f"{t:.1f}h:{g:.0f}" for t, g in plan["p50"]["disk_log"][:40]) + f"  (peak {plan['p50']['disk_peak_gb']}, high-water {host.high_water_gb:.0f})")
+    out += vram_lines(host)
     out += download_report(host, rates, plan)
     if routea:
         P(routea)

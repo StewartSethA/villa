@@ -17,10 +17,52 @@ command -v curl >/dev/null || command -v wget >/dev/null || fail preflight "need
 LIBSTD=$(g++ -print-file-name=libstdc++.so.6)
 FREE=$(df -BG --output=avail "$ROUTEB_HOME" | tail -1 | tr -dc 0-9)
 echo "routeB: host=$(hostname) gpu=[$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | tr '\n' ';')] free=${FREE}G in $ROUTEB_HOME g++=$GV"
+# ---- LINK CHECK FIRST (box8 mode): measure ingress from the data host and a CDN before anything that costs money-time (env, compile, fetch)
+case " $* " in
+  *" --mode box8 "*)
+    if [ "${ROUTEB_SKIP_LINKCHECK:-0}" != 1 ] && command -v python3 >/dev/null; then
+      PYTHONPATH="$HERE${PYTHONPATH:+:$PYTHONPATH}" python3 -m routeB.linkcheck "$@" \
+        || fail link "link check gate (see the verdict box above); nothing was built" 5
+    fi;;
+esac
+# ---- EARLY PREFETCH (box8): start downloading the first scroll's stripes now, while the env builds
+PF_PID=""
+case " $* " in
+  *" --mode box8 "*)
+    if [ "${ROUTEB_SKIP_PREFETCH:-0}" != 1 ] && command -v python3 >/dev/null; then
+      PYTHONPATH="$HERE${PYTHONPATH:+:$PYTHONPATH}" python3 -m routeB.prefetch "$@" \
+        > "$ROUTEB_HOME/prefetch.log" 2>&1 &
+      PF_PID=$!
+      echo "routeB: early prefetch running in the background (pid $PF_PID, log $ROUTEB_HOME/prefetch.log)"
+    fi;;
+esac
 # ---- python env (pinned lock) + native build
-ENVD="$ROUTEB_HOME/env"
-bash "$HERE/deploy_common/bootstrap_env.sh" "$ENVD" "$HERE/routeB/pins/requirements.lock" --uv-env "$HERE/routeB/pins/uv.env" \
-     --extra-index https://download.pytorch.org/whl/cu126 >"$ROUTEB_HOME/bootstrap.log" 2>&1 || { tail -20 "$ROUTEB_HOME/bootstrap.log" >&2; fail env "bootstrap_env.sh failed (log $ROUTEB_HOME/bootstrap.log)"; }
+# ---- torch build: cu126 (validated) unless --torch-cuda says otherwise or a Blackwell card (compute capability >= 12) needs sm_120 kernels
+TC=""
+PREV=""
+for A in "$@"; do
+  [ "$PREV" = "--torch-cuda" ] && TC=$A
+  PREV=$A
+done
+if [ -z "$TC" ] || [ "$TC" = auto ]; then
+  MAXCC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | sort -rn | head -1)
+  DRVC=$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: *\([0-9.]*\).*/\1/p' | head -1)
+  TC=cu126
+  if [ "${MAXCC%%.*}" -ge 12 ] 2>/dev/null; then TC=cu128; fi
+  case "$DRVC" in 12.[89]|12.[1-9][0-9]|13.*) TC=cu128 ;; esac
+  echo "routeB: torch build chosen from the hardware: $TC (compute capability ${MAXCC:-?}, driver CUDA ${DRVC:-?})"
+fi
+case "$TC" in
+  cu126) LOCK="$HERE/routeB/pins/requirements.lock"; ENVD="$ROUTEB_HOME/env" ;;
+  cu128|cu129) LOCK="$HERE/routeB/pins/requirements.$TC.lock"; ENVD="$ROUTEB_HOME/env_$TC"
+    echo "routeB: *** torch build $TC is UNVALIDATED numerically (the validated build is cu126): spot-check"
+    echo "routeB: *** one stripe on a known GPU before trusting these fits (D6) ***" ;;
+  *) fail args "--torch-cuda must be auto|cu126|cu128|cu129 (got $TC)" ;;
+esac
+export ROUTEB_TORCH_CUDA=$TC
+bash "$HERE/deploy_common/bootstrap_env.sh" "$ENVD" "$LOCK" --uv-env "$HERE/routeB/pins/uv.env" \
+     --extra-index "https://download.pytorch.org/whl/$TC" >"$ROUTEB_HOME/bootstrap.log" 2>&1 \
+  || { tail -20 "$ROUTEB_HOME/bootstrap.log" >&2; fail env "bootstrap_env.sh failed (log $ROUTEB_HOME/bootstrap.log)"; }
 tail -1 "$ROUTEB_HOME/bootstrap.log"
 SFSTAMP="$ENVD/.spiral.$(md5sum "$HERE"/spiral-fitting/cpp/*.cpp "$HERE"/spiral-fitting/pyproject.toml | md5sum | cut -c1-12)"
 if [ ! -f "$SFSTAMP" ]; then
@@ -49,4 +91,27 @@ export PYTHONWARNINGS=ignore
    || fail env-check "torch/vc_spiral do not import in $ENVD (see TROUBLESHOOTING.md: libstdc++, driver)"
 ( cd "$HERE/spiral-fitting" && "$ENVD/bin/python" -c "import vc_spiral.spiral_sampling as s; assert hasattr(s,'PatchSatisfactionAtlas'), 'PatchSatisfactionAtlas missing'; print('routeB: native vc_spiral importable from the fit cwd, PatchSatisfactionAtlas present')" ) \
    || fail native-shadow "vc_spiral.spiral_sampling is not importable from $HERE/spiral-fitting (the cwd fit_spiral.py runs in): the fit would fall back to python and crash at the end"
+# ---- record exactly what was installed (downloadable with the results)
+mkdir -p "$ROUTEB_HOME/box8"
+"$ENVD/bin/python" -c "import json,sys,torch,importlib.metadata as m; d={'torch':torch.__version__,'cuda':torch.version.cuda,'arch_list':torch.cuda.get_arch_list(),'build':sys.argv[1],'lock':sys.argv[2],'torchvision':m.version('torchvision'),'triton':m.version('triton')}; print(json.dumps(d))" "$TC" "$(basename "$LOCK")" > "$ROUTEB_HOME/box8/env_installed.json" 2>/dev/null
+echo "routeB: installed: $(cat "$ROUTEB_HOME/box8/env_installed.json" 2>/dev/null)"
+# ---- GPU kernel smoke test (box8 mode): every allowed GPU must run real kernels BEFORE any fetch or fit
+case " $* " in
+  *" --mode box8 "*)
+    if [ "${ROUTEB_SKIP_GPUSMOKE:-0}" != 1 ]; then
+      GL=""
+      PREV=""
+      for A in "$@"; do
+        [ "$PREV" = "--gpus" ] && GL=$A
+        PREV=$A
+      done
+      "$ENVD/bin/python" -m routeB.gpusmoke ${GL:+--gpus "$GL"} \
+        || fail gpu-smoke "a GPU cannot run this torch build ($TC); see the table above. Nothing was fetched." 6
+    fi;;
+esac
+if [ -n "$PF_PID" ]; then
+  kill -TERM "$PF_PID" 2>/dev/null
+  wait "$PF_PID" 2>/dev/null
+  echo "routeB: prefetch handed over to the scheduler: $(tail -1 "$ROUTEB_HOME/prefetch.log" 2>/dev/null)"
+fi
 exec "$ENVD/bin/python" -m routeB.cli "$@"

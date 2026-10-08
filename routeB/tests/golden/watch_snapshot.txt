@@ -1,0 +1,43 @@
+== routeB box8 @ 2027-01-15 08:00:00   host testbox   routeAB-deploy-v5@abc1234   3h49m since the REAL box start
+$ spent 18.40  projected 31.20   soft 45  hard 49   rate 4.801/h   [######..........] 41% of soft   clock 3h49m of max 12 h
+link 99 MB/s (data host) rising; last 4: 61 80 96 99   verdict GOOD
+disk used 123 / 934 GB (free 811)   RAM available 400 / 516 GB   jobs {'running': 1, 'done': 2, 'pending': 5}
+
+GPU  util  VRAM        job (scroll/stripe)            step           it/s   ETA        rung      ladder
+  0   97%   20.5/40G   PHerc0191/h9100s4500           8100/30000     2.9    2h 06m     h9100     desc 1 oom 1
+  1    0%    0.3/40G   -- IDLE --
+
+FETCH
+  PHerc0191  done             
+  PHerc0257  fetching         3.3/9.7 GB  108 MB/s  ETA 1 min  nx 6000/8573 obj
+  PHerc0813  BLOCKED by disk  
+ROUTE A  slots 27   segments published 0   area grown so far 0.0 cm2   
+
+PAYLOAD  2 unit(s) DONE, 0.70 GB, 1 pulled
+  PHerc0125/full                      0.300 GB   120 files  pulled: yes
+  PHerc0211/full                      0.400 GB   120 files  pulled: no
+
+ALERTS (4)
+  ! GPU 1 IDLE 240 s beside 5 pending job(s): waiting for DATA: PHerc0257 still fetching   [240 s]
+  ! failures: oom -> retry x1 (50% of 2 jobs)
+  ! failures: oom -> descend x1 (50% of 2 jobs)
+  ! STAGING BLOCKED by disk: PHerc0813 needs 71 GB (held 700 GB): nothing pulled yet?
+
+PULL from your machine (paste each line):
+  H=root@203.0.113.9
+  P=2222
+  RH=<HOME>
+  R=$RH/out/
+  mkdir -p out
+  while :;do rsync -aH --partial --append-verify -e "ssh -p $P" $H:$R out/;sleep 60;done
+  # verified pull (md5 + PULLED marking) needs the repo checkout on your machine:
+  ./routeB_pull.sh --host $H --port $P --remote-home $RH --dest out --final
+
+EVENTS
+  [routeA]                     grow: 2 seeds
+  [fit gpu0 PHerc0191]         PHerc0191/full: FAILED class=oom -> DESCEND: oom: re-cover z[4500,17500) at height 9100
+  [box8]                       PHerc0125: complete: 1 unit(s) in out/PHerc0125/ (scroll DONE marker written)
+  [fit gpu0 PHerc0191]         PHerc0191/h9100s4500: rung h9100 z[4500,13600) on GPU 0 pid 4242 (attempt 1, overrides {})
+  [budget]                     LAUNCH PHerc0191/h9100s4500: projected $31.20
+  [ALARM]                      ALARM [idle:gpu1] GPU 1 IDLE 240 s beside 5 pending job(s): waiting for DATA
+  [stage]                      STAGING PHerc0813 BLOCKED by disk: base 90 + held 700 + need 71 > high-water 794 GB
