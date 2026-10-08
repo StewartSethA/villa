@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import os
 import shutil
 import time
@@ -115,7 +116,10 @@ def _integrity(sd: Path) -> tuple[dict, list[str]]:
 
 def _checkpoints(sd: Path) -> list[Path]:
     out = [p.parent for p in sd.glob("r*/*/x.tif") if all((p.parent / f).is_file() for f in TIFXYZ_FILES)]
-    return sorted(out, key=lambda d: (d.parent.name, (d / "meta.json").stat().st_mtime, d.name))
+    def _rn(d: Path) -> int:                                  # NUMERIC round: "r10" must sort after "r2" (a name sort put r9 last for a 24-round segment)
+        m = re.search(r"(\d+)", d.parent.name)
+        return int(m.group(1)) if m else -1
+    return sorted(out, key=lambda d: (_rn(d), (d / "meta.json").stat().st_mtime, d.name))
 
 
 def verify(sd, pol, override: dict | None = None) -> dict:
@@ -136,9 +140,25 @@ def verify(sd, pol, override: dict | None = None) -> dict:
         if not v["problems"]:
             from . import resume_gate as RG, selfcontact as SC
             from . import growth_guard as GG
-            newest = cks[-1]
-            res = RG.check(str(newest), pol, override)
+            # USABLE IS VALID (user 2026-10-08: "any segment that is usable is valid"): when the newest checkpoint fails the degeneracy gate, fall back to the
+            # newest EARLIER checkpoint that passes it (the grower stopped exactly because the next round tripped the gate; the rounds before it passed).  A gate that
+            # could not RUN is a fail-closed stop, never a reason to look further back.  The skipped newer checkpoints and their reasons are recorded.
+            newest, res, skipped = None, None, []
+            for ck in reversed(cks):
+                r_ = RG.check(str(ck), pol, override)
+                if res is None:
+                    res = r_                                  # the NEWEST checkpoint's verdict is what the problems below report if nothing passes
+                if r_.get("ran", True) and r_.get("pass"):
+                    newest, res = ck, r_
+                    break
+                skipped.append({"checkpoint": str(ck.relative_to(sd)), "reasons": r_.get("reasons"), "ran": r_.get("ran", True)})
+                if not r_.get("ran", True):
+                    break
+            if newest is None:
+                newest = cks[-1]
             v["checks"]["resume_gate"] = res
+            if skipped and newest is not cks[-1]:
+                v["checks"]["skipped_newer_checkpoints"] = skipped
             if not res.get("ran", True):
                 v["problems"].append(f"gate could not run: {res.get('reasons')}")
             elif not res["pass"]:
