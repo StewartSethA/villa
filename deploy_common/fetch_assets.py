@@ -29,9 +29,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
 import json
 import os
 import re
+import ssl
 import sys
 import tarfile
 import threading
@@ -88,6 +90,43 @@ def sha256_file(p, buf=1 << 22):
 def _open(url, headers=None, timeout=60, method="GET"):
     req = urllib.request.Request(url, headers={**UA, **(headers or {})}, method=method)
     return urllib.request.urlopen(req, timeout=timeout)
+
+
+# ---- persistent connections: the lasagna z-slab is 40-45 k objects of ~25 kB PER FIELD, so one TCP+TLS handshake per object (urllib's default) dominates; each worker thread keeps
+# ONE keep-alive connection and issues its GETs on it (ROUTEB_S3_KEEPALIVE=0 restores one connection per object).
+KEEPALIVE = os.environ.get("ROUTEB_S3_KEEPALIVE", "1") != "0"
+_TL = threading.local()
+_CTX = ssl.create_default_context()
+
+
+def _kget(url, timeout=120):
+    """GET `url` on this thread's persistent connection; returns (body, etag).  HTTPError for non-200 (same contract as urlopen), transport errors reconnect up to 3 times."""
+    u = urllib.parse.urlparse(url)
+    path = u.path + ("?" + u.query if u.query else "")
+    key = (u.scheme, u.netloc)
+    for attempt in (1, 2, 3):
+        c = getattr(_TL, "c", None)
+        if c is None or getattr(_TL, "key", None) != key:
+            if c is not None:
+                c.close()
+            c = (http.client.HTTPSConnection(u.netloc, timeout=timeout, context=_CTX) if u.scheme == "https" else http.client.HTTPConnection(u.netloc, timeout=timeout))
+            _TL.c, _TL.key = c, key
+        try:
+            c.request("GET", path, headers=UA)
+            r = c.getresponse()
+            body = r.read()
+        except (http.client.HTTPException, ConnectionError, OSError) as e:      # includes ssl.SSLError / socket.timeout
+            try:
+                c.close()
+            except Exception:                                                   # noqa: BLE001
+                pass
+            _TL.c = None
+            if attempt == 3:
+                raise urllib.error.URLError(e)
+            continue
+        if r.status != 200:
+            raise urllib.error.HTTPError(url, r.status, r.reason, r.headers, None)
+        return body, (r.headers.get("ETag") or "").strip('"')
 
 
 def _retry(fn, what, tries=6):
@@ -223,9 +262,16 @@ def _s3_get(bucket, key, dst: Path, size, etag):
 
     def go():
         h, n = hashlib.md5(), 0
-        with _open(url, timeout=120) as r, open(part, "wb") as f:
-            for b in iter(lambda: r.read(1 << 20), b""):
-                f.write(b); h.update(b); n += len(b)
+        if KEEPALIVE and size <= (64 << 20):
+            body, _e = _kget(url)
+            with open(part, "wb") as f:
+                f.write(body)
+            h.update(body)
+            n = len(body)
+        else:
+            with _open(url, timeout=120) as r, open(part, "wb") as f:
+                for b in iter(lambda: r.read(1 << 20), b""):
+                    f.write(b); h.update(b); n += len(b)
         if n != size:
             raise FetchError(f"size {n} != listed {size} for {key}")
         if etag and "-" not in etag and h.hexdigest() != etag:
@@ -244,8 +290,13 @@ def sync_s3prefix(bucket, prefix, dst: Path, include=None, exclude=None, workers
     exc = re.compile(exclude) if exclude else None
     objs = []
     listing = []
-    for sp in (subprefixes or [""]):
-        listing += s3_list(bucket, prefix + "/" + sp)
+    sps = subprefixes or [""]
+    if len(sps) > 1:                                   # one listing request chain per z-chunk directory: run them concurrently (they were sequential, ~100 round trips)
+        with ThreadPoolExecutor(max_workers=min(16, len(sps))) as lx:
+            for part_ in lx.map(lambda sp_: s3_list(bucket, prefix + "/" + sp_), sps):
+                listing += part_
+    else:
+        listing += s3_list(bucket, prefix + "/" + sps[0])
     for o in listing:
         rel = o["key"][len(prefix) + 1:]
         if not rel or rel.endswith("/") or (inc and not inc.search(rel)) or (exc and exc.search(rel)):
@@ -267,7 +318,7 @@ def sync_s3prefix(bucket, prefix, dst: Path, include=None, exclude=None, workers
         futs = [ex.submit(_s3_get, bucket, o["key"], d, o["size"], o["etag"]) for o, d in todo]
         for i, f in enumerate(as_completed(futs), 1):
             got += f.result()
-            if i % 2000 == 0:
+            if i % 500 == 0:
                 log(f"    s3 {prefix}: {i}/{len(todo)} objects, {got / 1e9:.2f} GB")
     bad = [rel for o, rel in objs if not (dst / rel).exists()]
     if bad:
@@ -297,12 +348,18 @@ def sync_s3keys(bucket, prefix, keys, dst: Path, workers=32, log=_p):
 
         def go():
             try:
-                with _open(url, timeout=120) as r:
-                    etag = (r.headers.get("ETag") or "").strip('"')
-                    h, n = hashlib.md5(), 0
+                if KEEPALIVE:
+                    body, etag = _kget(url)
+                    h, n = hashlib.md5(body), len(body)
                     with open(part, "wb") as f:
-                        for b in iter(lambda: r.read(1 << 20), b""):
-                            f.write(b); h.update(b); n += len(b)
+                        f.write(body)
+                else:
+                    with _open(url, timeout=120) as r:
+                        etag = (r.headers.get("ETag") or "").strip('"')
+                        h, n = hashlib.md5(), 0
+                        with open(part, "wb") as f:
+                            for b in iter(lambda: r.read(1 << 20), b""):
+                                f.write(b); h.update(b); n += len(b)
             except urllib.error.HTTPError as e:
                 if e.code in (403, 404):             # a missing key answers 403 on a bucket without anonymous ListBucket for GET
                     return -1
@@ -422,18 +479,24 @@ def fetch(manifest: dict | str | Path, dest, only=None, connections=8, log=_p) -
     names = set(only) if only else None
     res, failed = [], []
     t0 = time.time()
-    for a in manifest["assets"]:
-        if names is not None and a["name"] not in names:
-            continue
+    todo_assets = [a for a in manifest["assets"] if names is None or a["name"] in names]
+
+    def one_asset(a):
         if a.get("note"):
             log(f"  note {a['name']}: {a['note']}")
         try:
-            res.append(fetch_one(a, root, connections, log))
+            return ("ok", fetch_one(a, root, connections, log))
         except Exception as e:                                  # per-item: report all failures, not just the first
             msg = f"{a['name']}: {type(e).__name__}: {e}"
             (log if a.get("optional") else lambda m: print(m, file=sys.stderr))(f"  [FAIL{' (optional)' if a.get('optional') else ''}] {msg}")
-            if not a.get("optional"):
-                failed.append(msg)
+            return ("fail", None if a.get("optional") else msg)
+    # the tracks file and the lasagna fields (nx, ny, grad_mag) are independent: fetch them CONCURRENTLY (the tracks file used to block the fields and the fields ran one after another)
+    with ThreadPoolExecutor(max_workers=max(1, min(4, len(todo_assets)))) as ax:
+        for kind, val in ax.map(one_asset, todo_assets):
+            if kind == "ok":
+                res.append(val)
+            elif val:
+                failed.append(val)
     tot = {"time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "wall_s": round(time.time() - t0, 1),
            "bytes_net": NET.bytes, "failed": failed}
     p = root / ".fetched" / "_totals.json"

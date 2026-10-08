@@ -35,7 +35,12 @@ def stage_fetch(scroll: str, z0: int, z1: int, a) -> None:
     except ValueError as e:
         raise StageError(f"fetch: {e}")
     t0 = time.time()
-    r = FA.fetch(m, home() / "assets", log=lambda x: say(x, "fetch"))
+    from .fetchlog import Collapser
+    sp = spec(scroll)
+    tracks_gb = sum(v for k, v in sp["tracks"]["files"].items() if k.endswith(".dbm")) / 1e9
+    col = Collapser(scroll, tracks_gb + 0.000242 * (z1 - z0 + 512), emit=lambda m_: say(m_, "fetch"))
+    r = FA.fetch(m, home() / "assets", log=col)
+    col.final()
     say(f"{scroll}: fetched {r['bytes_net'] / 1e9:.3f} GB over the network in {time.time() - t0:.0f} s", "fetch")
     if not r["ok"]:
         raise StageError("fetch: " + "; ".join(r["failed"]))

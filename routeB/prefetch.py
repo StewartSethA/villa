@@ -89,7 +89,12 @@ def main(argv=None) -> int:
         if STOP:
             break
         m = MAN.build(sc, z0, z1)
-        r = FA.fetch(m, H / "assets", log=lambda x: None)
+        from .fetchlog import Collapser
+        from .common import spec
+        tr = sum(v for k, v in spec(sc)["tracks"]["files"].items() if k.endswith(".dbm")) / 1e9
+        col = Collapser(sc, tr + PL.LAS_GB_PER_SLICE * (z1 - z0 + 512), emit=lambda m_: print(f"[{time.strftime('%H:%M:%S')}] fetch: {m_}", flush=True))
+        r = FA.fetch(m, H / "assets", log=col)
+        col.final()
         total = max(total, r["bytes_net"])                 # fetch_assets' counter is cumulative for this process
         done.append({"scroll": sc, "z": [z0, z1], "ok": r["ok"]})
         log(f"{sc} z[{z0},{z1}) {'staged' if r['ok'] else 'FAILED ' + '; '.join(r['failed'])[:200]}  (cumulative {r['bytes_net'] / 1e9:.2f} GB over the network)")

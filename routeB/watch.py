@@ -24,6 +24,7 @@ RED, YEL, GRN, DIM, RST, BLD = "\033[31m", "\033[33m", "\033[32m", "\033[2m", "\
 PROG = re.compile(r"PROGRESS Optimizing\s+\S*\s*([\d,]+)/([\d,]+) iterations[^\r\n]*")
 RATE = re.compile(r"([\d.]+) it/s")
 ETA = re.compile(r"ETA\s+([0-9hms ]+)")
+SUMRX = re.compile(r"^(PHerc\w+) ([\d.]+)(?:/([\d.]+))? GB (\d+) MB/s (\d+) obj/s(?: ETA (\d+) min)?( DONE)?(?: \| (.*))?$")
 OBJ = re.compile(r"s3 (\S+): (\d+)/(\d+) objects, ([\d.]+) GB")
 BLK = re.compile(r"(\S+): (\d+)/(\d+) blocks, ([\d.]+) GB this run, ([\d.]+) MB/s")
 TS = re.compile(r"^\[(\d\d):(\d\d):(\d\d)\] (\w+): (.*)$")
@@ -91,9 +92,8 @@ def pull_lines(home: Path, env=None) -> list[str]:
         ip = e["RUNPOD_PUBLIC_IP"]
         port = e.get("RUNPOD_TCP_PORT_22") or port
     user = "root" if (e.get("USER") in (None, "root") or os.geteuid() == 0) else e.get("USER", "root")
-    return [f"H={user}@{ip}", f"P={port}", f"RH={home}", "R=$RH/out/", "mkdir -p out",
-            'while :;do rsync -aH --partial --append-verify -e "ssh -p $P" $H:$R out/;sleep 60;done',
-            "# verified pull (md5 + PULLED marking) needs the repo checkout on your machine:",
+    return [f"H={user}@{ip}", f"P={port}", f"RH={home}",
+            'while :;do rsync -aH --partial --append-verify -e "ssh -p $P" $H:$RH/out/ out/;sleep 60;done',
             "./routeB_pull.sh --host $H --port $P --remote-home $RH --dest out --final"]
 
 
@@ -180,7 +180,9 @@ def collect(home: Path, now: float | None = None, gpus=None, log_path: Path | No
     # log tails
     lp = log_path or Path(os.environ.get("ROUTEB_LOG") or (H / "box8.log"))
     snap["log_path"] = str(lp)
-    snap["log_tail"] = tail_text(lp, 250000).splitlines()
+    pl_ = tail_text(H / "prefetch.log", 60000).splitlines()
+    snap["log_tail"] = sorted(tail_text(lp, 250000).splitlines() + [x for x in pl_ if TS.match(x)], key=lambda x: (TS.match(x).groups()[:3] if TS.match(x) else ("00", "00", "00")))
+    snap["env"] = readj(D / "env_installed.json", {}) or {}
     # fetch rows: GB done / total, MB/s, ETA from the progress lines of the fetch log (timestamps give the rate)
     fetch = {}
     for line in snap["log_tail"]:
@@ -188,6 +190,12 @@ def collect(home: Path, now: float | None = None, gpus=None, log_path: Path | No
         if not m or m.group(4) != "fetch":
             continue
         txt = m.group(5)
+        sm = SUMRX.match(txt)
+        if sm:
+            fetch.setdefault(sm.group(1), {"tracks": 0.0, "las": {}, "pts": []})["sum"] = {
+                "gb": float(sm.group(2)), "tot": float(sm.group(3) or 0), "mbs": int(sm.group(4)), "ops": int(sm.group(5)),
+                "eta": sm.group(6), "done": bool(sm.group(7)), "det": sm.group(8) or ""}
+            continue
         mo = re.search(r"(PHerc(?:Paris)?\d+[A-Z]?)", txt)
         if not mo:
             continue
@@ -226,7 +234,11 @@ def collect(home: Path, now: float | None = None, gpus=None, log_path: Path | No
             state = "waiting"
         f = fetch.get(sc)
         detail, rate = "", None
-        if state == "fetching" and f and f["pts"]:
+        if state == "fetching" and f and f.get("sum"):
+            q = f["sum"]
+            detail = f"{q['gb']:.1f}/{q['tot']:.1f} GB {q['mbs']} MB/s {q['ops']} obj/s ETA {q['eta'] or '?'} min {q['det']}"
+            rate = q["mbs"]
+        elif state == "fetching" and f and f["pts"]:
             done = f["pts"][-1][1]
             total = fetch_total_gb(sc)
             old = next((p_ for p_ in reversed(f["pts"][:-1]) if f["pts"][-1][0] - p_[0] >= 10), None)
@@ -423,6 +435,75 @@ def render(snap: dict, color: bool = False, stream_n: int = 16) -> str:
     return "\n".join(L)
 
 
+
+W = 100
+
+
+def clip(t: str, w: int = W) -> str:
+    return t if len(t) <= w else t[: w - 1] + "~"
+
+
+def render_compact(snap: dict, color: bool = False, brief: bool = False) -> str:
+    """ONE SCREEN: <= 40 lines x 100 columns (brief: <= 28, no event stream).  One line per GPU, one per fetching scroll (GB done/total, MB/s, objects/s, ETA),
+    one Route A + payload line, <= 3 alert lines, the 5-line pull block, 6 event lines."""
+    L = []
+    b, st = snap["budget"], snap["status"]
+    tm = time.strftime("%H:%M:%S", time.localtime(snap["now"]))
+    L.append(c(clip(f"== routeB box8 {tm} {snap['host']['name']} {snap['branch']}@{snap['commit']}  clock {hms(b['hours']) if b.get('hours') is not None else '-'}"), BLD, color))
+    if b:
+        pc = b["spent"] / b["soft"] if b.get("soft") else 0
+        col = RED if b["spent"] >= b["hard"] or b.get("hard_stop") else YEL if pc >= 0.8 else GRN
+        j = st.get("jobs", {})
+        L.append(c(clip(f"$ {b['spent']:.2f} spent, {b['projected_total']:.2f} proj | soft {b['soft']:g} hard {b['hard']:g} | {pc:.0%} | "
+                        f"jobs run {j.get('running', 0)} done {j.get('done', 0)} pend {j.get('pending', 0)} fail {j.get('failed', 0)}"), col, color))
+    tr = [x.get("data_mbs") for x in snap["link_trend"] if x.get("data_mbs") is not None]
+    u, f_, t_ = snap["disk"]
+    av, tot = snap["ram"]
+    en = snap.get("env") or {}
+    L.append(clip(f"link {('%.0f' % tr[-1]) if tr else '?'} MB/s{' (' + ' '.join('%.0f' % v for v in tr[-4:]) + ')' if len(tr) > 1 else ''} | disk {u:.0f}/{t_:.0f} GB"
+                  f" | RAM {av:.0f}/{tot:.0f} | torch {en.get('torch', '?')}"))
+    idle_s = {}
+    for a_ in snap["alerts_file"]:
+        mm = re.match(r"idle:gpu(\d+)", a_.get("key", ""))
+        if mm:
+            idle_s[mm.group(1)] = snap["now"] - a_.get("since", snap["now"])
+    for r in snap["gpu_rows"]:
+        j = r["job"]
+        head = f"g{r['idx']} {r['util']:>3.0f}% {r['mem'] / 1024:4.1f}/{r['total'] / 1024:.0f}G"
+        if j:
+            stp = f"{j['step']}/{j['steps']}" if j["steps"] else "start"
+            ld = ("d%d" % j["descents"] if j["descents"] else "") + ("o%d" % j["ooms"] if j["ooms"] else "") + ("+" + j["prov"][:4] if j.get("prov") else "")
+            L.append(clip(f"{head} {j['id'][:26]:<26} {stp:>11} {(j['rate'] or '-') + 'it/s':>8} {(j['eta'] or '-'):<8} {j['rung'] or '-':<8} {ld}"))
+        else:
+            idle = f" IDLE {idle_s[r['idx']] / 60:.0f}m" if r["idx"] in idle_s else (" idle" if r["util"] < 5 else " (other load)")
+            L.append(c(clip(f"{head}{idle}"), RED if r["idx"] in idle_s else YEL if r["util"] < 5 else DIM, color))
+    fr = snap["fetch_rows"]
+    act = [x for x in fr if x["state"] not in ("done",)]
+    for x in act[:4]:
+        col = RED if x["state"] in ("FAILED", "BLOCKED by disk") else YEL if x["state"] == "fetching" else DIM
+        L.append(c(clip(f"f {x['scroll']:<10} {x['state']:<9} {x['detail']}"), col, color))
+    if len(act) > 4 or any(x["state"] == "done" for x in fr):
+        L.append(clip(f"f +{max(0, len(act) - 4)} more | {sum(1 for x in fr if x['state'] == 'done')} scroll(s) fully staged"))
+    ra = snap["routea"]
+    units = snap["units"]
+    L.append(clip(f"A: {ra['slots'] if ra['slots'] is not None else '-'} slots, {ra['segments']} seg, {ra['area']:.1f} cm2 {'; '.join(ra['events'])[:30]} | "
+                  f"P: {len(units)} units {sum(x['gb'] for x in units):.2f} GB, {sum(1 for x in units if x['pulled'])} pulled"))
+    al = alerts(snap)
+    for sev, txt in al[:3]:
+        L.append(c(clip("! " + txt), RED if sev == "red" else YEL, color))
+    if len(al) > 3:
+        L.append(c(clip(f"! +{len(al) - 3} more alert(s) (routeB_watch.sh --once --full)"), YEL, color))
+    L.append("PULL (your machine):")
+    for l in snap["pull"][:5]:
+        L.append(clip("  " + l))
+    if not brief:
+        L.append("EVENTS")
+        for _t, pref, txt in blend(snap, 6):
+            colr = next((cc for rx, cc in SEV if rx.search(txt)), None)
+            L.append(c(clip(f"  {pref[:18]:<18} {txt}"), {"red": RED, "yellow": YEL, "green": GRN}.get(colr, ""), color and bool(colr)))
+    return "\n".join(L)
+
+
 def snapshot_text(snap: dict) -> str:
     """The single block to paste back for diagnosis: dashboard + raw STATUS/budget/link/control/REPLAN + log tail + df/nvidia-smi."""
     H = snap["home"]
@@ -484,6 +565,8 @@ def main(argv=None) -> int:
     ap.add_argument("--plain", action="store_true")
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--ctl-status", action="store_true")
+    ap.add_argument("--brief", action="store_true", help="compact AND without the event stream (<= 28 lines)")
+    ap.add_argument("--full", action="store_true", help="the long dashboard / the long diagnostic snapshot (default is ONE SCREEN: <= 40 lines x 100 columns)")
     a = ap.parse_args(argv)
     if not a.home:
         print("routeB_watch: set ROUTEB_HOME or pass --home", file=sys.stderr)
@@ -493,12 +576,14 @@ def main(argv=None) -> int:
         print(ctl_status(H))
         return 0
     if a.once:
-        print(snapshot_text(collect(H)))
+        sn = collect(H)
+        print(snapshot_text(sn) if a.full else render_compact(sn, color=False, brief=a.brief))
         return 0
     tty = sys.stdout.isatty() and not a.plain
     try:
         while True:
-            txt = render(collect(H), color=tty)
+            sn_ = collect(H)
+            txt = render(sn_, color=tty) if a.full else render_compact(sn_, color=tty, brief=a.brief)
             if tty:
                 sys.stdout.write("\033[H\033[2J" + txt + f"\n\n{DIM}watching every {a.interval:g} s; Ctrl-C detaches the watcher only (the run continues in tmux session routeb){RST}\n")
             else:

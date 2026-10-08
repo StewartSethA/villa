@@ -1511,7 +1511,7 @@ def build_parser():
     ap.add_argument("--fetch-workers", type=int, default=8, help="threads in the scroll-fetch pool (each scroll fetch itself uses ROUTEB_FETCH_WORKERS=128 connections)")
     ap.add_argument("--fetch-parallel", type=int, default=8, help="max concurrent scroll fetches")
     ap.add_argument("--fetch-ahead", type=int, default=2, help="fetched-but-unstarted scrolls kept ready beyond the free GPUs (GPUs must not wait)")
-    ap.add_argument("--fetch-files-per-s", type=float, default=58.0, help="planner: objects/s of ONE scroll's lasagna fetch (MEASURED 58 on pny with 128 workers under load 95, n = 1)")
+    ap.add_argument("--fetch-files-per-s", type=float, default=180.0, help="planner: objects/s of the lasagna fetch (MEASURED 181-236 with keep-alive connections, 13-121 without, on pny under load 95; n = 1 run per setting)")
     ap.add_argument("--disk-high-water", type=float, default=0.85, help="never stage inputs that would push disk use above this fraction of the volume")
     ap.add_argument("--disk-total-gb", type=float, default=None, help="planner/test override of the volume size (default: df of ROUTEB_HOME)")
     ap.add_argument("--disk-free-gb", type=float, default=None)

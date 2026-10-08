@@ -27,10 +27,7 @@ PULL from your machine (paste each line):
   H=root@203.0.113.9
   P=2222
   RH=<HOME>
-  R=$RH/out/
-  mkdir -p out
-  while :;do rsync -aH --partial --append-verify -e "ssh -p $P" $H:$R out/;sleep 60;done
-  # verified pull (md5 + PULLED marking) needs the repo checkout on your machine:
+  while :;do rsync -aH --partial --append-verify -e "ssh -p $P" $H:$RH/out/ out/;sleep 60;done
   ./routeB_pull.sh --host $H --port $P --remote-home $RH --dest out --final
 
 EVENTS

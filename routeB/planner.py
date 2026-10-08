@@ -32,7 +32,8 @@ GRID = L.GRID
 
 # measured / assumed input volumes ------------------------------------------------------------------------------------------------------------------------------
 LAS_GB_PER_SLICE = 0.245 / 1012.0            # PHerc0211 smoke slab z 9000-9500 (+-256 margin = 1012 slices): nx+ny+grad_mag = 0.245 GB (n = 1 scroll)
-LAS_OBJ_PER_SLICE = 3 * 6012 / 1012.0        # same slab: 6012 objects per field x 3 fields
+LAS_OBJ_PER_SLICE = 3 * 43731 / 13512.0      # MEASURED on the PRO 5000 run: ny 43,219 and grad_mag 44,243 objects for z 4500-17500 (+-256 margin = 13,512 slices) = 3.24 per slice per field,
+                                             # x3 fields (the earlier 17.8 came from a 1,012-slice slab whose z-chunk rounding inflated it ~1.8x); varies a little with the scroll's xy size
 WORK_GB_BASE, WORK_GB_PER_TRACK_GB = 8.7, 5.0   # fit dir / caches / run outputs per scroll: ASSUMED, calibrated so input+work = 35 GB (smallest scroll) .. 90 GB (largest)
                                                # (the coordinator's per-scroll disk figures); refine from a measured full-height fit dir
 
@@ -55,7 +56,7 @@ class Host:
     env_gb: float = 15.0                       # python env + tools on the box (pny readiness proof: env 7.4 + tools 7.6 GB)
     net_down_mb_s: float = 860 / 8.0           # 860 Mbps (quoted)
     net_up_mb_s: float = 913 / 8.0
-    fetch_files_per_s: float = 58.0            # per scroll, 128 workers: MEASURED on pny under load ~95 (lasagna z-slab, n = 1 run); the 192-thread box may do better
+    fetch_files_per_s: float = 180.0           # objects/s of ONE process with keep-alive connections, 128 workers: MEASURED 181-236 on pny under load ~95 (n = 1 run per setting, 600 objects); urllib new-connection-per-object gave 13-121
     fetch_parallel: int = 8                    # concurrent scroll fetches
     fetch_ahead: int = 2                       # fetched-but-unstarted scrolls kept ready beyond the free GPUs
     pull_latency_h: float = 0.15               # DONE -> pulled+verified (poll interval + transfer) before the inputs are deleted
@@ -100,6 +101,7 @@ class Facts:
     las_gb: float
     las_objects: int
     work_gb: float
+    startup_split: bool = False
 
     @property
     def input_gb(self) -> float:
@@ -427,8 +429,36 @@ def priority_key(f: Facts, cfg: dict):
     return (len(f.roles), -L.fit_hours(f.name, f.shell, f.z1 - f.z0, "p50"))
 
 
+def startup_stripes(host: Host, ordered: list[Facts], min_h: int = 2800, thr_h: float = 0.15) -> tuple[list[Facts], list[str]]:
+    """DATA-BOUND START: when staging a whole scroll takes > thr_h, a one-job-per-scroll plan leaves the GPUs idle until a whole scroll has landed (object-bound fetch: ~1.2 h seen on
+    the PRO 5000 box with 0 MiB used on all four cards).  The first scroll(s) are therefore planned as k z-stripes (k = min(GPUs, floor((span+overlap)/min_h))) so the first stripe's
+    fit starts after tracks + 1/k of the lasagna while the other stripes and the next scroll keep downloading.  Cost: ~1.1-1.35x the GPU-h of those scrolls (stripe overlap + startup)."""
+    import dataclasses
+    out, notes, gpus_left = [], [], host.n
+    for f in ordered:
+        span = f.z1 - f.z0
+        whole = f.height >= span
+        if gpus_left > 0 and whole and fetch_time(host, f) > thr_h and host.n >= 2:
+            k = min(max(1, gpus_left), max(1, (span + OVERLAP) // max(min_h, GRID)))
+            if k >= 2:
+                h = -(-int((span + (k - 1) * OVERLAP) / k) // GRID) * GRID
+                if h >= min_h:
+                    g = dataclasses.replace(f, height=h, startup_split=True, height_why=f"startup stripes: {k} x ~{h} (was whole scroll; staging takes {fetch_time(host, f):.2f} h)")
+                    first = f.tracks_gb * 1000.0 / (host.net_down_mb_s / max(1, host.fetch_parallel)) / 3600.0 + max(
+                        LAS_OBJ_PER_SLICE * (h + 512) / host.fetch_files_per_s / 3600.0, LAS_GB_PER_SLICE * (h + 512) * 1000.0 / (host.net_down_mb_s / max(1, host.fetch_parallel)) / 3600.0)
+                    extra = k * L.fit_hours(f.name, f.shell, h) - L.fit_hours(f.name, f.shell, span)
+                    notes.append(f"startup stripes: {f.name} -> {k} stripes of ~{h} slices: first fit after ~{first:.2f} h instead of ~{fetch_time(host, f):.2f} h "
+                                 f"(whole-scroll staging), +{extra:.1f} GPU-h p50 for the overlap/startup of the split")
+                    out.append(g)
+                    gpus_left -= k
+                    continue
+        out.append(f)
+        gpus_left -= 1
+    return out, notes
+
+
 def make_plan(host: Host, rates, scrolls: list[str], cfg: dict, z0: int = UP_LO, z1: int = UP_HI, plan_frac: float = 0.8, max_height: int = L.FULL_SPAN,
-              priority: list[str] | None = None, heights_path=None, order: str = "spt") -> dict:
+              priority: list[str] | None = None, heights_path=None, order: str = "spt", startup: bool = False, startup_min_height: int = 2800, startup_thr_h: float = 0.15) -> dict:
     cfg.setdefault("dynamic", True)
     allf = [scroll_facts(s, cfg, host, z0, z1, max_height, heights_path) for s in scrolls]
     if priority:
@@ -442,11 +472,14 @@ def make_plan(host: Host, rates, scrolls: list[str], cfg: dict, z0: int = UP_LO,
     res = None
     while keep:
         ordered = sorted(keep, key=lambda f: sum(j["expected_h"] for j in make_jobs(cfg, f)), reverse=(order == "lpt"))
+        snotes = []
+        if startup:
+            ordered, snotes = startup_stripes(host, ordered, startup_min_height, startup_thr_h)
         s50 = simulate(host, ordered, cfg, "p50")
         s90 = simulate(host, ordered, cfg, "p90")
         m50, m90 = money(rates, s50), money(rates, s90)
         ok = (m90["total_usd"] <= limit_usd and m90["billed_h"] <= limit_h and not s90["blocked"] and not s50["blocked"])
-        res = dict(keep=[f.name for f in ordered], facts={f.name: f for f in ordered}, p50=s50, p90=s90, m50=m50, m90=m90, fits=ok)
+        res = dict(keep=[f.name for f in ordered], facts={f.name: f for f in ordered}, p50=s50, p90=s90, m50=m50, m90=m90, fits=ok, startup_notes=snotes)
         if ok:
             break
         victim = keep.pop()                    # lowest priority
@@ -564,6 +597,8 @@ def render(host: Host, rates, plan: dict, runnable_note: list[str] | None = None
         s50 = [x for x in plan["p50"]["sched"] if x["scroll"] == nme]
         s90 = [x for x in plan["p90"]["sched"] if x["scroll"] == nme]
         P(f"  {nme:<10} {f.shell:>5} {f.tracks_gb:>6.1f} {f.input_gb:>7.0f} {f.height:>6} {len(s50):>4} {sum(x['h'] for x in s50):>9.1f} {sum(x['h'] for x in s90):>9.1f}  {f.height_why}")
+    for n_ in plan.get("startup_notes", []):
+        P("PLAN " + n_)
     ff = plan["p50"]
     P(f"PLAN time to first fit {ff['first_fit_h']:.2f} h ({'per-stripe staging: tracks + stripe 1 lasagna first' if getattr(host, 'stripe_staging', True) else 'whole-scroll staging'}); "
       "GPUs busy over time (p50): " + ", ".join(f"{n_} @ {t_:.2f} h" for t_, n_ in ff["gpus_filled"][:12]))
