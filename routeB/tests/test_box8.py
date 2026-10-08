@@ -239,3 +239,23 @@ def test_detect_early_kills_on_too_many_tracks_and_descends(tmp_path, monkeypatc
     j = s.jobs["PHerc0211/full"]
     assert j["status"] == "descended" and j["attempts"][0]["class"] == "multinomial" and j["n_loaded"] == 20_000_000
     assert any(k.startswith("PHerc0211/sw") and v["status"] == "done" for k, v in s.jobs.items())
+
+
+# ---------------------------------------------------------------- computed stripe height
+def test_computed_height_matches_measurements(tmp_path):
+    h16 = L.computed_height(15.58)                      # 4060 Ti: 13,000 must be refused, 2,800 must be allowed
+    assert 2800 <= h16 < 13000 and h16 % 100 == 0
+    assert L.computed_height(32.0) >= 13000 or L.computed_height(32.0, span=13000) == 13000 or L.computed_height(32.0) > 11000
+    assert L.computed_height(4.0) == 1000               # floor
+    assert L.computed_height(80.0, span=13000) == 13000  # capped at the span
+
+
+def test_shrink_and_memory(tmp_path):
+    assert L.shrink_height(4500) == 3300
+    assert L.shrink_height(1200) is None
+    p = tmp_path / "h.json"
+    assert L.start_height(p, "PHerc0191", 15.58, 13000) == L.computed_height(15.58, span=13000)
+    L.record_height(p, "PHerc0191", 2800, 15.58)
+    assert L.start_height(p, "PHerc0191", 15.58, 13000) == 2800
+    assert L.start_height(p, "PHerc0125", 15.58, 13000) == 2800     # next scroll starts from the last success
+    assert L.start_height(p, "PHerc0125", 32.0, 13000) == L.computed_height(32.0, span=13000)   # different card size: model, not memory

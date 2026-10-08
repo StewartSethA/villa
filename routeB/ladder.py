@@ -190,3 +190,54 @@ def decide(cfg: dict, job: dict, cls: str, shell: int, dbm_bytes: float | None =
             return {"action": "fail", "why": "multinomial limit and no narrower rung is under it"}
     kids = plan(cfg, job["scroll"], shell, job["z0"], job["z1"], start=nr, parent=job["id"], lineage_attempts=job["lineage_attempts"])
     return {"action": "descend", "jobs": kids, "to_rung": cfg["rungs"][nr]["name"], "why": f"{cls}: re-cover z[{job['z0']},{job['z1']}) with rung {cfg['rungs'][nr]['name']} ({len(kids)} stripe(s))"}
+
+
+# ---------------------------------------------------------------- computed stripe height (adaptive ladder)
+# Peak VRAM of one fit_spiral run is modelled as  vram_gib = A + B * z_slices  (fixed cost + per-slice cost: tracks, flow field and
+# optimizer state all grow with the z-extent). TWO measured points, both with the production recipe, so this is a 2-point line, not a fit:
+#   * 2,800-slice PHerc0191 stripes on a 4060 Ti 16 GB: nvidia-smi peak 9.6-10.2 GiB (n = 4 stripes, 2026-10-08, includes ~0.3 GiB of other contexts), no OOM
+#     through 30,000 steps' first 83 %;
+#   * 13,000-slice PHerc0211 (14.36 M tracks) on a V100 32 GB: peak ~31 GiB (f0211_full, OOM at step 25000, restarted from checkpoint).
+# Cross-check: a 13,000-slice fit on a 15.58 GiB 4060 Ti OOMed at iteration 61-77 in 4 of 4 runs (model says 31 GiB needed). Tracks per slice differ
+# per scroll (0191 22.8 M / 0211 14.4 M): the model is per z-slice, not per track, until a third point exists.
+VRAM_A_GIB = 3.97
+VRAM_B_GIB_PER_SLICE = (31.0 - 9.8) / (13000 - 2800)
+GRID = 100            # stripe heights are rounded DOWN to this many slices (tiling grid)
+
+
+def computed_height(vram_gib: float, margin_gib: float = 1.5, overlap: int = 0, span: int | None = None, a: float = VRAM_A_GIB,
+                    b: float = VRAM_B_GIB_PER_SLICE, grid: int = GRID, min_height: int = 1000) -> int:
+    """Largest stripe height (z slices) whose modelled peak VRAM stays within vram_gib - margin_gib; at least min_height, at most span."""
+    h = int((vram_gib - margin_gib - a) / b)
+    h = max(min_height, (h // grid) * grid)
+    return min(h, span) if span else h
+
+
+def shrink_height(height: int, factor: float = 0.75, grid: int = GRID, min_height: int = 1000) -> int | None:
+    """Next height after an OOM (0.75x, grid-rounded); None when it would fall under min_height (the scroll is then skipped, announced)."""
+    h = (int(height * factor) // grid) * grid
+    return h if h >= min_height else None
+
+
+def load_heights(path: Path | str) -> dict:
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def record_height(path: Path | str, scroll: str, height: int, vram_gib: float) -> None:
+    """Remember the height that SUCCEEDED for a scroll on a card of this size, so the next scroll starts from it."""
+    d = load_heights(path)
+    d[scroll] = {"height": height, "vram_gib": vram_gib}
+    d["_last_ok"] = {"height": height, "vram_gib": vram_gib}
+    Path(path).write_text(json.dumps(d, indent=1))
+
+
+def start_height(path: Path | str, scroll: str, vram_gib: float, span: int, margin_gib: float = 1.5) -> int:
+    """Start height for a scroll: its own recorded success, else the last scroll's success on a card of this size, else the model."""
+    d = load_heights(path)
+    for k in (scroll, "_last_ok"):
+        if k in d and abs(d[k]["vram_gib"] - vram_gib) < 0.5:
+            return min(d[k]["height"], span)
+    return computed_height(vram_gib, margin_gib, span=span)

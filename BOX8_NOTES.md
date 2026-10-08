@@ -45,3 +45,6 @@ Precedence: built-in defaults < `--budget-config FILE.json` < `BUDGET_*` env < C
 | egress, box uploads to us, $/TB | 4.00 | `--egress-per-tb` | BUDGET_EGRESS_PER_TB | egress_per_tb |
 | swap the two directions | off | `--swap-directions` | BUDGET_SWAP_DIRECTIONS=1 | swap_directions |
 RAM/disk guards: `--ram-need-gb` (40), `--ram-floor-gb` (12), `--min-free-gb` (200). Max run time is a launch gate, not a kill: a fit already running is never killed for it.
+
+## Computed stripe height (adaptive fallback) -- model + helpers; NOT yet called by the box8 scheduler
+`routeB/ladder.py`: `computed_height(vram_gib, margin_gib=1.5, span=...)`, `shrink_height()` (0.75x on OOM, grid 100, floor 1000), `record_height()/start_height()` (per-scroll success memory in a json). Model: peak VRAM = 3.97 + 0.00208 GiB x z_slices, a 2-point line (2,800-slice 0191 stripes on a 4060 Ti: 9.6-10.2 GiB, n = 4; 13,000-slice 0211 on a V100-32: ~31 GiB). Cross-check: 13,000 slices OOMed a 15.58 GiB card at iteration 61-77 in 4/4 runs. Per z-slice, not per track, until a third point exists. Wiring into `Scheduler` (replace the fixed `sw2800` rung by start_height -> shrink on OOM -> record on success) is the remaining step.
