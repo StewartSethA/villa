@@ -155,6 +155,24 @@ def summarize(work, slots: int | None = None, tracers: int | None = None, cpu: f
     out.update(seeds_planned=planned, seeds_done=done, status=st, area_cm2=round(sum(area_by.values()), 1), area_by_status={k: round(v, 1) for k, v in area_by.items()},
                held_reasons=tally, held=len(rows))
     # ---- near-miss sweep: how many held seeds a looser threshold multiplier would release (transverse is zero-tolerance: never scaled)
+    # seeds finished BEFORE thresholds were recorded per round: fall back to the thresholds in effect now (pinned values + control file)
+    cur = {}
+    try:
+        from .. import resume_gate as _RG
+        cur = {k: v[0] for k, v in _RG.TUNABLES.items()}
+        try:
+            pin = json.loads((Path(__file__).resolve().parents[3] / "pins" / "settings_snapshot.json").read_text()).get("resume_gate") or {}
+            cur.update({k: float(v) for k, v in pin.items() if k in cur})
+        except (OSError, ValueError):
+            pass
+        cur.update(clean_gate(load_control(work).get("gate") or {})[0])
+    except ImportError:
+        pass
+    for r in rows:
+        if not r["thresholds"]:
+            r["thresholds"] = dict(cur)
+            r["thresholds_assumed"] = True
+    out["sweep_assumed_thresholds"] = sum(1 for r in rows if r.get("thresholds_assumed"))
     sweep = {}
     for mult in (1.25, 1.5, 2.0, 3.0):
         n = 0
