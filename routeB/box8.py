@@ -270,6 +270,15 @@ class Scheduler:
         self.save(scroll)
 
     # ---- fetch
+    def fetch_est_h(self, scroll: str) -> float:
+        """Planned hours to stage `scroll` (planner.fetch_time at the current link/objects rate)."""
+        try:
+            if self.host is None:
+                return 0.0
+            return PL.fetch_time(self.host, PL.scroll_facts(scroll, self.cfg, self.host, self.a.z0 or UP_LO, self.a.z1 or UP_HI))
+        except Exception:                                # noqa: BLE001
+            return 0.0
+
     def _fetch_real(self, scroll: str) -> float:
         from . import cli
         ns = SimpleNamespace(with_crossings=False, full_lasagna=False)
@@ -282,8 +291,11 @@ class Scheduler:
         err = None
         for attempt in (1, 2, 3):
             try:
+                t_f0 = time.time()
+                est_h = self.fetch_est_h(scroll)
                 gb = self.fetch_fn(scroll)
                 self.gov.transfer(box_download_gb=gb, what=f"fetch {scroll}")
+                self._observe_fetch(scroll, gb, time.time() - t_f0, est_h)
                 with self.cv:
                     sc["fetched"], sc["fetching"] = True, False
                     self.cv.notify_all()
@@ -312,6 +324,21 @@ class Scheduler:
         except Exception:                              # noqa: BLE001 - an unknown size must not stop staging; announced
             say(f"{scroll}: input size unknown, assuming 80 GB for disk admission", "box8")
             return 80.0
+
+    def _observe_fetch(self, scroll: str, gb: float, secs: float, est_h: float):
+        """Compare the planned staging time with what happened; a >1.5x miss either way rescales the planner's fetch rates (the link/object rates were quoted or probed
+        under other load) and triggers a re-plan -- GPUs waiting for data bill like busy ones."""
+        if self.host is None or secs < 60 or est_h <= 0:
+            return
+        ratio = secs / (est_h * 3600.0)
+        say(f"FETCH OBSERVED {scroll}: {gb:.1f} GB in {secs / 60:.1f} min = {gb * 1000 / secs:.0f} MB/s; planned {est_h * 60:.1f} min (x{ratio:.2f})", "fetch")
+        self.ev("fetch_observed", scroll=scroll, gb=gb, secs=secs, planned_h=est_h)
+        if ratio > 1.5 or ratio < 0.5:
+            self.host.fetch_files_per_s /= ratio
+            self.host.net_down_mb_s /= ratio
+            say(f"FETCH RATE CHANGE: staging is x{ratio:.2f} of plan -> planner rates scaled to {self.host.fetch_files_per_s:.0f} files/s and {self.host.net_down_mb_s:.0f} MB/s; "
+                f"{'DOWNLOAD IS SLOWER THAN PLANNED: idle GPUs waiting for data are billed; consider fewer GPUs (routeB_ctl.sh gpus ...)' if ratio > 1.5 else 'faster than planned'}", "fetch")
+            threading.Thread(target=self.replan, args=(f"fetch observed x{ratio:.2f} of plan",), daemon=True).start()
 
     def start_fetches(self):
         """Fetch-ahead stager: scrolls are staged in dispatch order, just ahead of the GPUs, only while (a) fewer than fetch_parallel fetches run, (b) fewer than
@@ -907,6 +934,10 @@ class Scheduler:
                     g["committed"] = True
             groups = {k: v for k, v in groups.items() if v["jobs"]}
             avail, extra = [], 0.0
+            for sc_, g_ in groups.items():                 # release times: a job cannot start before its scroll is staged (idle GPUs waiting for data cost the box bill)
+                rh = 0.0 if self.scrolls[sc_]["fetched"] else self.fetch_est_h(sc_)
+                for j_ in g_["jobs"]:
+                    j_["_ready_h"] = rh
             for g in sorted(al, key=str):
                 jid = self.busy.get(g)
                 avail.append(self.gov.remaining_h(self.gov.running[jid]) if jid in self.gov.running else 0.0)
@@ -933,7 +964,10 @@ class Scheduler:
                     restored.append(sc)
             self.tail_done = False                          # re-arm the LPT tail split for the new GPU count
             n_run = len([g for g in self.busy if g in al])
-            lines = [f"REPLAN ({reason}): {len(al)} allowed GPU(s) {sorted(al, key=str)} of {len(self.gpus)}, {n_run} busy; spent ${self.gov.spent():.2f} at {self.gov.hours():.2f} h; "
+            tot_h = sum(j_["expected_h"] for g_ in groups.values() for j_ in g_["jobs"] if j_["scroll"] in res["keep"] or g_["committed"])
+            longest = max([j_["expected_h"] for g_ in groups.values() for j_ in g_["jobs"]] or [0.0])
+            lines = [f"REPLAN ({reason}): allowed {len(al)} of {len(self.gpus)} GPU(s) {sorted(al, key=str)}, {n_run} busy; unstarted work {tot_h:.1f} GPU-h (p50) -> "
+                     f">= {max(tot_h / max(1, len(al)), longest):.1f} h wall on the allowed set; spent ${self.gov.spent():.2f} at {self.gov.hours():.2f} h; "
                      f"{sum(len(g['jobs']) for g in groups.values())} unstarted job(s) in {len(groups)} scroll(s)",
                      f"REPLAN p50 {res['mk50']:.1f} h / ${res['usd50']:.2f}; p90 {res['mk90']:.1f} h / ${res['usd90']:.2f} vs limit ${res['limit_usd']:.2f} / {res['limit_h']:.1f} h"]
             for sc in res["keep"]:
@@ -1123,6 +1157,8 @@ def build_parser():
     ap.add_argument("--foreign-mib", type=float, default=1500.0, help="a GPU whose memory.used exceeds this before we launch anything is held by a foreign process: warned and skipped")
     ap.add_argument("--force-gpus", action="store_true", help="use GPUs even if a foreign process holds VRAM")
     ap.add_argument("--control-poll-s", type=float, default=10.0, help="how often the control dir <home>/box8/control/ is re-read")
+    ap.add_argument("--link-mb-s", type=float, default=None, help="aggregate ingress MB/s; skips the probe (default: measure 8 parallel 8 MB range reads of a real input at start)")
+    ap.add_argument("--no-link-probe", action="store_true", help="do not measure the link; use the quoted 860 Mbps")
     ap.add_argument("--fake-gpus", type=int, default=0, help="TEST ONLY: N logical workers, no nvidia-smi, no RAM guard")
     ap.add_argument("--order", default="spt", choices=["given", "spt", "lpt"], help="queue order: shortest expected first (default; most scrolls finished per $) | as listed | longest first")
     ap.add_argument("--legacy-ladder", action="store_true", help="old static ladder (full -> sw2800), no planner/admission/tail split; also implied by --ladder")
@@ -1235,6 +1271,53 @@ def physical_cores(a) -> int:
     return max(1, (os.cpu_count() or 2) // 2)
 
 
+def measure_link(url: str, n_conn: int = 8, chunk: int = 8 << 20, timeout: float = 60.0) -> tuple[float | None, str]:
+    """Aggregate ingress MB/s: n_conn parallel HTTP Range requests of `chunk` bytes at distinct offsets of one real input file (n_conn x chunk = 64 MB at the defaults)."""
+    import urllib.request
+    from concurrent.futures import ThreadPoolExecutor as TPE
+
+    def one(i):
+        rq = urllib.request.Request(url, headers={"Range": f"bytes={i * chunk}-{(i + 1) * chunk - 1}"})
+        with urllib.request.urlopen(rq, timeout=timeout) as r:
+            return len(r.read())
+
+    t0 = time.time()
+    try:
+        with TPE(n_conn) as ex:
+            got = sum(ex.map(one, range(n_conn)))
+    except Exception as e:                      # noqa: BLE001 - announced; the quoted rate stays in force
+        return None, f"{type(e).__name__}: {e}"
+    dt = max(time.time() - t0, 1e-6)
+    return got / 1e6 / dt, f"{got / 1e6:.0f} MB in {dt:.1f} s over {n_conn} connections"
+
+
+def probe_link(a, host, scroll: str) -> None:
+    """Replace the quoted link rate by a measured one (announced either way)."""
+    if a.link_mb_s:
+        host.net_down_mb_s, host.link_measured = a.link_mb_s, True
+        say(f"link {a.link_mb_s:g} MB/s from --link-mb-s", "link")
+        return
+    if a.no_link_probe or a.fake_gpus:
+        say(f"link NOT measured ({'--no-link-probe' if a.no_link_probe else 'fake GPUs'}): using the quoted {host.net_down_mb_s:.0f} MB/s", "link")
+        return
+    try:
+        sp = spec(scroll)
+        name = next(k for k in sp["tracks"]["files"] if k.endswith(".dbm"))
+        url = sp["tracks"]["base_url"] + name
+    except Exception as e:                      # noqa: BLE001
+        say(f"link NOT measured (no probe url: {e}); using the quoted {host.net_down_mb_s:.0f} MB/s", "link")
+        return
+    mbs, why = (LINK_FN or measure_link)(url)
+    if mbs is None:
+        say(f"link probe FAILED ({why}); using the quoted {host.net_down_mb_s:.0f} MB/s", "link")
+        return
+    host.net_down_mb_s, host.link_measured = mbs, True
+    say(f"link MEASURED {mbs:.0f} MB/s ({why}) vs quoted {860 / 8:.0f} MB/s", "link")
+
+
+LINK_FN = None                                  # tests patch this
+
+
 def disk_measure(a, H: Path) -> tuple[float, float, list[str]]:
     """(total GB, free GB, the df lines used) of the volume that actually holds ROUTEB_HOME (created first).  Overrides are announced; the base use is clamped to the volume."""
     H.mkdir(parents=True, exist_ok=True)
@@ -1326,7 +1409,8 @@ def main(argv=None) -> int:
     sch.host = host
     sch.gpus = [g.idx for g in host.all_gpus]
     sch.allowed_init = {g.idx for g in host.gpus}
-    ng = max(1, len(sch.gpus))
+    ng = max(1, len(host.gpus))                          # the ALLOWED set: wall and budget projection use it, not every card on the box
+    probe_link(a, host, run_names[0])
     plan = None
     if not legacy and not a.no_plan:
         plan = PL.make_plan(host, rates, run_names, cfg, z0, z1, a.plan_frac, a.max_height, [x for x in (a.priority or "").split(",") if x] or None, sch.heights_path, a.order)
@@ -1352,9 +1436,10 @@ def main(argv=None) -> int:
             tot[sch.jobs[i]["scroll"]] = tot.get(sch.jobs[i]["scroll"], 0.0) + sch.jobs[i]["expected_h"]
         sch.order.sort(key=lambda i: tot[sch.jobs[i]["scroll"]], reverse=(a.order == "lpt"))
     tot_h = sum(j["expected_h"] for j in sch.jobs.values() if j["status"] == "pending")
-    wall = max(tot_h / ng, max([j["expected_h"] for j in sch.jobs.values() if j["status"] == "pending"] or [0]))
+    lead = min([PL.fetch_time(host, PL.scroll_facts(s_, cfg, host, z0, z1)) for s_ in run_names] or [0.0])     # GPUs idle until the first scroll is staged
+    wall = max(tot_h / ng, max([j["expected_h"] for j in sch.jobs.values() if j["status"] == "pending"] or [0])) + lead
     proj = gov.projected(extra_expected_h=wall, extra_payload_gb=sum(j["payload_gb"] for j in sch.jobs.values()))
-    say(f"PLAN: {len(sch.jobs)} job(s) over {len(run_names)} scroll(s), {tot_h:.1f} GPU-h expected on {ng} GPU(s) = {wall:.1f} h wall at perfect packing; "
+    say(f"PLAN: {len(sch.jobs)} job(s) over {len(run_names)} scroll(s), {tot_h:.1f} GPU-h expected on {ng} allowed GPU(s) of {len(sch.gpus)} = {wall:.1f} h wall at perfect packing (incl. {lead:.2f} h until the first scroll is staged); "
         f"projected total ${proj['projected_total']:.2f} vs soft ${rates.soft_usd} / hard ${rates.hard_usd} (expected hours are EXTRAPOLATED, see ladder_config.json)", "box8")
     if proj["projected_total"] > rates.soft_usd:
         say(f"the whole queue does NOT fit the budget: the governor will stop launching once the projection reaches ${rates.soft_usd}; use --order spt to maximise finished scrolls", "box8")

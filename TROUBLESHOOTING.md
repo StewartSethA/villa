@@ -43,3 +43,6 @@ First: read the last 30 lines of the failing stage's log (`routeA_work/logs/`, `
 | `WARNING GPU N holds ... MiB (a foreign process)` | another process (e.g. llama-server) owns VRAM | free it, or `--force-gpus`; the GPU is skipped meanwhile |
 | `IDLE: no allowed GPU and nothing running` | `gpus none`, or every GPU drained/killed | `routeB_ctl.sh gpus 0,1,...` or `stop`: the box is still billing |
 | planner shows tiny free disk | old builds measured the parent of a not-yet-created home | v4 measures the home itself; see the `PLAN disk: df ...` line |
+| `!!! DOWNLOAD TIME DOMINATES` in the plan | staging the inputs takes > 50 % of the compute wall at this link/object rate; GPUs beyond K wait for data and are billed | follow the printed RECOMMENDATION: `routeB_ctl.sh gpus <fewer>`, a faster-ingress box, or a z window; `--link-mb-s` to plan with a known rate |
+| `FETCH RATE CHANGE: ... SLOWER THAN PLANNED` | a real fetch took > 1.5x its plan | same; the re-plan that follows shows what still fits |
+| `link probe FAILED` | the probe URL is unreachable from the box | the quoted 107 MB/s stays in force and is labelled QUOTED; fix the network or pass `--link-mb-s` |

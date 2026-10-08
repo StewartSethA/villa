@@ -86,7 +86,7 @@ def test_shrink_8_to_3_mid_run_then_regrow(tmp_path, monkeypatch):
     # launches that happened after the replan event must all be on GPUs 0-2 (the first wave is older than the change)
     after = [g for ts, _id, g in stub_starts(tmp_path)[n_before:]]
     assert after and set(after) <= {0, 1, 2}, after
-    assert "REPLAN" in (tmp_path / "box8" / "control" / "PLAN.txt").read_text() and "3 allowed GPU(s)" in (tmp_path / "box8" / "control" / "PLAN.txt").read_text()
+    assert "REPLAN" in (tmp_path / "box8" / "control" / "PLAN.txt").read_text() and "allowed 3 of 8 GPU(s)" in (tmp_path / "box8" / "control" / "PLAN.txt").read_text()
     assert ctl(tmp_path, "gpus", "0,1,2,3,4,5,6,7").returncode == 0                 # regrow
     t.join(60)
     assert not t.is_alive() and out["rc"] in (0, 4)
@@ -297,3 +297,121 @@ def test_runtime_disk_fn_returns_total_and_free_not_used(tmp_path, monkeypatch):
     DU = collections.namedtuple("usage", "total used free")
     monkeypatch.setattr(B8.shutil, "disk_usage", lambda p: DU(1000 * 10**9, 24 * 10**9, 976 * 10**9))
     assert B8.real_disk_fn(tmp_path)() == (1000 * 10**9, 976 * 10**9)
+
+
+# ---------------------------------------------------------------- allowed-set wall + measured link / download-dominance
+def test_plan_line_and_projection_use_the_allowed_gpus_not_every_card(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("ROUTEB_HOME", str(tmp_path))
+    args = ["--scrolls", "PHerc0125,PHerc0211", "--fake-gpus", "8", "--phys-cores", "48", "--dry-run", "--no-plan", "--no-link-probe", "--steps", "30000"]
+    assert B8.main(args + ["--gpus", "0,1,2,3"]) == 0
+    out4 = capsys.readouterr().out
+    assert "on 4 allowed GPU(s) of 8" in out4
+    assert B8.main(args) == 0
+    out8 = capsys.readouterr().out
+    assert "on 8 allowed GPU(s) of 8" in out8
+    import re
+    w = lambda o: float(re.search(r"= ([\d.]+) h wall at perfect packing", o).group(1))
+    assert w(out4) >= w(out8)                                                       # fewer cards can never promise a shorter wall
+    pl = [l for l in out4.splitlines() if "projected total" in l]
+    assert pl and "4 allowed" in pl[0]
+
+
+def test_replan_prints_allowed_of_total_and_wall(tmp_path, monkeypatch):
+    s = make(tmp_path, monkeypatch, TEN[:4], 8, extra=("--steps", "30000"), rates=B.Rates(soft_usd=500.0, hard_usd=510.0, max_run_hours=0.0))
+    s.done_evt = threading.Event()
+    s.allowed = {"0", "1", "2"}
+    s.replan("test")
+    txt = "\n".join(s.replan_log)
+    assert "allowed 3 of 8 GPU(s)" in txt and ">= " in txt and "h wall on the allowed set" in txt
+
+
+def test_link_probe_override_failure_and_success(monkeypatch, capsys):
+    host = P.Host([P.Gpu("0", 40.0)])
+    a = B8.build_parser().parse_args(["--scrolls", "PHerc0211"])
+    monkeypatch.setattr(B8, "LINK_FN", lambda url: (42.0, "64 MB in 1.5 s over 8 connections"))
+    B8.probe_link(a, host, "PHerc0211")
+    assert host.net_down_mb_s == 42.0 and host.link_measured and "link MEASURED 42 MB/s" in capsys.readouterr().out
+    host2 = P.Host([P.Gpu("0", 40.0)])
+    monkeypatch.setattr(B8, "LINK_FN", lambda url: (None, "URLError: down"))
+    B8.probe_link(a, host2, "PHerc0211")
+    assert host2.net_down_mb_s == pytest.approx(107.5) and not getattr(host2, "link_measured", False) and "probe FAILED" in capsys.readouterr().out
+    host3 = P.Host([P.Gpu("0", 40.0)])
+    B8.probe_link(B8.build_parser().parse_args(["--scrolls", "PHerc0211", "--link-mb-s", "300"]), host3, "PHerc0211")
+    assert host3.net_down_mb_s == 300 and host3.link_measured
+
+
+def test_measure_link_against_a_range_server(tmp_path):
+    import http.server
+    import socketserver
+    data = os.urandom(8 << 20)
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            lo, hi = self.headers["Range"].split("=")[1].split("-")
+            body = data[int(lo): int(hi) + 1]
+            self.send_response(206)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+    srv = socketserver.ThreadingTCPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        mbs, why = B8.measure_link(f"http://127.0.0.1:{srv.server_address[1]}/f", n_conn=4, chunk=1 << 20)
+    finally:
+        srv.shutdown()
+    assert mbs and mbs > 1 and "4 MB in" in why
+    mbs, why = B8.measure_link("http://127.0.0.1:9/nothing", n_conn=2, chunk=1024, timeout=2)
+    assert mbs is None and why                                                       # a failed probe is reported, not guessed
+
+
+def test_download_dominance_is_warned_loudly_with_a_recommendation():
+    c = L.load_config()
+    c["dynamic"] = True
+    r = B.Rates()
+
+    def plan_for(link, files_s):
+        h = P.Host([P.Gpu(str(i), 40.0) for i in range(8)], net_down_mb_s=link, fetch_files_per_s=files_s)
+        h.link_measured = True
+        pl = P.make_plan(h, r, ["PHerc0125", "PHerc0211"], c, plan_frac=100.0)
+        return h, pl
+    h, pl = plan_for(5.0, 58.0)                                                       # a 5 MB/s link: 13 GB takes ~0.7 h per scroll in parallel
+    rep = "\n".join(P.download_report(h, r, pl))
+    assert "link 5 MB/s (MEASURED at start)" in rep and "fetching" in rep and "DOWNLOAD TIME DOMINATES" in rep and "RECOMMENDATION: shrink --gpus to ~" in rep
+    assert "idle GPUs waiting for data" in rep
+    h, pl = plan_for(5000.0, 1e6)
+    rep = "\n".join(P.download_report(h, r, pl))
+    assert "DOWNLOAD TIME DOMINATES" not in rep and "DOWNLOAD DOMINATES" not in rep
+    slow = P.make_plan(*(lambda hh: (hh, r, ["PHerc0125", "PHerc0211"], c))(P.Host([P.Gpu(str(i), 40.0) for i in range(8)], net_down_mb_s=5.0)), plan_frac=100.0)
+    fast = P.make_plan(P.Host([P.Gpu(str(i), 40.0) for i in range(8)], net_down_mb_s=5000.0, fetch_files_per_s=1e6), r, ["PHerc0125", "PHerc0211"], c, plan_frac=100.0)
+    assert slow["p50"]["makespan_h"] > fast["p50"]["makespan_h"] and slow["p50"]["idle_gpu_h_before_tail"] > fast["p50"]["idle_gpu_h_before_tail"]
+    assert slow["m50"]["total_usd"] > fast["m50"]["total_usd"]                         # idle waiting is paid for
+
+
+def test_release_times_in_makespan_and_in_replan(tmp_path, monkeypatch):
+    assert P.release_makespan([0.0, 0.0], [(0.0, 1.0), (5.0, 1.0)]) == 6.0         # the late scroll cannot start before it is staged
+    s = make(tmp_path, monkeypatch, TEN[:3], 4, extra=("--steps", "30000"), rates=B.Rates(soft_usd=500.0, hard_usd=510.0, max_run_hours=0.0))
+    s.done_evt = threading.Event()
+    for sc in s.scrolls.values():
+        sc["fetched"] = True
+    fast = s.replan("all staged")
+    for sc in s.scrolls.values():
+        sc["fetched"] = False
+    s.host.fetch_files_per_s = 5.0                                                   # very slow staging
+    slow = s.replan("nothing staged")
+    assert slow["mk90"] > fast["mk90"] + 5.0
+
+
+def test_observed_slow_fetch_rescales_rates_and_replans(tmp_path, monkeypatch):
+    s = make(tmp_path, monkeypatch, TEN[:2], 4, extra=("--steps", "30000"), rates=B.Rates(soft_usd=500.0, hard_usd=510.0, max_run_hours=0.0))
+    s.done_evt = threading.Event()
+    est = s.fetch_est_h("PHerc0125")
+    f0 = s.host.fetch_files_per_s
+    s._observe_fetch("PHerc0125", 12.0, est * 3600.0 * 4.0, est)                   # 4x slower than planned
+    assert s.host.fetch_files_per_s == pytest.approx(f0 / 4.0)
+    assert wait_for(lambda: any(json.loads(l)["kind"] == "replan" for l in (tmp_path / "box8" / "events.jsonl").read_text().splitlines()), timeout=10)
+    f1 = s.host.fetch_files_per_s
+    s._observe_fetch("PHerc0125", 12.0, est * 3600.0 * 1.1, est * 1.0)             # within tolerance: unchanged
+    assert s.host.fetch_files_per_s == f1

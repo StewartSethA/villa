@@ -135,6 +135,15 @@ def lpt_makespan(avail: list[float], hs: list[float]) -> float:
     return max(a) if a else 0.0
 
 
+def release_makespan(avail: list, jobs: list) -> float:
+    """List scheduling with release times (a job cannot start before its scroll's inputs are staged): jobs = [(ready_h, hours)], taken in release order, larger first."""
+    a = sorted(avail)
+    for ready, h in sorted(jobs, key=lambda x: (x[0], -x[1])):
+        a[0] = max(a[0], ready) + h
+        a.sort()
+    return max(a)
+
+
 def pieces_for(cfg: dict, j: dict, k: int, shell: int) -> list[dict]:
     S = j["z1"] - j["z0"]
     h = max(L.MIN_HEIGHT, -(-int((S + (k - 1) * OVERLAP) / k) // GRID) * GRID)
@@ -196,6 +205,48 @@ def routea_slots(phys_cores: int, busy_gpus: int, reserve: int, ram_gb: float, f
 
 
 # ------------------------------------------------------------------------------------------------ simulation
+def fetch_time(host: Host, f: Facts) -> float:
+    """Hours to stage one scroll: the slower of its object count at the per-scroll fetch rate and its bytes at this scroll's share of the link."""
+    by_obj = f.las_objects / host.fetch_files_per_s / 3600.0
+    by_net = f.fetch_gb * 1000.0 / (host.net_down_mb_s / max(1, host.fetch_parallel)) / 3600.0
+    return max(by_obj, by_net)
+
+
+def download_report(host: Host, rates, plan: dict, frac: float = 0.5) -> list[str]:
+    """Link line + per-scroll fetch vs compute + LOUD warnings when download time dominates (fetch_h > frac x compute_h) with a recommendation."""
+    out = []
+    facts = [plan["facts"][n] for n in plan["keep"]]
+    if not facts:
+        return out
+    gb = sum(f.fetch_gb for f in facts)
+    n = max(1, plan["p50"]["n_gpus_used"])
+    link = host.net_down_mb_s
+    h_bytes = gb * 1000.0 / link / 3600.0
+    h_obj = sum(f.las_objects for f in facts) / (host.fetch_files_per_s * max(1, host.fetch_parallel)) / 3600.0
+    src = "MEASURED at start" if getattr(host, "link_measured", False) else "QUOTED/assumed, not measured"
+    out.append(f"PLAN link {link:.0f} MB/s ({src}) -> fetching {gb:.0f} GB takes {h_bytes:.2f} h of pure transfer (objects bound: {h_obj:.2f} h at {host.fetch_files_per_s:g} files/s x {host.fetch_parallel} scrolls in parallel)")
+    gpu_h = plan["p50"]["gpu_h"]
+    compute_h = gpu_h / n
+    idle = plan["p50"]["idle_gpu_h_before_tail"]
+    out.append(f"PLAN idle GPUs waiting for data (p50): {idle:.1f} GPU-h = {idle / n:.2f} h of the box bill = ${idle / n * rates.eff_hour_usd:.2f} of ${plan['m50']['total_usd']:.2f}")
+    bad = []
+    for f in facts:
+        fh = fetch_time(host, f)
+        ch = sum(j["expected_h"] for j in make_jobs(plan["cfg"], f)) if plan.get("cfg") else L.fit_hours(f.name, f.shell, f.z1 - f.z0, "p50")
+        out.append(f"PLAN   {f.name:<10} fetch {f.fetch_gb:5.1f} GB, {f.las_objects:,} objects -> {fh:5.2f} h to stage vs {ch:5.1f} GPU-h of fit" + ("   <-- DOWNLOAD DOMINATES" if fh > frac * ch else ""))
+        if fh > frac * ch:
+            bad.append(f.name)
+    agg = max(h_bytes, h_obj)
+    if bad or agg > frac * compute_h:
+        k = max(1, int(frac * gpu_h / agg)) if agg > 0 else n
+        need = gb * 1000.0 / (frac * compute_h * 3600.0) if compute_h > 0 else 0.0
+        out.append(f"PLAN !!! DOWNLOAD TIME DOMINATES: staging all inputs needs {agg:.2f} h vs {compute_h:.2f} h of compute wall on {n} GPU(s) (limit {frac:.0%}); "
+                   f"per scroll: {bad or 'none individually'}.")
+        out.append(f"PLAN !!! RECOMMENDATION: shrink --gpus to ~{k} (the GPUs beyond that mostly wait for data), or rent a box with ingress >= {need:.0f} MB/s "
+                   f"(this link: {link:.0f} MB/s), or restrict --z0/--z1 so each scroll fetches less lasagna.")
+    return out
+
+
 def simulate(host: Host, facts: list[Facts], cfg: dict, q: str = "p50", tail: bool = True) -> dict:
     """Discrete-event simulation of the whole box run.  `facts` is the dispatch order (SPT).  Returns timeline, makespan, disk peak, GB moved."""
     n = min(host.n, max(1, host.max_concurrent_fits()))
@@ -218,11 +269,6 @@ def simulate(host: Host, facts: list[Facts], cfg: dict, q: str = "p50", tail: bo
     last_t = 0.0
     blocked = False
     tail_done = False
-
-    def fetch_time(f: Facts) -> float:
-        by_obj = f.las_objects / host.fetch_files_per_s / 3600.0
-        by_net = f.fetch_gb * 1000.0 / (host.net_down_mb_s / max(1, host.fetch_parallel)) / 3600.0
-        return max(by_obj, by_net)
 
     def n_pending() -> int:
         return sum(len(s["jobs"]) for s in S.values())
@@ -264,7 +310,7 @@ def simulate(host: Host, facts: list[Facts], cfg: dict, q: str = "p50", tail: bo
                 notes.append(f"t={t:.2f} h: staging {sc} blocked by the disk high-water mark ({used:.0f} + {need:.0f} > {host.high_water_gb:.0f} GB)") if not any(
                     x.startswith(f"t=") and f"staging {sc} blocked" in x for x in notes) else None
                 break
-            ft = fetch_time(s["f"])
+            ft = fetch_time(host, s["f"])
             s["state"] = "fetching"
             s["fetch_t0"] = t
             used += need
@@ -367,6 +413,7 @@ def make_plan(host: Host, rates, scrolls: list[str], cfg: dict, z0: int = UP_LO,
         sim = simulate(h2, [res["facts"][n] for n in res["keep"]], c2, "p50")
         sens[lab] = money(rates, sim)["total_usd"], sim["makespan_h"]
     res["sensitivity"] = sens
+    res["cfg"] = cfg
     res.update(priority=[f.name for f in prio], deferred=deferred, all_facts={f.name: f for f in allf}, plan_frac=plan_frac, limit_usd=limit_usd, limit_h=limit_h)
     return res
 
@@ -382,6 +429,8 @@ def replan_eval(cfg: dict, avail: list, extra_h: float, jobs: list, shells: dict
     js = list(jobs)
     if len(js) < len(avail):
         js, _ = tail_split(cfg, avail, js, shells, q)
+    if any(j.get("_ready_h") for j in js):
+        return max(release_makespan(avail, [(j.get("_ready_h", 0.0), hours(j, q)) for j in js]), extra_h)
     return max(lpt_makespan(avail, [hours(j, q) for j in js]), extra_h)
 
 
@@ -489,6 +538,7 @@ def render(host: Host, rates, plan: dict, runnable_note: list[str] | None = None
     for a in sorted(plan["p50"]["arrivals"], key=lambda x: x["t_h"]):
         P(f"  t={a['t_h']:>6.2f} h  out/{a['id']}/  {a['gb']:.2f} GB")
     P("PLAN disk timeline (p50, GB used incl. env; <t h: GB>): " + " ".join(f"{t:.1f}h:{g:.0f}" for t, g in plan["p50"]["disk_log"][:40]) + f"  (peak {plan['p50']['disk_peak_gb']}, high-water {host.high_water_gb:.0f})")
+    out += download_report(host, rates, plan)
     if routea:
         P(routea)
     return "\n".join(out)
