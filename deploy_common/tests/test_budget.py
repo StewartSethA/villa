@@ -18,6 +18,8 @@ class Clk:
 
 
 def mk(tmp_path, **kw):
+    kw.setdefault("hour_usd", 2.33)       # legacy tests were written for the 2.33 $/h V100 quote with no disk term
+    kw.setdefault("disk_gb", 0.0)
     c = Clk()
     g = B.Governor(tmp_path, B.Rates(**kw), clock=c, box_start=c.t, say=lambda *_: None)
     return g, c
@@ -131,3 +133,31 @@ def test_rates_file_env_flag_precedence_and_describe(tmp_path, monkeypatch):
     import pytest
     with pytest.raises(ValueError):
         B.Rates.from_file(f)
+
+
+def test_disk_term_is_billed_for_the_whole_run_and_projected(tmp_path):
+    r = B.Rates()                                              # defaults: 4.276 $/h machine, 934 GB x 0.009 $/16GB/h
+    assert abs(r.disk_hour_usd - 934 / 16 * 0.009) < 1e-12 and abs(r.disk_hour_usd - 0.525375) < 1e-9
+    assert abs(r.eff_hour_usd - 4.801375) < 1e-9
+    assert abs(r.affordable_hours("soft") - 45 / 4.801375) < 1e-9 and 9.3 < r.affordable_hours("soft") < 9.4 and 10.3 < 50 / r.eff_hour_usd < 10.5
+    g, c = mk(tmp_path, hour_usd=4.276, disk_gb=934.0)
+    c.adv_h(10)
+    assert abs(g.spent() - 10 * 4.801375) < 1e-9               # disk billed although nothing is stored: allocated, not used
+    g2, c2 = mk(tmp_path / "b", hour_usd=4.276, disk_gb=0.0)
+    c2.adv_h(10)
+    assert abs(g.spent() - g2.spent() - 10 * 0.525375) < 1e-9
+    # projection and decision text carry the disk term
+    p = g.projected(extra_expected_h=2.0)
+    assert abs(p["projected_total"] - (10 * 4.801375 + 2 * 4.801375)) < 1e-9
+    ok, why = g.may_launch("f", 2.0)
+    assert "machine+disk" in why and "4.801" in why
+    assert g.status()["eff_hour_usd"] > 4.8 and "disk 934" in r.describe()
+
+
+def test_disk_flags_env_and_file(tmp_path, monkeypatch):
+    f = tmp_path / "b.json"
+    f.write_text(json.dumps({"disk_gb": 500, "disk_usd_per_16gb_hour": 0.01}))
+    r = B.Rates.from_env(**B.Rates.from_file(f))
+    assert r.disk_gb == 500 and abs(r.disk_hour_usd - 500 / 16 * 0.01) < 1e-12
+    monkeypatch.setenv("BUDGET_DISK_GB", "160")
+    assert B.Rates.from_env().disk_gb == 160

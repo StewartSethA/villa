@@ -24,7 +24,7 @@ Expected remaining hours of a running fit: from progress (iteration fraction) wh
 an overrunning fit (elapsed >= expected) is assumed to need `overrun_frac` (25 %) of its expected hours more -- an ASSUMPTION, announced in the ledger.
 
 Ledger: <dir>/budget.jsonl, append-only, one JSON object per line (kind = start|transfer|fit_start|fit_end|decision|hard_stop).  State is rebuilt from the
-ledger on load, so a restarted scheduler continues the same account.  Budget overrides: env BUDGET_SOFT_USD, BUDGET_HARD_USD, BUDGET_HOUR_USD,
+ledger on load, so a restarted scheduler continues the same account.  Budget overrides: env BUDGET_SOFT_USD, BUDGET_HARD_USD, BUDGET_HOUR_USD, BUDGET_DISK_USD_PER_16GB_HOUR, BUDGET_DISK_GB,
 BUDGET_INGRESS_PER_TB, BUDGET_EGRESS_PER_TB, BUDGET_BOX_START (epoch s), BUDGET_SWAP_DIRECTIONS.
 CLI:  python budget.py status <dir>      prints spent / projected (dry run, reads the ledger only)
 """
@@ -41,13 +41,27 @@ from pathlib import Path
 
 @dataclass
 class Rates:
-    hour_usd: float = 2.33
+    hour_usd: float = 4.276                # machine, USD/h (8x A100 40GB quote 2026-10-08); the DISK term below is billed on top
+    disk_usd_per_16gb_hour: float = 0.009  # allocated disk, USD per 16 GB per hour, billed for the WHOLE run whether or not it is full
+    disk_gb: float = 934.0                 # allocated disk (GB); 934/16*0.009 = $0.525/h
     ingress_per_tb: float = 2.70           # box downloads from the web
     egress_per_tb: float = 4.00            # box uploads to the internet (our payload pull)
     soft_usd: float = 45.0
     hard_usd: float = 49.0
     overrun_frac: float = 0.25
     max_run_hours: float = 12.0            # wall-clock limit since rental start: no launch whose projected end passes it; 0 = no limit
+
+    @property
+    def disk_hour_usd(self) -> float:
+        return self.disk_gb / 16.0 * self.disk_usd_per_16gb_hour
+
+    @property
+    def eff_hour_usd(self) -> float:
+        """What one wall-clock hour of the rental costs: machine + allocated disk.  Every projection uses this, never hour_usd alone."""
+        return self.hour_usd + self.disk_hour_usd
+
+    def affordable_hours(self, which: str = "soft") -> float:
+        return (self.soft_usd if which == "soft" else self.hard_usd) / self.eff_hour_usd
 
     @classmethod
     def from_file(cls, path) -> dict:
@@ -60,7 +74,8 @@ class Rates:
         return {k: v for k, v in d.items() if k != "_doc"}
 
     def describe(self) -> str:
-        return (f"BUDGET SETTINGS: machine ${self.hour_usd}/h | soft stop ${self.soft_usd} | hard stop ${self.hard_usd} | max run time "
+        return (f"BUDGET SETTINGS: machine ${self.hour_usd}/h + disk {self.disk_gb:g} GB x ${self.disk_usd_per_16gb_hour}/16GB/h = ${self.disk_hour_usd:.3f}/h "
+                f"-> effective ${self.eff_hour_usd:.3f}/h ({self.affordable_hours('soft'):.1f} h to the soft cap, {self.affordable_hours('hard'):.1f} h to the hard cap) | soft stop ${self.soft_usd} | hard stop ${self.hard_usd} | max run time "
                 f"{self.max_run_hours if self.max_run_hours else 'unlimited'} h | ingress (box downloads) ${self.ingress_per_tb}/TB | "
                 f"egress (box uploads) ${self.egress_per_tb}/TB | overrun assumption {self.overrun_frac:.0%}")
 
@@ -69,7 +84,7 @@ class Rates:
         swap = kw.pop("swap_directions", False)
         r = cls(**kw)
         for env, attr in (("BUDGET_HOUR_USD", "hour_usd"), ("BUDGET_INGRESS_PER_TB", "ingress_per_tb"), ("BUDGET_EGRESS_PER_TB", "egress_per_tb"),
-                          ("BUDGET_SOFT_USD", "soft_usd"), ("BUDGET_HARD_USD", "hard_usd"), ("BUDGET_MAX_RUN_HOURS", "max_run_hours")):
+                          ("BUDGET_DISK_USD_PER_16GB_HOUR", "disk_usd_per_16gb_hour"), ("BUDGET_DISK_GB", "disk_gb"), ("BUDGET_SOFT_USD", "soft_usd"), ("BUDGET_HARD_USD", "hard_usd"), ("BUDGET_MAX_RUN_HOURS", "max_run_hours")):
             if os.environ.get(env):
                 setattr(r, attr, float(os.environ[env]))
         if swap or os.environ.get("BUDGET_SWAP_DIRECTIONS") == "1":
@@ -145,7 +160,7 @@ class Governor:
 
     def spent(self, now=None) -> float:
         with self.lock:
-            return (self.hours(now) * self.r.hour_usd + self.ingress_gb * self.r.ingress_per_tb / 1000.0
+            return (self.hours(now) * self.r.eff_hour_usd + self.ingress_gb * self.r.ingress_per_tb / 1000.0
                     + self.egress_gb * self.r.egress_per_tb / 1000.0)
 
     def transfer(self, box_download_gb: float = 0.0, box_upload_gb: float = 0.0, what: str = ""):
@@ -188,7 +203,7 @@ class Governor:
             horizon = max(rem + [extra_expected_h, 0.0])
             payload = self.unpulled_gb + sum(f.payload_gb for f in self.running.values()) + extra_payload_gb
             spent = self.spent()
-            total = (spent + horizon * self.r.hour_usd + payload * self.r.egress_per_tb / 1000.0 + extra_ingress_gb * self.r.ingress_per_tb / 1000.0)
+            total = (spent + horizon * self.r.eff_hour_usd + payload * self.r.egress_per_tb / 1000.0 + extra_ingress_gb * self.r.ingress_per_tb / 1000.0)
             return {"spent": spent, "horizon_h": horizon, "payload_gb": payload, "projected_total": total, "running": len(self.running)}
 
     def may_launch(self, fid: str, expected_h: float, payload_gb: float = 0.0, ingress_gb: float = 0.0) -> tuple[bool, str]:
@@ -199,7 +214,7 @@ class Governor:
             late = bool(self.r.max_run_hours) and end_h > self.r.max_run_hours
             ok = p["projected_total"] <= self.r.soft_usd and not self.hard_stop() and not late
             why = (f"{'LAUNCH' if ok else 'REFUSE'} {fid}: projected ${p['projected_total']:.2f} (spent ${p['spent']:.2f} + horizon {p['horizon_h']:.2f} h x "
-                   f"${self.r.hour_usd}/h + payload {p['payload_gb']:.1f} GB egress) vs soft cap ${self.r.soft_usd:.2f}"
+                   f"${self.r.eff_hour_usd:.3f}/h (machine+disk) + payload {p['payload_gb']:.1f} GB egress) vs soft cap ${self.r.soft_usd:.2f}"
                    + (f"; projected end {end_h:.2f} h > max run time {self.r.max_run_hours} h" if late else ""))
             self._log("decision", fid=fid, ok=ok, why=why, **p)
             return ok, why
@@ -213,7 +228,7 @@ class Governor:
 
     def status(self) -> dict:
         p = self.projected()
-        return {**p, "hours": self.hours(), "ingress_gb": self.ingress_gb, "egress_gb": self.egress_gb, "soft": self.r.soft_usd, "hard": self.r.hard_usd, "max_run_hours": self.r.max_run_hours,
+        return {**p, "eff_hour_usd": self.r.eff_hour_usd, "disk_hour_usd": self.r.disk_hour_usd, "hours": self.hours(), "ingress_gb": self.ingress_gb, "egress_gb": self.egress_gb, "soft": self.r.soft_usd, "hard": self.r.hard_usd, "max_run_hours": self.r.max_run_hours,
                 "past_max_run": bool(self.r.max_run_hours) and self.hours() >= self.r.max_run_hours, "hard_stop": self.hard_stop()}
 
 

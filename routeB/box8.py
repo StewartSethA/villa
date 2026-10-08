@@ -29,6 +29,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from . import ladder as L
+from . import planner as PL
 from .common import ROOT, UP_HI, UP_LO, home, is_done, say, spec
 
 
@@ -131,8 +132,23 @@ class Scheduler:
         self.a, self.cfg, self.gov = a, cfg, gov
         self.H = box_home or home()
         self.D = self.H / "box8"
-        for s in ("state", "logs", "payload"):
+        for s in ("state", "logs"):
             (self.D / s).mkdir(parents=True, exist_ok=True)
+        self.out = self.H / "out"                      # ONE directory holding every payload unit: one rsync of it pulls everything as it arrives
+        if not getattr(a, "dry_run", False):
+            self.out.mkdir(parents=True, exist_ok=True)
+        if not getattr(a, "dry_run", False) and not (self.D / "payload").exists():
+            try:
+                (self.D / "payload").symlink_to(self.out)    # old name kept for older pull scripts
+            except OSError:
+                pass
+        self.host = None
+        self.tail_done = False
+        self.staged_gb: dict[str, float] = {}           # scroll -> input GB currently held on disk (fetch started .. inputs released)
+        self.released: set[str] = set()
+        self.heights_path = self.D / "heights.json"
+        self.routea_proc = None
+        self.disk_fn = (lambda: (10e12, 10e12)) if a.fake_gpus else (lambda: tuple(shutil.disk_usage(self.H)[:2]))
         self.cv = threading.Condition()
         self.save_lock = threading.RLock()
         self.jobs: dict[str, dict] = {}
@@ -207,14 +223,22 @@ class Scheduler:
         if self.load_state(scroll):
             return
         dbm = sum(v for k, v in sp["tracks"]["files"].items() if k.endswith(".dbm"))
-        start, why = (L.rung_index(self.cfg, first_rung), "forced by --first-rung") if first_rung else L.first_rung(self.cfg, scroll, z0, z1)
-        jobs = L.plan(self.cfg, scroll, sc["shell"], z0, z1, start=start)
+        if self.cfg.get("dynamic") and not first_rung:
+            vram = self.host.min_vram if self.host else 40.0
+            h, why = L.start_height_for(self.cfg, scroll, vram, z1 - z0, max_height=getattr(self.a, "max_height", L.FULL_SPAN), heights_path=self.heights_path)
+            jobs = L.jobs_for_height(self.cfg, scroll, sc["shell"], z0, z1, h, PL.OVERLAP)
+            start = jobs[0]["rung"]
+            why = f"height {h}: {why}"
+        else:
+            start, why = (L.rung_index(self.cfg, first_rung), "forced by --first-rung") if first_rung else L.first_rung(self.cfg, scroll, z0, z1)
+            jobs = L.plan(self.cfg, scroll, sc["shell"], z0, z1, start=start)
         for j in jobs:
             self.scale_expected(j)
             j["dbm_bytes"] = dbm
             self.jobs[j["id"]] = j
             self.order.append(j["id"])
-        say(f"{scroll}: {len(jobs)} job(s) on rung {self.cfg['rungs'][start]['name']} ({why}); expected {sum(j['expected_h'] for j in jobs):.1f} GPU-h", "box8")
+        say(f"{scroll}: {len(jobs)} job(s) on rung {self.cfg['rungs'][start]['name']} ({why}); expected {sum(j['expected_h'] for j in jobs):.1f} GPU-h "
+            f"(p90 {sum(j.get('p90_h', j['expected_h']) for j in jobs):.1f})", "box8")
         self.ev("plan", scroll=scroll, rung=self.cfg["rungs"][start]["name"], why=why, jobs=[j["id"] for j in jobs])
         self.save(scroll)
 
@@ -255,13 +279,64 @@ class Scheduler:
         with self.cv:
             self.save(scroll)
 
+    def input_gb(self, scroll: str) -> float:
+        try:
+            return PL.scroll_facts(scroll, self.cfg, self.host or PL.Host([PL.Gpu("0", 40.0)]), self.a.z0 or UP_LO, self.a.z1 or UP_HI).input_gb
+        except Exception:                              # noqa: BLE001 - an unknown size must not stop staging; announced
+            say(f"{scroll}: input size unknown, assuming 80 GB for disk admission", "box8")
+            return 80.0
+
     def start_fetches(self):
-        self.fpool = ThreadPoolExecutor(max_workers=self.a.fetch_workers)
-        for s, sc in self.scrolls.items():
-            if sc["fetched"]:
-                continue
-            sc["fetching"] = True
+        """Fetch-ahead stager: scrolls are staged in dispatch order, just ahead of the GPUs, only while (a) fewer than fetch_parallel fetches run, (b) fewer than
+        free-GPUs + fetch_ahead fetched scrolls wait unstarted, (c) the disk high-water mark allows the scroll's input+work volume.  Announces every block."""
+        self.fpool = ThreadPoolExecutor(max_workers=max(1, self.a.fetch_workers))
+        self.stager = threading.Thread(target=self._stage_loop, daemon=True, name="stager")
+        self.stager.start()
+
+    def _disk_state(self):
+        total, free = self.disk_fn()
+        return total / 1e9, free / 1e9, total * self.a.disk_high_water / 1e9
+
+    def _stage_loop(self):
+        blocked_msg = {}
+        used0 = None
+        while not self.done_evt.is_set() and not self.stop_reason:
+            time.sleep(min(1.0, self.a.poll_s))
+            with self.cv:
+                todo = [s for s in self.order_scrolls() if not self.scrolls[s]["fetched"] and not self.scrolls[s]["fetching"] and not self.scrolls[s].get("fetch_failed")]
+                if not todo:
+                    return
+                if used0 is None:
+                    total, free, hw = self._disk_state()
+                    used0 = (total - free) - sum(self.staged_gb.values())
+                active = sum(1 for sc in self.scrolls.values() if sc["fetching"])
+                unstarted = sum(1 for k, sc in self.scrolls.items() if (sc["fetched"] or sc["fetching"]) and not any(j["scroll"] == k and j["status"] != "pending" for j in self.jobs.values()))
+                free_gpus = max(0, len(self.gpus) - len(self.busy))
+                s = todo[0]
+                if active >= self.a.fetch_parallel or unstarted >= free_gpus + self.a.fetch_ahead:
+                    continue
+                need = self.input_gb(s)
+                total, free, hw = self._disk_state()
+                held = sum(self.staged_gb.values())
+                if used0 + held + need > hw or free < need:
+                    msg = f"STAGING {s} BLOCKED by disk: base {used0:.0f} + held {held:.0f} + need {need:.0f} > high-water {hw:.0f} GB (free {free:.0f} GB); waits for a payload to be pulled"
+                    if blocked_msg.get(s) != int(held):
+                        blocked_msg[s] = int(held)
+                        say(msg, "stage")
+                        self.ev("stage_blocked", scroll=s, held_gb=held, need_gb=need)
+                    continue
+                self.scrolls[s]["fetching"] = True
+                self.staged_gb[s] = need
+            self.ev("stage", scroll=s, need_gb=need)
             self.fpool.submit(self.fetch_worker, s)
+
+    def order_scrolls(self) -> list[str]:
+        seen = []
+        for i in self.order:
+            sc = self.jobs[i]["scroll"]
+            if sc not in seen:
+                seen.append(sc)
+        return seen + [s for s in self.scrolls if s not in seen]
 
     # ---- claim
     def claim(self, gpu: str):
@@ -270,8 +345,11 @@ class Scheduler:
             while True:
                 if self.stop_reason:
                     return None
+                self._maybe_tail_split()
                 pend = [self.jobs[i] for i in self.order if self.jobs[i]["status"] == "pending"]
                 ready = [j for j in pend if self.scrolls[j["scroll"]]["fetched"]]
+                if self.tail_done:
+                    ready.sort(key=lambda j: -j["expected_h"])          # tail: largest first (LPT)
                 waiting_fetch = [j for j in pend if self.scrolls[j["scroll"]]["fetching"]]
                 for j in ready:
                     ram_ok, ram_why = self._ram_ok()
@@ -303,6 +381,43 @@ class Scheduler:
                     return None
                 self.cv.wait(timeout=5)
 
+    def _maybe_tail_split(self):
+        """LPT tail balancing (caller holds self.cv).  Once fewer unstarted jobs remain than GPUs, split the largest remaining scrolls into z-stripes across the
+        GPUs that would otherwise idle -- accepted only if the simulated makespan shortens (planner.tail_split)."""
+        if self.tail_done or not self.cfg.get("dynamic") or getattr(self.a, "no_tail_split", False):
+            return
+        pend = [j for j in (self.jobs[i] for i in self.order) if j["status"] == "pending" and not j["attempts"]]     # never split a retry (it would lose its checkpoint)
+        if not pend or len(pend) >= len(self.gpus):
+            return
+        avail = [0.0] * max(0, len(self.gpus) - len(self.busy))
+        for j in self.jobs.values():
+            if j["status"] == "running":
+                try:
+                    avail.append(self.gov.remaining_h(self.gov.running[j["id"]]))
+                except KeyError:
+                    avail.append(j["expected_h"])
+        shells = {k: sc["shell"] for k, sc in self.scrolls.items()}
+        new, notes = PL.tail_split(self.cfg, avail, pend, shells, "p50")
+        self.tail_done = True
+        if not notes:
+            say(f"tail balancing: {len(pend)} unstarted job(s) < {len(self.gpus)} GPUs, no stripe split shortens the simulated tail", "box8")
+            return
+        old_ids = {j["id"] for j in pend}
+        new_ids = {j["id"] for j in new}
+        for j in pend:
+            if j["id"] not in new_ids:
+                j["status"] = "split"
+        for k in new:
+            if k["id"] not in old_ids:
+                k["dbm_bytes"] = self.jobs[k["parent"]].get("dbm_bytes") if k.get("parent") in self.jobs else None
+                self.jobs[k["id"]] = k
+                self.order.append(k["id"])
+        for n_ in notes:
+            say("TAIL SPLIT " + n_, "box8")
+        self.ev("tail_split", notes=notes, jobs=sorted(new_ids))
+        for sc in {j["scroll"] for j in new}:
+            self.save(sc)
+
     def _ram_ok(self):
         if self.a.fake_gpus:
             return True, ""
@@ -310,9 +425,9 @@ class Scheduler:
         need = self.a.ram_need_gb
         if avail < need:
             return False, f"MemAvailable {avail:.0f} GB < need {need:.0f} GB per fit"
-        du = shutil.disk_usage(self.H)
-        if du.free / 1e9 < self.a.min_free_gb:
-            return False, f"free disk {du.free / 1e9:.0f} GB on {self.H} < --min-free-gb {self.a.min_free_gb:.0f}"
+        free = self.disk_fn()[1] / 1e9
+        if free < self.a.min_free_gb:
+            return False, f"free disk {free:.0f} GB on {self.H} < --min-free-gb {self.a.min_free_gb:.0f}"
         return True, ""
 
     # ---- run one job
@@ -410,6 +525,17 @@ class Scheduler:
 
     # ---- after a job
     def settle(self, j: dict, cls: str, att: dict):
+        if cls == "ok":                                   # outside the lock: md5 of a unit takes seconds and must not stall the other GPUs' claims
+            try:
+                self.publish_unit(j)
+            except Exception as e:                  # noqa: BLE001 - reported loudly; the unit is retried at finalize
+                say(f"UNIT PAYLOAD FAILED {j['id']}: {type(e).__name__}: {e}", "box8")
+                self.ev("unit_failed", job=j["id"], err=str(e))
+            try:
+                L.record_height(self.heights_path, j["scroll"], max(j["z1"] - j["z0"], (L.load_heights(self.heights_path).get(j["scroll"]) or {}).get("height", 0)),
+                                self.host.min_vram if self.host else 0.0)
+            except OSError:
+                pass
         with self.cv:
             self.busy.pop(j.get("gpu"), None)
             sc = self.scrolls[j["scroll"]]
@@ -462,7 +588,50 @@ class Scheduler:
                 j["attempts"].append(att)
             self.settle(j, cls, att)
 
-    # ---- payload / DONE
+    # ---- payload / DONE.  Layout (ONE directory, ONE rsync): <home>/out/<scroll>/<tag>/{files, PAYLOAD.json (md5 of every file), DONE} per finished stripe/job,
+    #      written the moment that job finishes; <home>/out/<scroll>/{SCROLL.json, DONE} when the scroll has no pending work; <home>/out/{STATUS.json, ALLDONE.json}.
+    def publish_unit(self, j: dict) -> tuple[int, int]:
+        scroll, rd = j["scroll"], self.H / "runs" / j["scroll"] / j["tag"]
+        unit = self.out / scroll / j["tag"]
+        tmp = self.out / f".tmp_{scroll}__{j['tag']}"
+        shutil.rmtree(tmp, ignore_errors=True)
+        tmp.mkdir(parents=True)
+        for src in self._payload_sources(rd, j):
+            dst = tmp / src.relative_to(rd)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.link(src, dst)
+            except OSError:
+                shutil.copy2(src, dst)
+        fl = self.job_dirs(j)[1]
+        if fl.exists():
+            with gzip.open(tmp / "fit.log.tail.gz", "wb") as g:
+                g.write(tail_text(fl, 400000).encode())
+        with ThreadPoolExecutor(8) as ex:
+            allf = sorted(p for p in tmp.rglob("*") if p.is_file())
+            ents = list(ex.map(lambda p: {"path": str(p.relative_to(tmp)), "size": p.stat().st_size, "md5": md5_file(p)}, allf))
+        tot = sum(e["size"] for e in ents)
+        man = rd / "tiled" / "manifest.json"
+        nt = None
+        if man.exists():
+            try:
+                nt = json.loads(man.read_text()).get("n_tiles")
+            except ValueError:
+                pass
+        meta = {"scroll": scroll, "tag": j["tag"], "rung": j["rung_name"], "z": [j["z0"], j["z1"]], "n_tiles": nt, "attempts": len(j["attempts"]), "files": ents,
+                "total_bytes": tot, "status": "complete", "tile_name_stem": f"{scroll}_{j['tag']}_wNNN_zRRxC", "manifest": "tiled/manifest.json",
+                "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "note": "no checkpoints; tiled/manifest.json is the producer's verbatim manifest (box-side absolute paths inside are informational)"}
+        atomic_json(tmp / "PAYLOAD.json", meta)
+        (tmp / "DONE").write_text(f"complete {len(ents)} files {tot} bytes\n")
+        unit.parent.mkdir(parents=True, exist_ok=True)
+        if unit.exists():
+            shutil.rmtree(unit, ignore_errors=True)
+        os.replace(tmp, unit)                                 # the unit appears whole, DONE inside; rsync excludes .tmp_*
+        self.ev("unit", job=j["id"], files=len(ents), bytes=tot)
+        say(f"{j['id']}: payload unit out/{scroll}/{j['tag']} ({len(ents)} files, {tot / 1e9:.3f} GB, DONE written)", "box8")
+        return len(ents), tot
+
     def maybe_finalize(self, scroll: str):
         js = [j for j in self.jobs.values() if j["scroll"] == scroll]
         if any(j["status"] in ("pending", "running") for j in js) or self.scrolls[scroll].get("finalized"):
@@ -475,60 +644,40 @@ class Scheduler:
             return
         status = "complete" if not bad else "partial"
         try:
-            n_files, tot = self.build_payload(scroll, done, bad, status)
+            for j in done:
+                if not (self.out / scroll / j["tag"] / "DONE").exists():
+                    self.publish_unit(j)                      # a unit whose publish failed earlier is retried here
+            sd = self.out / scroll
+            units = sorted(j["tag"] for j in done)
+            atomic_json(sd / "SCROLL.json", {"scroll": scroll, "status": status, "units": units, "z_covered": sorted([j["z0"], j["z1"]] for j in done),
+                                             "failed_intervals": [{"id": j["id"], "z": [j["z0"], j["z1"]], "why": j.get("fail_why")} for j in bad],
+                                             "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+            (sd / "DONE.tmp").write_text(f"{status} {len(units)} units\n")
+            os.replace(sd / "DONE.tmp", sd / "DONE")
         except Exception as e:                          # noqa: BLE001
             say(f"PAYLOAD FAILED {scroll}: {type(e).__name__}: {e}", "box8")
             self.ev("payload_failed", scroll=scroll, err=str(e))
             return
         self.scrolls[scroll]["finalized"] = status
-        say(f"{scroll}: payload {status}: {n_files} files, {tot / 1e9:.3f} GB -> {self.D / 'payload' / scroll} (DONE marker written)", "box8")
-        self.ev("finalized", scroll=scroll, status=status, files=n_files, bytes=tot)
+        say(f"{scroll}: {status}: {len(done)} unit(s) in out/{scroll}/ (scroll DONE marker written)", "box8")
+        self.ev("finalized", scroll=scroll, status=status, units=len(done))
         self.save(scroll)
 
-    def build_payload(self, scroll: str, done: list[dict], bad: list[dict], status: str):
-        pd = self.D / "payload" / scroll
-        shutil.rmtree(pd, ignore_errors=True)
-        pd.mkdir(parents=True)
-        files: list[tuple[Path, Path]] = []
-        segs = []
-        for j in sorted(done, key=lambda j: (j["z0"], j["tag"])):
-            rd = self.H / "runs" / scroll / j["tag"]
-            dst = pd / j["tag"]
-            for src in self._payload_sources(rd, j):
-                rel = src.relative_to(rd)
-                files.append((src, dst / rel))
-            man = rd / "tiled" / "manifest.json"
-            nt = None
-            if man.exists():
-                try:
-                    nt = json.loads(man.read_text()).get("n_tiles")
-                except ValueError:
-                    pass
-            segs.append({"tag": j["tag"], "rung": j["rung_name"], "z": [j["z0"], j["z1"]], "n_tiles": nt, "manifest": f"{j['tag']}/tiled/manifest.json",
-                         "tile_name_stem": f"{scroll}_{j['tag']}_wNNN_zRRxC", "attempts": len(j["attempts"])})
-        for src, dst in files:
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                os.link(src, dst)
-            except OSError:
-                shutil.copy2(src, dst)
-        # gzip the log tail (full logs can be large; the tail holds the metrics)
-        for j in done:
-            fl = self.job_dirs(j)[1]
-            if fl.exists():
-                with gzip.open(pd / j["tag"] / "fit.log.tail.gz", "wb") as g:
-                    g.write(tail_text(fl, 400000).encode())
-        with ThreadPoolExecutor(8) as ex:
-            allf = sorted(p for p in pd.rglob("*") if p.is_file())
-            ents = list(ex.map(lambda p: {"path": str(p.relative_to(pd)), "size": p.stat().st_size, "md5": md5_file(p)}, allf))
-        tot = sum(e["size"] for e in ents)
-        meta = {"scroll": scroll, "status": status, "segments": segs, "failed_intervals": [{"id": j["id"], "z": [j["z0"], j["z1"]], "why": j.get("fail_why")} for j in bad],
-                "files": ents, "total_bytes": tot, "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "note": "no checkpoints; tiled/manifest.json is the producer's verbatim manifest (box-side absolute paths inside are informational)"}
-        atomic_json(pd / "PAYLOAD.json", meta)
-        (pd / "DONE.tmp").write_text(f"{status} {len(ents)} files {tot} bytes\n")
-        os.replace(pd / "DONE.tmp", pd / "DONE")
-        return len(ents), tot
+    def release_inputs(self, scroll: str):
+        """Delete a scroll's fetched inputs (re-fetchable) once its payload is pulled+verified: the disk is the scarce resource."""
+        if scroll in self.released:
+            return
+        self.released.add(scroll)
+        before = self._disk_state()[1]
+        shutil.rmtree(self.H / "assets" / scroll, ignore_errors=True)
+        for c in (self.H / "runs" / scroll).glob("*/fit/cache"):
+            shutil.rmtree(c, ignore_errors=True)
+        with self.cv:
+            self.staged_gb.pop(scroll, None)
+            self.cv.notify_all()
+        after = self._disk_state()[1]
+        say(f"{scroll}: inputs released after pull (free disk {before:.0f} -> {after:.0f} GB)", "box8")
+        self.ev("released", scroll=scroll, free_before=before, free_after=after)
 
     @staticmethod
     def _payload_sources(rd: Path, j: dict):
@@ -553,7 +702,7 @@ class Scheduler:
         seen_pulled: set[str] = set()
         while not self.done_evt.is_set():
             time.sleep(self.a.poll_s)
-            for pj in (self.D / "payload").glob("*/PULLED.json"):
+            for pj in self.out.glob("*/*/PULLED.json"):
                 if str(pj) in seen_pulled:
                     continue
                 seen_pulled.add(str(pj))
@@ -561,12 +710,30 @@ class Scheduler:
                     b = json.loads(pj.read_text()).get("bytes", 0)
                 except ValueError:
                     continue
-                self.gov.transfer(box_upload_gb=b / 1e9, what=f"pulled {pj.parent.name}")
+                self.gov.transfer(box_upload_gb=b / 1e9, what=f"pulled {pj.parent.parent.name}/{pj.parent.name}")
+            for sc, st in list(self.scrolls.items()):                    # inputs are released when every unit is pulled (or, with --free-inputs-on done, when finished)
+                if sc in self.released or not st.get("finalized") or st["finalized"] == "nothing":
+                    continue
+                units = [d for d in (self.out / sc).iterdir() if d.is_dir()] if (self.out / sc).is_dir() else []
+                if self.a.free_inputs_on == "done" or (units and all((d / "PULLED.json").exists() for d in units)):
+                    self.release_inputs(sc)
+            self.write_status()
             if (self.D / "STOP").exists() and not self.stop_reason:
                 self._hard_stop("STOP file present (operator request)")
             elif self.gov.hard_stop() and not self.stop_reason:
                 self.gov.note_hard_stop()
                 self._hard_stop(f"HARD BUDGET STOP: spent ${self.gov.spent():.2f} (+unpulled payload) >= ${self.gov.r.hard_usd}")
+
+    def write_status(self):
+        by = {}
+        for j in self.jobs.values():
+            by[j["status"]] = by.get(j["status"], 0) + 1
+        try:
+            atomic_json(self.out / "STATUS.json", {"t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "jobs": by, "busy_gpus": sorted(self.busy), "budget": self.gov.status(),
+                                                   "scrolls": {s: sc.get("finalized") or ("fetched" if sc["fetched"] else "staging" if sc["fetching"] else "waiting") for s, sc in self.scrolls.items()},
+                                                   "stop": self.stop_reason})
+        except OSError:
+            pass
 
     def _hard_stop(self, why: str):
         say(f"*** {why}: stopping running fits (SIGTERM, 60 s, SIGKILL). fit_spiral autosaves every {os.environ.get('FIT_SPIRAL_AUTOSAVE_INTERVAL', '1000')} steps; "
@@ -576,22 +743,75 @@ class Scheduler:
             self.stop_reason = why
             self.cv.notify_all()
 
+    # ---- Route A on the spare cores
+    def _routea_thread(self):
+        a = self.a
+        t0 = time.time()
+        while not self.done_evt.is_set() and not self.busy and time.time() - t0 < 1800:
+            time.sleep(2)                                    # start after the first fit is on a GPU: the fits come first
+        if self.done_evt.is_set() or self.stop_reason:
+            return
+        busy = len(self.gpus)
+        h = self.host or PL.Host([PL.Gpu(g, 40.0) for g in self.gpus])
+        slots, why = PL.routea_slots(h.phys_cores, busy, a.routea_reserve_cores, h.ram_gb, a.ram_need_gb, h.ram_reserve_gb, a.routea_ram_per_grow_gb, a.routea_slots)
+        if slots < 1:
+            say(f"Route A NOT started: 0 slots ({why})", "routeA")
+            self.ev("routea_skip", why=why)
+            return
+        from . import routea_side as RA
+        names = [s for s in (a.routea_scrolls or "").split(",") if s]
+        if not names:
+            pick = RA.pick_scrolls(ROOT / "pins" / "scrolls.json", a.routea_disk_gb, list(self.scrolls))
+            names = [s for s, _ in pick]
+            say(f"Route A scrolls (auto, <= {a.routea_disk_gb:g} GB of prediction+grids, Route B scrolls first, smallest first): " + ", ".join(f"{s} {g:.0f} GB" for s, g in pick), "routeA")
+        if not names:
+            say("Route A NOT started: no scroll chosen (pins/scrolls.json missing or --routea-disk-gb too small)", "routeA")
+            return
+        hours = a.routea_hours or max(1.0, (getattr(a, 'planned_makespan_h', None) or 4.0) * 0.9)
+        cmd = RA.command(self.H, names, slots, hours, a.routea_seeds)
+        say(f"Route A START on spare cores: {slots} slots = {why}; {len(names)} scroll(s), {a.routea_seeds} seeds each, {hours:.1f} h; log box8/logs/routeA.log", "routeA")
+        self.ev("routea_start", slots=slots, why=why, scrolls=names, hours=hours)
+        self.routea_proc = RA.launch(self.H, cmd, self.D / "logs" / "routeA.log")
+        self.routea_stop = threading.Event()
+        RA.publisher(self.H / "routeA_work", self.out, self.routea_stop, self.ev, every=max(5.0, a.poll_s * 4))
+        while self.routea_proc.poll() is None and not self.done_evt.is_set():
+            time.sleep(5)
+        if self.routea_proc.poll() not in (None, 0):
+            say(f"Route A EXITED rc={self.routea_proc.returncode} (see box8/logs/routeA.log); Route B is unaffected", "routeA")
+            self.ev("routea_exit", rc=self.routea_proc.returncode)
+
+    def _routea_finish(self):
+        p = self.routea_proc
+        if p is not None and p.poll() is None:
+            say("Route B finished: stopping Route A (SIGTERM; its finished segments are published, a rerun resumes the rest)", "routeA")
+            try:
+                os.killpg(p.pid, signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                pass
+        if getattr(self, "routea_stop", None):
+            self.routea_stop.set()
+            time.sleep(1)
+
     # ---- main
     def run(self) -> int:
         self.done_evt = threading.Event()
         self.start_fetches()
         mon = threading.Thread(target=self.monitor, daemon=True)
         mon.start()
+        if getattr(self.a, "routea", False) and (not self.a.fake_gpus or os.environ.get("ROUTEB_TEST_ROUTEA")):
+            threading.Thread(target=self._routea_thread, daemon=True, name="routea").start()
         ths = [threading.Thread(target=self.worker, args=(g,), name=f"gpu{g}") for g in self.gpus]
         for t in ths:
             t.start()
         for t in ths:
             t.join()
         self.done_evt.set()
+        self._routea_finish()
         for s in self.scrolls:
             with self.cv:
                 self.maybe_finalize(s)
         self.summary()
+        self.write_status()
         st = [j["status"] for j in self.jobs.values()]
         if any(x in ("failed", "hard_stopped") for x in st) or any(sc.get("fetch_failed") for sc in self.scrolls.values()):
             return 1                                      # something failed loudly
@@ -605,6 +825,7 @@ class Scheduler:
         summ = {"wall_s": round(time.time() - self.t0), "jobs": by, "stop": self.stop_reason, "budget": st,
                 "scrolls": {s: sc.get("finalized") or ("fetch_failed" if sc.get("fetch_failed") else "unfinished") for s, sc in self.scrolls.items()}}
         atomic_json(self.D / "ALLDONE.json", summ)
+        atomic_json(self.out / "ALLDONE.json", summ)
         say(f"ALLDONE {json.dumps(summ)}", "box8")
 
 
@@ -635,23 +856,51 @@ def skip_reason(scroll: str) -> str | None:
 
 def build_parser():
     ap = argparse.ArgumentParser(prog="routeB_run.sh --mode box8")
-    ap.add_argument("--scrolls", required=True)
+    ap.add_argument("--scrolls", default="auto", help="comma list | 'auto' (default) = EVERY eligible scroll that is runnable (tracks + lasagna + sense + umbilicus in the registry); "
+                    "non-runnable ones are listed with the reason")
     ap.add_argument("--steps", type=int, default=30000)
     ap.add_argument("--z0", type=int, default=None)
     ap.add_argument("--z1", type=int, default=None)
     ap.add_argument("--smoke", action="store_true", help="z 9000-9500, 1500 steps, 2 windings, 1 tile: a proof run (jobs get --smoke)")
     ap.add_argument("--gpus", default=None, help="comma list of GPU indices (default: all from nvidia-smi)")
     ap.add_argument("--fake-gpus", type=int, default=0, help="TEST ONLY: N logical workers, no nvidia-smi, no RAM guard")
-    ap.add_argument("--order", default="given", choices=["given", "spt", "lpt"], help="queue order: as listed | shortest expected first (most scrolls per $) | longest first")
+    ap.add_argument("--order", default="spt", choices=["given", "spt", "lpt"], help="queue order: shortest expected first (default; most scrolls finished per $) | as listed | longest first")
+    ap.add_argument("--legacy-ladder", action="store_true", help="old static ladder (full -> sw2800), no planner/admission/tail split; also implied by --ladder")
     ap.add_argument("--first-rung", default=None, help="force the starting rung name (default: full, or the first under the track limit when n_tracks is known)")
     ap.add_argument("--ladder-config", default=None)
     ap.add_argument("--ladder", default=None, help="rungs in order, e.g. full,sw2800 (default from ladder_config.json) | 'all' = full,w13000,q4500,sw2800")
-    ap.add_argument("--fetch-workers", type=int, default=2)
+    ap.add_argument("--fetch-workers", type=int, default=8, help="threads in the scroll-fetch pool (each scroll fetch itself uses ROUTEB_FETCH_WORKERS=128 connections)")
+    ap.add_argument("--fetch-parallel", type=int, default=8, help="max concurrent scroll fetches")
+    ap.add_argument("--fetch-ahead", type=int, default=2, help="fetched-but-unstarted scrolls kept ready beyond the free GPUs (GPUs must not wait)")
+    ap.add_argument("--fetch-files-per-s", type=float, default=58.0, help="planner: objects/s of ONE scroll's lasagna fetch (MEASURED 58 on pny with 128 workers under load 95, n = 1)")
+    ap.add_argument("--disk-high-water", type=float, default=0.85, help="never stage inputs that would push disk use above this fraction of the volume")
+    ap.add_argument("--disk-total-gb", type=float, default=None, help="planner/test override of the volume size (default: df of ROUTEB_HOME)")
+    ap.add_argument("--disk-free-gb", type=float, default=None)
+    ap.add_argument("--free-inputs-on", default="pulled", choices=["pulled", "done"], help="delete a scroll's fetched inputs once its payload is pulled+verified (default) or as soon as it is finished")
+    ap.add_argument("--max-height", type=int, default=L.FULL_SPAN, help="largest stripe height (z slices) the planner may start a scroll at")
+    ap.add_argument("--vram-margin-gib", type=float, default=1.5)
+    ap.add_argument("--gpu-speed", type=float, default=1.0, help="speed of these GPUs relative to the V100-class basis of the GPU-hour model (A100 UNMEASURED -> 1.0)")
+    ap.add_argument("--plan-frac", type=float, default=0.8, help="the p90 plan must finish within this fraction of the soft budget and of the max run hours; the rest is deferred")
+    ap.add_argument("--priority", default=None, help="comma list of scrolls, most important first (deferral drops from the end); default: both prizes first, then cheapest")
+    ap.add_argument("--no-plan", action="store_true", help="skip the planner's admission/deferral (run every runnable scroll; the governor still guards the budget)")
+    ap.add_argument("--no-tail-split", action="store_true", help="never split the tail scrolls into z-stripes")
+    ap.add_argument("--phys-cores", type=int, default=None)
+    ap.add_argument("--fake-vram-gib", type=float, default=40.0, help="TEST ONLY with --fake-gpus")
+    ap.add_argument("--fake-ram-gb", type=float, default=516.0, help="TEST ONLY with --fake-gpus")
+    ap.add_argument("--routea", dest="routea", action="store_true", default=True, help="Route A guarded grows on the spare CPU cores (default ON)")
+    ap.add_argument("--no-routea", dest="routea", action="store_false", help="disable Route A on the spare cores")
+    ap.add_argument("--routea-slots", type=int, default=None, help="override: concurrent Route A grows (default physical_cores - 2 x busy GPUs - reserve, RAM-checked)")
+    ap.add_argument("--routea-reserve-cores", type=int, default=4)
+    ap.add_argument("--routea-ram-per-grow-gb", type=float, default=6.0, help="ASSUMED RSS of one Route A grow (seed proposer ~1.5 GB measured; tracer unmeasured)")
+    ap.add_argument("--routea-scrolls", default=None, help="comma list (default auto: Route B scrolls first, smallest first, within --routea-disk-gb)")
+    ap.add_argument("--routea-disk-gb", type=float, default=150.0, help="disk reserved for Route A inputs (prediction+grids, 4-93 GB per scroll)")
+    ap.add_argument("--routea-seeds", type=int, default=8)
+    ap.add_argument("--routea-hours", type=float, default=None, help="Route A grow budget (default 0.9 x the planned Route B makespan)")
     ap.add_argument("--stall-minutes", type=float, default=None)
     ap.add_argument("--poll-s", type=float, default=5.0)
     ap.add_argument("--ram-need-gb", type=float, default=float(os.environ.get("ROUTEB_FIT_RAM_GB", 40)), help="MemAvailable needed to admit one fit (ASSUMED 40; peak RSS is logged per attempt so this can be set from data)")
     ap.add_argument("--ram-floor-gb", type=float, default=float(os.environ.get("ROUTEB_RAM_FLOOR_GB", 12)), help="below this MemAvailable the largest fit is killed (host_oom) instead of letting the kernel pick")
-    ap.add_argument("--min-free-gb", type=float, default=200.0, help="do not admit a fit when ROUTEB_HOME has less free disk than this (fit dirs are written there)")
+    ap.add_argument("--min-free-gb", type=float, default=60.0, help="do not admit a fit when ROUTEB_HOME has less free disk than this (fit dirs are written there)")
     ap.add_argument("--dry-run", action="store_true", help="print queue, skips, expected hours and the budget projection; launch nothing")
     ap.add_argument("--target-cm2", type=float, default=26.0)
     ap.add_argument("--rows", type=int, default=400)
@@ -659,7 +908,9 @@ def build_parser():
     g = ap.add_argument_group("budget (deploy_common/budget.py; env BUDGET_* also read)")
     g.add_argument("--soft", type=float, default=None, help="stop launching new fits when the projection reaches this (USD, default 45)")
     g.add_argument("--hard", type=float, default=None, help="hard stop (USD, default 49)")
-    g.add_argument("--hour-usd", type=float, default=None)
+    g.add_argument("--hour-usd", type=float, default=None, help="machine USD/h (default 4.276, the 8x A100 40GB quote)")
+    g.add_argument("--disk-usd-per-16gb-hour", type=float, default=None, help="allocated disk, USD per 16 GB per hour (default 0.009), billed for the whole run")
+    g.add_argument("--disk-gb", type=float, default=None, help="allocated (billed) disk in GB (default 934)")
     g.add_argument("--ingress-per-tb", type=float, default=None, help="box DOWNLOADS from the web, USD/TB (default 2.70)")
     g.add_argument("--egress-per-tb", type=float, default=None, help="box UPLOADS to us (our payload pull), USD/TB (default 4.00)")
     g.add_argument("--swap-directions", action="store_true")
@@ -670,9 +921,60 @@ def build_parser():
     return ap
 
 
+def gpu_info(a) -> list[PL.Gpu]:
+    """GPU list with VRAM (GiB): fake (tests), --gpus subset, or nvidia-smi."""
+    if a.fake_gpus:
+        return [PL.Gpu(str(i), a.fake_vram_gib, a.gpu_speed) for i in range(a.fake_gpus)]
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=index,name,memory.total", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise SystemExit(f"ROUTEB FAIL box8-gpus: cannot run nvidia-smi ({e})")
+    if out.returncode != 0 or not out.stdout.strip():
+        raise SystemExit(f"ROUTEB FAIL box8-gpus: nvidia-smi rc={out.returncode}: {out.stderr.strip()[:200]}")
+    rows = [[x.strip() for x in r.split(",")] for r in out.stdout.strip().splitlines()]
+    want = [g for g in a.gpus.split(",") if g] if a.gpus else None
+    gs = [PL.Gpu(r[0], float(r[2]) / 1024.0, a.gpu_speed) for r in rows if want is None or r[0] in want]
+    say("GPUs: " + "; ".join(f"{r[0]}={r[1]} {float(r[2]) / 1024:.1f} GiB" for r in rows if want is None or r[0] in want), "box8")
+    return gs
+
+
+def physical_cores(a) -> int:
+    if a.phys_cores:
+        return a.phys_cores
+    try:
+        out = subprocess.run(["lscpu", "-p=core,socket"], capture_output=True, text=True, timeout=10).stdout
+        n = len({l for l in out.splitlines() if l and not l.startswith("#")})
+        if n:
+            return n
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return max(1, (os.cpu_count() or 2) // 2)
+
+
+def build_host(a, H: Path) -> PL.Host:
+    gs = gpu_info(a)
+    ram = a.fake_ram_gb if a.fake_gpus else meminfo_gb()[1]
+    du = shutil.disk_usage(H if H.exists() else H.parent)
+    total = a.disk_total_gb if a.disk_total_gb is not None else du.total / 1e9
+    free = a.disk_free_gb if a.disk_free_gb is not None else du.free / 1e9
+    return PL.Host(gs, phys_cores=physical_cores(a), ram_gb=ram, disk_total_gb=total, disk_free_gb=free, disk_high_water_frac=a.disk_high_water,
+                   fetch_files_per_s=a.fetch_files_per_s, fetch_parallel=a.fetch_parallel, fetch_ahead=a.fetch_ahead, ram_per_fit_gb=a.ram_need_gb,
+                   reserve_cores=a.routea_reserve_cores)
+
+
+def all_scroll_names() -> list[str]:
+    return sorted(p.stem for p in (ROOT / "routeB" / "scrolls").glob("PHerc*.json"))
+
+
 def main(argv=None) -> int:
     a = build_parser().parse_args(argv)
+    if a.smoke:
+        a.no_plan = True                                 # a smoke is not priced by the full-fit planner
+    legacy = bool(a.legacy_ladder or a.ladder)
     cfg = L.load_config(a.ladder_config, a.ladder)
+    cfg["gpu_speed"] = a.gpu_speed
+    if not legacy:
+        cfg["dynamic"] = True
     if a.stall_minutes is None:
         a.stall_minutes = cfg["watchdog"]["stall_minutes"]
     if a.smoke:
@@ -687,8 +989,8 @@ def main(argv=None) -> int:
     if a.swap_directions:
         os.environ["BUDGET_SWAP_DIRECTIONS"] = "1"
     kw = B.Rates.from_file(a.budget_config) if a.budget_config else {}
-    kw.update({k: v for k, v in dict(hour_usd=a.hour_usd, ingress_per_tb=a.ingress_per_tb, egress_per_tb=a.egress_per_tb,
-                                     soft_usd=a.soft, hard_usd=a.hard, max_run_hours=a.max_run_hours).items() if v is not None})
+    kw.update({k: v for k, v in dict(hour_usd=a.hour_usd, ingress_per_tb=a.ingress_per_tb, egress_per_tb=a.egress_per_tb, soft_usd=a.soft, hard_usd=a.hard,
+                                     max_run_hours=a.max_run_hours, disk_usd_per_16gb_hour=a.disk_usd_per_16gb_hour, disk_gb=a.disk_gb).items() if v is not None})
     if a.swap_directions:
         kw["swap_directions"] = True
     rates = B.Rates.from_env(**kw)
@@ -697,20 +999,41 @@ def main(argv=None) -> int:
     clock = B.ScaledClock(a.clock_scale) if a.clock_scale else time.time
     import tempfile
     gov = B.Governor(Path(tempfile.mkdtemp(prefix="box8_dry_")) if a.dry_run else H / "box8" / "budget", rates, clock=clock, box_start=a.box_start, say=lambda m: say(m, "budget"))
+    names = all_scroll_names() if a.scrolls in ("auto", "all") else [s.strip() for s in a.scrolls.split(",") if s.strip()]
     sch = Scheduler(a, cfg, gov)
     sch.dry = a.dry_run                                  # a dry run reads state (if any) but writes nothing
-    names = [s.strip() for s in a.scrolls.split(",") if s.strip()]
-    run_names = []
+    run_names, not_runnable = [], []
     for s in names:
         why = skip_reason(s)
         if why:
             say(f"SKIP {s}: {why}", "box8")
             sch.ev("skip", scroll=s, why=why)
+            not_runnable.append((s, why))
         else:
             run_names.append(s)
     if not run_names:
         say("nothing to run: every requested scroll was skipped (see SKIP lines above)", "box8")
         return 1
+    host = build_host(a, H)
+    sch.host = host
+    sch.gpus = [g.idx for g in host.gpus]
+    ng = max(1, len(sch.gpus))
+    plan = None
+    if not legacy and not a.no_plan:
+        plan = PL.make_plan(host, rates, run_names, cfg, z0, z1, a.plan_frac, a.max_height, [x for x in (a.priority or "").split(",") if x] or None, sch.heights_path, a.order)
+        slots, sw = PL.routea_slots(host.phys_cores, ng, a.routea_reserve_cores, host.ram_gb, a.ram_need_gb, host.ram_reserve_gb, a.routea_ram_per_grow_gb, a.routea_slots)
+        ra = (f"PLAN Route A on the spare cores: {'ON' if a.routea else 'OFF (--no-routea)'}; {slots} grow slot(s) = {sw}" if a.routea else "PLAN Route A: OFF (--no-routea)")
+        print(PL.render(host, rates, plan, not_runnable, ra), flush=True)
+        if plan["keep"]:
+            a.planned_makespan_h = plan["p50"]["makespan_h"]
+        sch.ev("plan", keep=plan["keep"], deferred=plan["deferred"])
+        if not plan["keep"]:
+            return 3
+        for n_, why in plan["deferred"]:
+            sch.ev("deferred", scroll=n_, why=why)
+        run_names = list(plan["keep"])
+        if a.dry_run:
+            return 0 if plan["fits"] else 3
     for s in run_names:
         sch.add_scroll(s, z0, z1, a.first_rung)
     if a.order != "given":
@@ -719,8 +1042,6 @@ def main(argv=None) -> int:
             tot[sch.jobs[i]["scroll"]] = tot.get(sch.jobs[i]["scroll"], 0.0) + sch.jobs[i]["expected_h"]
         sch.order.sort(key=lambda i: tot[sch.jobs[i]["scroll"]], reverse=(a.order == "lpt"))
     tot_h = sum(j["expected_h"] for j in sch.jobs.values() if j["status"] == "pending")
-    sch.gpus = discover_gpus(a.gpus, a.fake_gpus)
-    ng = max(1, len(sch.gpus))
     wall = max(tot_h / ng, max([j["expected_h"] for j in sch.jobs.values() if j["status"] == "pending"] or [0]))
     proj = gov.projected(extra_expected_h=wall, extra_payload_gb=sum(j["payload_gb"] for j in sch.jobs.values()))
     say(f"PLAN: {len(sch.jobs)} job(s) over {len(run_names)} scroll(s), {tot_h:.1f} GPU-h expected on {ng} GPU(s) = {wall:.1f} h wall at perfect packing; "

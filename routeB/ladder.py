@@ -92,8 +92,10 @@ def tag_for(rung: dict, z0: int) -> str:
     return rung["tag"].format(z0=z0)
 
 
-def expected_h(cfg: dict, scroll: str, shell: int, rung_i: int) -> float:
+def expected_h(cfg: dict, scroll: str, shell: int, rung_i: int, span: int | None = None) -> float:
     r = cfg["rungs"][rung_i]
+    if r.get("dynamic") or (cfg.get("dynamic") and span):
+        return fit_hours(scroll, shell, span or r["height"], speed=cfg.get("gpu_speed", 1.0))
     ov = cfg.get("expected_gpuh_override", {}).get(scroll, {}).get(r["name"])
     if ov is not None:
         return float(ov)
@@ -105,10 +107,14 @@ def expected_h(cfg: dict, scroll: str, shell: int, rung_i: int) -> float:
 
 def make_job(cfg: dict, scroll: str, shell: int, rung_i: int, z0: int, z1: int, parent: str | None = None, lineage_attempts: int = 0) -> dict:
     r = cfg["rungs"][rung_i]
+    if r.get("dynamic") or cfg.get("dynamic"):
+        pay = round(0.8 * (z1 - z0) / 13000.0 + 0.05, 3)
     tag = tag_for(r, z0)
     return {"id": f"{scroll}/{tag}", "scroll": scroll, "rung": rung_i, "rung_name": r["name"], "tag": tag, "z0": z0, "z1": z1, "status": "pending",
             "parent": parent, "attempts": [], "oom_n": 0, "stall_n": 0, "unknown_n": 0, "lineage_attempts": lineage_attempts,
-            "expected_h": expected_h(cfg, scroll, shell, rung_i), "payload_gb": cfg["payload_gb"].get(r["name"], 0.5), "extra_overrides": {}}
+            "expected_h": expected_h(cfg, scroll, shell, rung_i, z1 - z0),
+            "p90_h": fit_hours(scroll, shell, z1 - z0, "p90", cfg.get("gpu_speed", 1.0)),
+            "payload_gb": pay if (r.get("dynamic") or cfg.get("dynamic")) else cfg["payload_gb"].get(r["name"], 0.5), "extra_overrides": {}}
 
 
 def tracks_estimate(cfg: dict, scroll: str, span: int, dbm_bytes: float | None = None, n_total: float | None = None) -> tuple[float | None, str]:
@@ -178,6 +184,21 @@ def decide(cfg: dict, job: dict, cls: str, shell: int, dbm_bytes: float | None =
         # fewer tracks per step keeps the checkpoint compatible (resume, as the 30 observed chunk exits with progress did); a different flow grid does not
         return {"action": "retry", "extra": extra, "fresh": "model_flow_voxel_resolution" in extra, "why": f"{cls}: memory-lean retry {job['oom_n']} with {extra}"}
     # descend
+    if cfg.get("dynamic"):
+        # adaptive ladder: an OOM (after its retry) re-covers the failed interval with 0.75x the failed height; a multinomial overflow jumps to the height
+        # whose track count (loaded-tracks evidence, else the configured count) is under the 2^24 limit.  Heights are rounded down to GRID slices.
+        span = job["z1"] - job["z0"]
+        if cls == "multinomial":
+            h = tracks_height(cfg, job["scroll"], job.get("n_loaded"), span)
+            h = min(h, shrink_height(span) or h) if h >= span else h
+        else:
+            h = shrink_height(span)
+        if not h or h < MIN_HEIGHT:
+            return {"action": "fail", "why": f"stripe height floor ({MIN_HEIGHT} slices) reached after {cls} at {span} slices"}
+        nr = dyn_rung(cfg, h)
+        kids = plan(cfg, job["scroll"], shell, job["z0"], job["z1"], start=nr, parent=job["id"], lineage_attempts=job["lineage_attempts"])
+        return {"action": "descend", "jobs": kids, "to_rung": cfg["rungs"][nr]["name"], "height": h,
+                "why": f"{cls}: re-cover z[{job['z0']},{job['z1']}) at height {h} (was {span}; 0.75x shrink / track limit), {len(kids)} stripe(s)"}
     nr = next_rung(cfg, job)
     if nr is None:
         return {"action": "fail", "why": f"ladder exhausted after {job['rung_name']} ({cls})"}
@@ -241,3 +262,68 @@ def start_height(path: Path | str, scroll: str, vram_gib: float, span: int, marg
         if k in d and abs(d[k]["vram_gib"] - vram_gib) < 0.5:
             return min(d[k]["height"], span)
     return computed_height(vram_gib, margin_gib, span=span)
+
+
+# ---------------------------------------------------------------- cost model by stripe height (planner + dynamic ladder)
+# GPU-hours of ONE fit_spiral job (30,000 steps) as a function of its z height.  Anchors (all MEASURED, on different cards, so this is a model, not a fit):
+#   full 13,000 slices: PHerc0125 5.99 GPU-h, PHerc0211 7.49 GPU-h (V100 32 GB, n = 1 each; the plan's n=3 range 5.99-13.27 incl. a gap-only run)
+#   2,800-slice stripes: 1.76 h p50 (p10 1.30 / p90 2.54), n = 26 completed fits on the contended 8xV100 box (0125, 5 stripes); and 3.6-3.8 ks = 1.03 h each,
+#     8.6-9.8 it/s, 9.6-10.2 GiB, 0 OOM, n = 4 PHerc0191 stripes on an RTX 4060 Ti 16 GB (lifestar, uncontended) -- a faster-than-V100 per-stripe figure.
+# height exponent alpha: t(h) = t_full * (h/13000)^alpha; alpha = ln(7.49/1.88)/ln(13000/2800) = 0.90 from 0125 (5.99 full vs 9.41/5 = 1.88 per stripe).
+# Consequence (printed in the doc): total GPU-h of a split scroll is ~(1+overlap)*5*(2800/13000)^0.9 / 1 = ~1.25x the full-height GPU-h, but wall-clock drops ~5x.
+FULL_SPAN = 13000
+ALPHA = 0.90
+FULL_P50_MEASURED = {"PHerc0125": 5.99, "PHerc0211": 7.49}
+HOURS_PER_SHELL = 0.048            # p50 full-height GPU-h per shell winding, from the plan table (4.5/7.0/10.6 at shell 146, 9.6 at 200, 19.6 at 408); ASSUMED for unfit scrolls
+Q_MULT = {"p10": 0.64, "p50": 1.0, "p90": 1.52}      # plan table 6.1/9.6/14.6 -> 0.64/1/1.52
+MIN_HEIGHT = 1000
+
+
+def fit_hours(scroll: str, shell: int, height: int, q: str = "p50", speed: float = 1.0) -> float:
+    """Expected GPU-hours of one fit of `height` z-slices on a V100-class card (speed>1 = faster card; A100 is UNMEASURED so the default stays 1.0)."""
+    tf = FULL_P50_MEASURED.get(scroll) or max(5.99, HOURS_PER_SHELL * shell)
+    return tf * Q_MULT[q] * (min(height, FULL_SPAN) / FULL_SPAN) ** ALPHA / speed
+
+
+def tracks_height(cfg: dict, scroll: str, n_loaded: float | None, span: int, safety: float = 0.95) -> int:
+    """Largest height whose track count stays under the 2^24 multinomial limit (tracks assumed uniform in z -- announced), with a safety factor."""
+    lim = cfg["limits"]["multinomial_categories"]
+    if n_loaded:
+        per_slice = n_loaded / max(1, span)
+    else:
+        n = cfg.get("scrolls", {}).get(scroll, {}).get("n_tracks")
+        if not n:
+            return FULL_SPAN
+        per_slice = n / cfg["full_span_z"]
+    return max(MIN_HEIGHT, int(lim * safety / per_slice) // GRID * GRID)
+
+
+def dyn_rung(cfg: dict, height: int, overlap: int = 200) -> int:
+    name = f"h{height}"
+    for i, r in enumerate(cfg["rungs"]):
+        if r["name"] == name:
+            return i
+    cfg["rungs"].append({"name": name, "width": height, "overlap": overlap, "tag": f"h{height}s{{z0}}", "gpuh_factor": None, "fit_overrides": {},
+                         "dynamic": True, "height": height, "note": "computed-height rung (routeB/planner.py), created at run time"})
+    return len(cfg["rungs"]) - 1
+
+
+def start_height_for(cfg: dict, scroll: str, vram_gib: float, span: int, margin_gib: float = 1.5, max_height: int = FULL_SPAN,
+                     heights_path: Path | str | None = None) -> tuple[int, str]:
+    """Initial stripe height = min(span, VRAM model, track limit from the configured count, --max-height); a recorded success for this scroll wins."""
+    hv = computed_height(vram_gib, margin_gib, span=span)
+    ht = tracks_height(cfg, scroll, None, span)
+    h = min(span, hv, ht, max_height)
+    why = f"min(span {span}, VRAM {vram_gib:.1f} GiB model {hv}, 2^24-track limit {ht}, max {max_height})"
+    if heights_path:
+        d = load_heights(heights_path)
+        if scroll in d and abs(d[scroll]["vram_gib"] - vram_gib) < 0.5:
+            return min(d[scroll]["height"], span), f"recorded success for {scroll} on a {d[scroll]['vram_gib']:.1f} GiB card ({why})"
+    return h, why
+
+
+def jobs_for_height(cfg: dict, scroll: str, shell: int, z0: int, z1: int, height: int, overlap: int = 200) -> list[dict]:
+    """Jobs covering [z0,z1) at `height`: one 'full' job when height >= span, else a dynamic rung's stripes."""
+    if height >= z1 - z0:
+        return plan(cfg, scroll, shell, z0, z1, start=0)
+    return plan(cfg, scroll, shell, z0, z1, start=dyn_rung(cfg, height, overlap))

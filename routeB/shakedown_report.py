@@ -49,10 +49,13 @@ def main(argv=None) -> int:
             add("tiles (tile_windings)", sc, m.get("n_tiles", 0) > 0, f"{m.get('n_windings')} windings, {m.get('n_tiles')} tiles, {m.get('tile_area_cm2')} cm2")
         else:
             add("tiles (tile_windings)", sc, False, "no .done.tiles.json")
-        pl = D / "payload" / sc
-        if (pl / "DONE").exists():
-            pm = json.loads((pl / "PAYLOAD.json").read_text())
-            add("payload (DONE marker, md5 manifest, no checkpoints)", sc, not any(f["path"].endswith(".ckpt") for f in pm["files"]), f"{pm['status']}, {len(pm['files'])} files", gb=pm["total_bytes"] / 1e9)
+        sd = D.parent / "out" / sc
+        units = sorted(d for d in sd.iterdir() if d.is_dir() and (d / "DONE").exists()) if sd.is_dir() else []
+        if (sd / "DONE").exists() and units:
+            pms = [json.loads((u / "PAYLOAD.json").read_text()) for u in units]
+            nf = sum(len(pm["files"]) for pm in pms)
+            add("payload (DONE marker, md5 manifest, no checkpoints)", sc, not any(f["path"].endswith(".ckpt") for pm in pms for f in pm["files"]),
+                f"{len(units)} unit(s), {nf} files", gb=sum(pm["total_bytes"] for pm in pms) / 1e9)
         else:
             add("payload (DONE marker, md5 manifest, no checkpoints)", sc, False, "no DONE")
         if a.with_ink:

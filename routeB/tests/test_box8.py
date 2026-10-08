@@ -109,7 +109,7 @@ def make_sched(tmp_path, monkeypatch, scrolls, gpus, plan, soft=45.0, hard=49.0,
     monkeypatch.setenv("ROUTEB_HOME", str(tmp_path))
     monkeypatch.setenv("STUB_PLAN", json.dumps(plan))
     monkeypatch.setenv("STUB_SLEEP", sleep)
-    a = B8.build_parser().parse_args(["--scrolls", ",".join(scrolls), "--fake-gpus", str(gpus), "--poll-s", "0.2", "--steps", "10", *extra])
+    a = B8.build_parser().parse_args(["--scrolls", ",".join(scrolls), "--fake-gpus", str(gpus), "--poll-s", "0.2", "--steps", "10", "--no-routea", *extra])
     a.stall_minutes = 0.05 if "stall" in json.dumps(plan) else 30.0
     B = B8._budget()
     clk = B.ScaledClock(clock_scale) if clock_scale else time.time
@@ -136,14 +136,19 @@ def test_work_stealing_keeps_all_gpus_busy_and_ladder_records_rung(tmp_path, mon
     assert st191["rung_succeeded"] == {"q4500": "q4500", "q7500": "q4500", "q10500": "q4500", "q13500": "q4500"}
     st211 = json.loads((tmp_path / "box8" / "state" / "PHerc0211.json").read_text())
     assert set(st211["rung_succeeded"].values()) == {"q4500"}               # full -> (multinomial; proxy: w13000 not skipped) -> oom x3 -> q4500
+    from routeB.box8 import md5_file
     for sc in ("PHerc0191", "PHerc0211", "PHerc0125"):
-        pd = tmp_path / "box8" / "payload" / sc
-        assert (pd / "DONE").exists(), sc
-        meta = json.loads((pd / "PAYLOAD.json").read_text())
-        assert meta["status"] == "complete" and not any(e["path"].endswith(".ckpt") for e in meta["files"])
-        from routeB.box8 import md5_file
-        assert all(md5_file(pd / e["path"]) == e["md5"] for e in meta["files"])
-        assert all(sg["tile_name_stem"].startswith(f"{sc}_") for sg in meta["segments"])
+        sd = tmp_path / "out" / sc
+        assert (sd / "DONE").exists() and json.loads((sd / "SCROLL.json").read_text())["status"] == "complete", sc
+        units = [d for d in sd.iterdir() if d.is_dir()]
+        assert units
+        for pd in units:                                              # every stripe is its own downloadable unit with md5 manifest + DONE
+            assert (pd / "DONE").exists()
+            meta = json.loads((pd / "PAYLOAD.json").read_text())
+            assert meta["status"] == "complete" and not any(e["path"].endswith(".ckpt") for e in meta["files"])
+            assert all(md5_file(pd / e["path"]) == e["md5"] for e in meta["files"])
+            assert meta["tile_name_stem"].startswith(f"{sc}_")
+    assert (tmp_path / "box8" / "payload").resolve() == (tmp_path / "out").resolve()     # old path name still works
     # concurrency: the stub log must show 3 jobs overlapping at some instant
     lines = [x.split() for x in (tmp_path / "stub_events.log").read_text().splitlines()]
     starts = sorted(float(x[0]) for x in lines)
@@ -188,7 +193,7 @@ def test_order_spt_and_lpt(tmp_path, monkeypatch, capsys):
     import re
     for order in ("spt", "lpt"):
         monkeypatch.setenv("ROUTEB_HOME", str(tmp_path / order))
-        assert B8.main(["--scrolls", "PHerc0125,PHerc0358,PHerc0268,PHerc0826", "--fake-gpus", "2", "--dry-run", "--order", order]) == 0
+        assert B8.main(["--scrolls", "PHerc0125,PHerc0358,PHerc0268,PHerc0826", "--fake-gpus", "2", "--dry-run", "--order", order, "--legacy-ladder"]) == 0
         tot, seq = {}, []
         for x in capsys.readouterr().out.splitlines():
             m = re.search(r"plan:\s+(PHerc\d+\w?)/\S+.*expected ([\d.]+) GPU-h", x)

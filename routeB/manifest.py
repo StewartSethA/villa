@@ -3,12 +3,16 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 from pathlib import Path
 
 from .common import spec
 
 BUCKET = "vesuvius-challenge-open-data"
+FETCH_WORKERS = int(os.environ.get("ROUTEB_FETCH_WORKERS", "128"))   # bench on pny (n = 1 run per setting): 32 workers 37 files/s, 128 workers 58 files/s, 256 workers 49 files/s
+
+
 PINS = Path(__file__).resolve().parent / "scrolls" / "pins.json"       # md5/sha256 of upstream files we measured, keyed by file name
 
 
@@ -52,7 +56,7 @@ def build(scroll: str, z0: int, z1: int, with_crossings: bool = False, full_lasa
         if not pref:
             continue
         a.append({"name": f"{scroll}:lasagna:{fld}", "kind": "s3prefix", "bucket": BUCKET, "prefix": pref,
-                  "dest": f"{scroll}/dataset/lasagna_inputs/{dirname}.ome.zarr",
+                  "dest": f"{scroll}/dataset/lasagna_inputs/{dirname}.ome.zarr", "workers": FETCH_WORKERS,
                   **({"include": inc, "subprefixes": [".zattrs", ".zgroup", "2/.zarray", "2/.zattrs", *[f"2/{c}/" for c in lasagna_z_chunks(z0, z1)]]} if inc else {"include": r"^(\.zattrs|\.zgroup|2/)"})})
     return {"scroll": scroll, "z": [z0, z1], "assets": a}
 
@@ -61,4 +65,4 @@ def volume_chunks_asset(scroll: str, keys: list[str], name: str) -> dict:
     """s3 volume chunks (level 0) needed by one tile set; `keys` are 'z/y/x' chunk keys."""
     s = spec(scroll)
     return {"scroll": scroll, "assets": [{"name": name, "kind": "s3keys", "bucket": BUCKET, "prefix": s["volume_s3_prefix"] + "/0",
-                                           "dest": f"{scroll}/volume/{s['volume_zarr']}/0", "keys": keys}]}
+                                           "dest": f"{scroll}/volume/{s['volume_zarr']}/0", "keys": keys, "workers": FETCH_WORKERS}]}
