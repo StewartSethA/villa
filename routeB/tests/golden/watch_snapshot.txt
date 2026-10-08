@@ -13,7 +13,10 @@ FETCH
   PHerc0813  BLOCKED by disk  
 ROUTE A  slots 27   segments published 0   area grown so far 0.0 cm2   
   A: STARTING  no tracers yet (kit / inputs / seeds phase) cpu 50% busy
-  A: seeds 0/? done, 0 running | 0 cm2 | ok/deadline 0 | held 0
+  A: 0/? seeds, 0 run | 0 grown, 0 usable | est final ~0 cm2 (~0 unique)
+  A: overlap none (0 segs, eps 5 vox)
+  ETA B: 0191 2h06m | all 2h06m (~10:06Z)
+  ETA A: unknown yet (no seeds finished in the last 30 min)
 
 PAYLOAD  2 unit(s) DONE, 0.70 GB, 1 pulled
   PHerc0125/full                      0.300 GB   120 files  pulled: yes

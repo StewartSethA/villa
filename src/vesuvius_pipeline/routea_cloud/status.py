@@ -110,6 +110,20 @@ def newest_area(sd: Path) -> float:
         return 0.0
 
 
+def area_at_round(sd: Path, r: int) -> float:
+    best = None
+    for m in sd.glob(f"r{r}/*/meta.json"):
+        k = m.stat().st_mtime
+        if best is None or k > best[0]:
+            best = (k, m)
+    if not best:
+        return 0.0
+    try:
+        return float(json.loads(best[1].read_text()).get("area_cm2") or 0.0)
+    except (OSError, ValueError, TypeError):
+        return 0.0
+
+
 def _tail(p: Path, n: int = 6000) -> str:
     try:
         with open(p, "rb") as f:
@@ -133,16 +147,24 @@ def summarize(work, slots: int | None = None, tracers: int | None = None, cpu: f
         except (OSError, ValueError):
             pass
     st, area_by, tally, rows, newest = {}, {}, {}, [], 0.0
+    fin_times, finals, usable, ext_done = [], [], 0.0, 0
     for exp in (work / "export").glob("*/*/export.json"):
         try:
             ex = json.loads(exp.read_text())
         except (OSError, ValueError):
             continue
         newest = max(newest, exp.stat().st_mtime)
+        fin_times.append(exp.stat().st_mtime)
         s = (ex.get("run") or {}).get("status", "?")
         st[s] = st.get(s, 0) + 1
         a = newest_area(exp.parent)
         area_by[s] = area_by.get(s, 0.0) + a
+        # USABLE area (user: "any segment that is usable is valid"): a held segment's usable surface is its newest round that PASSED the gate = the round before the failing one
+        us = area_at_round(exp.parent, len(ex.get("rounds") or []) - 1) if s == "gate_held" else a
+        usable += us
+        finals.append(us)
+        if "extended_from_round" in (ex.get("run") or {}):
+            ext_done += 1
         if s == "gate_held":
             rd = [r for r in (ex.get("rounds") or []) if (r.get("gate") or {}).get("pass") is False]
             g = (rd[-1] if rd else {}).get("gate") or {}
@@ -203,6 +225,31 @@ def summarize(work, slots: int | None = None, tracers: int | None = None, cpu: f
     finished = bool(rep.get("finished_utc"))
     out["finished_utc"] = rep.get("finished_utc")
     out["verified_pass"] = (rep.get("totals") or {}).get("verified_pass")
+    # ---- remaining seeds, finish rate, estimated total (crude: finished seeds' mean usable area stands in for every unfinished seed; the in-flight partial area is the floor)
+    ext_only = bool((rep.get("args") or {}).get("extend_only"))
+    if ext_only:
+        total_jobs = sum((v or {}).get("extend_candidates", 0) for v in (rep.get("scrolls") or {}).values())
+        remaining = max(0, total_jobs - ext_done)
+    else:
+        remaining = max(0, planned - done)
+    inflight = []
+    for sd in (work / "export").glob("*/*"):
+        if sd.is_dir() and not (sd / "export.json").is_file() and any(sd.glob("r*/*/meta.json")):
+            inflight.append(newest_area(sd))
+    mean_final = (sum(finals) / len(finals)) if finals else 0.0
+    est_rem = sum(max(0.0, mean_final - a_) for a_ in inflight) + max(0, remaining - len(inflight)) * mean_final
+    est_final = usable + sum(inflight) + est_rem
+    recent = sum(1 for t in fin_times if now - t < 1800)
+    out.update(usable_cm2=round(usable, 1), est_final_cm2=round(est_final, 1), mean_final_cm2=round(mean_final, 1), seeds_remaining=remaining, inflight=len(inflight),
+               finish_rate_per_h=round(recent * 2.0, 1), extend_only=ext_only)
+    try:
+        from . import overlap as _ov
+        ov = _ov.cached_scan(work)
+    except Exception:  # noqa: BLE001
+        ov = None
+    out["overlap"] = ov
+    if ov:
+        out["est_unique_final_cm2"] = round(est_final - ov.get("dup_cm2", 0.0), 1)
     # ---- processes, cpu, logs
     tr = tracer_count() if tracers is None else tracers
     cb = cpu_busy_pct() if cpu is None else cpu
@@ -242,15 +289,25 @@ def render_lines(d: dict, width: int = 100) -> list:
     ok = sum(v for k, v in st.items() if k not in ("gate_held", "no_checkpoint", "scrub_failed", "?"))
     cpu = "" if d.get("cpu_busy") is None else f" cpu {d['cpu_busy']:.0f}% busy"
     l1 = f"A: {d['state']}  {d['why']}{cpu}"
-    l2 = (f"A: seeds {d['seeds_done']}/{d['seeds_planned'] or '?'} done, {d.get('tracers', 0)} running | {d['area_cm2']:.0f} cm2 | "
-          f"ok/deadline {ok} | held {d['held']}" + (f" | verified {d['verified_pass']}" if d.get("verified_pass") is not None else ""))
+    est = ""
+    if d.get("est_final_cm2") is not None:
+        est = f" | est final ~{d['est_final_cm2']:.0f} cm2" + (f" (~{d['est_unique_final_cm2']:.0f} unique)" if d.get("est_unique_final_cm2") is not None else "")
+    total = d["seeds_planned"] or "?"
+    l2 = (f"A: {d['seeds_done']}/{total} seeds, {d.get('tracers', 0)} run | {d['area_cm2']:.0f} grown, {d.get('usable_cm2', 0):.0f} usable{est}")
     out = [l1[:width], l2[:width]]
     if d["held"]:
         hs = " ".join(f"{SHORT.get(k, k)} {v}" for k, v in sorted(d["held_reasons"].items(), key=lambda kv: -kv[1]))
         held_area = d["area_by_status"].get("gate_held", 0.0)
-        out.append(f"A: held by guard: {hs} | {held_area:.0f} cm2 stopped early"[:width])
+        out.append(f"A: ok {ok}, held {d['held']} by guard: {hs} | {held_area:.0f} cm2 stopped early"[:width])
         sw = d["sweep"]
         out.append(f"A: loosen x1.25 frees {sw['1.25']}, x1.5 {sw['1.5']}, x2 {sw['2.0']}, x3 {sw['3.0']} (guards set ...)"[:width])
+    ov = d.get("overlap")
+    if ov:
+        if ov["pairs"]:
+            w = ov["pairs"][0]
+            out.append(f"A: OVERLAP {ov['n_overlapping']} segs share ~{ov['dup_cm2']:.0f} cm2; worst {w['small'][-9:]}~{w['large'][-9:]} {w['frac'] * 100:.0f}%"[:width])
+        else:
+            out.append(f"A: overlap none ({ov['n_segments']} segs, eps {ov['eps_vox']:g} vox){' PARTIAL' if ov.get('partial') else ''}"[:width])
     return out
 
 

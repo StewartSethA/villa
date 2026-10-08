@@ -145,6 +145,78 @@ def _routea_summary(H: Path, slots):
         return None, [f"A: status unavailable ({type(e).__name__}: {str(e)[:60]})"]
 
 
+def _secs(txt):
+    """'1h 17m' / '9m 56s' / '2m' -> seconds (None when unparseable)."""
+    if not txt:
+        return None
+    m = re.findall(r"(\d+)\s*([hms])", txt)
+    if not m:
+        return None
+    return sum(int(n) * {"h": 3600, "m": 60, "s": 1}[u] for n, u in m)
+
+
+def _hm(sec):
+    if sec is None:
+        return "?"
+    sec = int(sec)
+    return (f"{sec // 3600}h{(sec % 3600) // 60:02d}m" if sec >= 3600 else f"{sec // 60}m")
+
+
+def compute_eta(snap: dict) -> dict:
+    """Time to completion per scroll and overall (Route B) and for Route A.  Route B: a running fit's ETA is the fit log's own; a pending job is its planned p50 hours; pending jobs are
+    placed on the GPUs longest-first (LPT) as they free up; a scroll finishes when its last job does.  Route A: remaining seeds / the finish rate of the last 30 minutes.  ESTIMATES,
+    not promises: a descent or an OOM retry makes a job longer."""
+    now = snap.get("now", time.time())
+    jobs = [j for j in snap.get("jobs", []) if j.get("status") in ("running", "pending", "deferred")]
+    free = {}
+    fin = {}
+    for r in snap.get("gpu_rows", []):
+        j = r.get("job")
+        free[r["idx"]] = (_secs(j.get("eta")) if j else 0) or 0
+        if j and not j.get("eta") and j.get("steps"):
+            free[r["idx"]] = 0
+    if not free:
+        free = {"0": 0}
+    run_by_id = {r["job"]["id"]: free[r["idx"]] for r in snap.get("gpu_rows", []) if r.get("job")}
+    pend = sorted([j for j in jobs if j.get("status") == "pending"], key=lambda j: -(j.get("expected_h") or 0))
+    ends = {}
+    for jid, e in run_by_id.items():
+        ends[jid] = e
+    for j in pend:
+        g = min(free, key=lambda k: free[k])
+        free[g] += int((j.get("expected_h") or 1.0) * 3600)
+        ends[j["id"]] = free[g]
+    per = {}
+    for j in jobs:
+        if j["id"] in ends:
+            per[j["scroll"]] = max(per.get(j["scroll"], 0), ends[j["id"]])
+    b_all = max(per.values()) if per else 0
+    out = {"B_scrolls": dict(sorted(per.items(), key=lambda kv: kv[1])), "B_all_s": b_all, "B_clock": time.strftime("%H:%MZ", time.gmtime(now + b_all)) if per else None}
+    ras = (snap.get("routea") or {}).get("summary") or {}
+    rate = ras.get("finish_rate_per_h")
+    rem = ras.get("seeds_remaining")
+    if rate and rem is not None and rate > 0:
+        sec = rem / rate * 3600
+        out.update(A_s=sec, A_rate=rate, A_clock=time.strftime("%H:%MZ", time.gmtime(now + sec)))
+    out["A_state"] = ras.get("state")
+    return out
+
+
+def eta_lines(snap: dict, width: int = 100) -> list:
+    e = snap.get("eta") or {}
+    ls = []
+    if e.get("B_scrolls"):
+        parts = " | ".join(f"{k.replace('PHerc', '')} {_hm(v)}" for k, v in list(e["B_scrolls"].items())[:6])
+        ls.append(f"ETA B: {parts} | all {_hm(e['B_all_s'])} (~{e['B_clock']})"[:width])
+    elif snap.get("jobs"):
+        ls.append("ETA B: no pending or running Route B jobs (done)")
+    if e.get("A_s") is not None:
+        ls.append(f"ETA A: ~{_hm(e['A_s'])} for the remaining seeds at {e['A_rate']:.0f} seeds/h (~{e['A_clock']})"[:width])
+    elif e.get("A_state") in ("GROWING", "UNDERBOOKED", "WAITING", "STARTING"):
+        ls.append("ETA A: unknown yet (no seeds finished in the last 30 min)")
+    return ls
+
+
 def newest_area(sd: Path):
     best = None
     for m in sd.glob("r*/*/meta.json"):
@@ -308,6 +380,7 @@ def collect(home: Path, now: float | None = None, gpus=None, log_path: Path | No
         ra["area"] += newest_area(sd)
     ra["summary"], ra["lines"] = _routea_summary(H, ra["slots"])
     snap["routea"] = ra
+    snap["eta"] = compute_eta(snap)
     # payload
     units = []
     for d in sorted((H / "out").glob("*/*/DONE")):
@@ -465,6 +538,8 @@ def render(snap: dict, color: bool = False, stream_n: int = 16) -> str:
     P(f"ROUTE A  slots {ra['slots'] if ra['slots'] is not None else '-'}   segments published {ra['segments']}   area grown so far {ra['area']:.1f} cm2   {'; '.join(ra['events'])}")
     for ln in ra.get("lines") or []:
         P("  " + ln)
+    for ln in eta_lines(snap):
+        P("  " + ln)
     P("")
     npull = sum(1 for x in snap["units"] if x["pulled"])
     P(f"PAYLOAD  {len(snap['units'])} unit(s) DONE, {sum(x['gb'] for x in snap['units']):.2f} GB, {npull} pulled")
@@ -543,10 +618,16 @@ def render_compact(snap: dict, color: bool = False, brief: bool = False) -> str:
     for ln in (ra.get("lines") or [f"A: {ra['slots'] if ra['slots'] is not None else '-'} slots, {ra['segments']} seg, {ra['area']:.1f} cm2"]):
         col = RED if any(w in ln for w in ("IDLE", "STALLED", "UNDERBOOKED", "FINISHED")) and ln.startswith("A: ") and ln.split()[1] in ("IDLE", "STALLED", "UNDERBOOKED", "FINISHED") else None
         L.append(c(clip(ln), col, color) if col else clip(ln))
+    for ln in eta_lines(snap):
+        L.append(clip(ln))
     L.append(clip(f"P: {len(units)} units {sum(x['gb'] for x in units):.2f} GB, {sum(1 for x in units if x['pulled'])} pulled"))
     al = alerts(snap)
     for sev, txt in al[:3]:
         L.append(c(clip("! " + txt), RED if sev == "red" else YEL, color))
+    # one screen: if the Route A panel grew the view past 40 lines, drop the lowest-value lines first (the loosen sweep, then the second pull-command line)
+    for drop in ("A: loosen", "  ./routeB_pull.sh"):
+        if len(L) > 40:
+            L = [x for x in L if not x.startswith(drop)]
     if len(al) > 3:
         L.append(c(clip(f"! +{len(al) - 3} more alert(s) (routeB_watch.sh --once --full)"), YEL, color))
     L.append("PULL (your machine):")

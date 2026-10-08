@@ -55,7 +55,7 @@ def test_states(tmp_path):
     assert RS.summarize(w, 38, tracers=10, cpu=20.0, now=now)["state"] == "UNDERBOOKED"
     assert RS.summarize(w, 38, tracers=36, cpu=80.0, now=now + 3 * 3600)["state"] == "STALLED"       # tracers but nothing touched for hours
     lines = RS.render_lines(RS.summarize(w, 38, tracers=36, cpu=80.0, now=now))
-    assert len(lines) == 4 and all(len(x) <= 100 for x in lines) and "held by guard" in lines[2]
+    assert len(lines) >= 4 and all(len(x) <= 100 for x in lines) and "by guard" in lines[2] and "usable" in lines[1]
 
 
 def test_waiting_while_downloading(tmp_path):
@@ -76,3 +76,21 @@ def test_control_file_is_read_on_every_call_and_unknown_keys_rejected(tmp_path, 
     assert "GATE_BOGUS" not in RS_settings.gate_override()
     RS.main(["--work", str(w), "guards", "clear"])
     assert RS_settings.gate_override()["GATE_FOLD_FRAC"] == base
+
+
+def test_usable_estimate_remaining_and_rate(tmp_path):
+    w = _work(tmp_path)
+    # a held segment with two rounds: its usable surface is the round BEFORE the failing one (r1 = 4 cm2), not the failing r2 (5 cm2)
+    d = w / "export" / "PHerc0125" / "e"
+    (d / "r1" / "x").mkdir(parents=True)
+    (d / "r1" / "x" / "meta.json").write_text(json.dumps({"area_cm2": 4.0}))
+    (d / "r2" / "x").mkdir(parents=True)
+    (d / "r2" / "x" / "meta.json").write_text(json.dumps({"area_cm2": 5.0}))
+    (d / "export.json").write_text(json.dumps({"run": {"status": "gate_held"}, "rounds": [{"gate": {"pass": True}}, {"gate": _gate({"fold_over": 3}, {"fold_over": 0.03})}], "identity": {"seg": "e"}}))
+    now = time.time()
+    x = RS.summarize(w, 38, tracers=0, cpu=3.0, now=now)
+    assert x["seeds_planned"] == 10 and x["seeds_remaining"] == 5               # 10 planned, 5 finished
+    assert abs(x["usable_cm2"] - (20.0 + 4.0)) < 1e-6                           # a (20) + e's passing round (4); b, c, d have no earlier round
+    assert x["finish_rate_per_h"] == 10.0                                       # 5 exports finished within the last 30 min -> 10 / h
+    assert x["est_final_cm2"] >= x["usable_cm2"]
+    assert abs(x["mean_final_cm2"] - (20.0 + 0 + 0 + 0 + 4.0) / 5) < 1e-6
