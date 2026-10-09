@@ -1,0 +1,207 @@
+{
+ "note": "per-scroll Hecate intensity frames: source quantiles (REF_Q) of our renders, resampled to 9.6 um; the hecate family maps them onto REF_V. Regenerate with scripts/hecate/frame_table.py --frames. Default norm = AFFINE on src_mean/src_std (measured best on S1, per-segment arm: 0.593 vs qmap 0.521 vs raw 0.492); per-scroll arm itself not separately scored.",
+ "ref_q_levels": [
+  1,
+  5,
+  10,
+  25,
+  50,
+  75,
+  90,
+  95,
+  99
+ ],
+ "ref_v": [
+  25.9,
+  32.2,
+  35.5,
+  41.0,
+  63.2,
+  108.9,
+  131.5,
+  142.8,
+  162.6
+ ],
+ "scrolls": {
+  "PHerc0125": {
+   "src_q": [
+    36.0,
+    51.0,
+    62.0,
+    84.0,
+    104.0,
+    124.0,
+    135.0,
+    144.0,
+    162.0
+   ],
+   "n_segments": 5,
+   "src_mean": 101.73,
+   "src_std": 28.05,
+   "src_mean_p10_p90": [
+    88.8,
+    108.3
+   ],
+   "source": "median of 5 segments' own 9.6 um-resampled quantiles, scripts/hecate/frame_table.py, 2026-10-05",
+   "as_of": "2026-10-05",
+   "status": "local-unvalidated"
+  },
+  "PHerc0172": {
+   "src_q": [
+    11.0,
+    22.5,
+    30.0,
+    44.0,
+    72.0,
+    103.0,
+    128.0,
+    140.0,
+    163.5
+   ],
+   "n_segments": 10,
+   "src_mean": 75.52,
+   "src_std": 38.34,
+   "src_mean_p10_p90": [
+    71.0,
+    77.0
+   ],
+   "source": "median of 10 segments' own 9.6 um-resampled quantiles, scripts/hecate/frame_table.py, 2026-10-05",
+   "as_of": "2026-10-05",
+   "status": "local-unvalidated"
+  },
+  "PHerc0191": {
+   "src_q": [
+    12.0,
+    36.0,
+    44.0,
+    53.0,
+    90.0,
+    124.0,
+    138.0,
+    147.5,
+    167.0
+   ],
+   "n_segments": 4,
+   "src_mean": 89.65,
+   "src_std": 38.05,
+   "src_mean_p10_p90": [
+    61.4,
+    101.4
+   ],
+   "source": "median of 4 segments' own 9.6 um-resampled quantiles, scripts/hecate/frame_table.py, 2026-10-05",
+   "as_of": "2026-10-05",
+   "status": "local-unvalidated"
+  },
+  "PHerc0211": {
+   "src_q": [
+    31.5,
+    48.5,
+    56.5,
+    93.5,
+    120.5,
+    138.0,
+    151.0,
+    159.0,
+    177.0
+   ],
+   "n_segments": 4,
+   "src_mean": 113.28,
+   "src_std": 35.02,
+   "src_mean_p10_p90": [
+    112.1,
+    113.8
+   ],
+   "source": "median of 4 segments' own 9.6 um-resampled quantiles, scripts/hecate/frame_table.py, 2026-10-05",
+   "as_of": "2026-10-05",
+   "status": "local-unvalidated"
+  },
+  "PHerc0257": {
+   "src_q": [
+    0.0,
+    29.0,
+    35.0,
+    45.0,
+    53.0,
+    126.0,
+    134.0,
+    138.0,
+    146.0
+   ],
+   "n_segments": 1,
+   "src_mean": 78.86,
+   "src_std": 42.85,
+   "src_mean_p10_p90": [
+    78.9,
+    78.9
+   ],
+   "source": "median of 1 segments' own 9.6 um-resampled quantiles, scripts/hecate/frame_table.py, 2026-10-05",
+   "as_of": "2026-10-05",
+   "status": "local-unvalidated"
+  },
+  "PHerc1545": {
+   "src_q": [
+    0.0,
+    35.5,
+    41.0,
+    48.0,
+    71.5,
+    122.5,
+    131.5,
+    135.5,
+    148.0
+   ],
+   "n_segments": 2,
+   "src_mean": 81.83,
+   "src_std": 39.24,
+   "src_mean_p10_p90": [
+    81.8,
+    81.9
+   ],
+   "source": "median of 2 segments' own 9.6 um-resampled quantiles, scripts/hecate/frame_table.py, 2026-10-05",
+   "as_of": "2026-10-05",
+   "status": "local-unvalidated"
+  },
+  "PHercParis4_2023": {
+   "src_q": [
+    51.0,
+    65.0,
+    72.0,
+    94.0,
+    134.0,
+    163.0,
+    184.0,
+    197.0,
+    220.0
+   ],
+   "n_segments": 5,
+   "src_mean": 130.98,
+   "src_std": 43.92,
+   "src_mean_p10_p90": [
+    128.4,
+    139.3
+   ],
+   "source": "median of 5 segments' own 9.6 um-resampled quantiles, scripts/hecate/frame_table.py, 2026-10-05",
+   "as_of": "2026-10-05",
+   "status": "local-unvalidated"
+  },
+  "PHerc1667": {
+   "src_q": [
+    25.9,
+    32.2,
+    35.5,
+    41.0,
+    63.2,
+    108.9,
+    131.5,
+    142.8,
+    162.6
+   ],
+   "src_mean": 75.0,
+   "src_std": 42.0,
+   "n_segments": 0,
+   "status": "authoritative",
+   "source": "public 2.399 um surface volume IS Hecate's training frame: identity map",
+   "as_of": "2026-10-05"
+  }
+ }
+}
