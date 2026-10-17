@@ -5,7 +5,12 @@ endif()
 ############
 # GUI Apps #
 ############
-add_subdirectory(VC3D)
+# Gated on VC_BUILD_UI_TRACER, not just VC_BUILD_APPS (2026-09-29): VC3D is the only thing under
+# apps/ that needs Qt6; see the root CMakeLists.txt's dependencies section for why this matters
+# on a box where Qt6 isn't installable the easy way.
+if(VC_BUILD_UI_TRACER)
+    add_subdirectory(VC3D)
+endif()
 
 #################
 # CMD Line Apps #

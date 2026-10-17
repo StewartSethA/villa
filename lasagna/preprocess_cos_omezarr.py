@@ -1752,6 +1752,11 @@ def run_preprocess_3d(
 			),
 			chunk_size=oc,
 			pyramid_policy=PYRAMID_POLICY_CUSTOM,
+			# the model emits 7 raw channels for this product (grad_mag + six direction
+			# channels, encoded to nx/ny only in finalize_product_slab); without this the
+			# accumulator is sized from the 3 OUTPUT channels and finalize raises
+			# "normal slab must have shape 7,D,H,W; got (3, ...)".
+			accumulator_channel_count=7,
 			inference_scaledown=other_sd,
 		),
 		pred_dt_product=(

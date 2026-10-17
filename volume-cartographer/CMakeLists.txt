@@ -519,12 +519,25 @@ if(VC_DEAD_CODE_REPORT AND NOT MSVC)
 endif()
 
 # ---- Dependencies -----------------------------------------------------------
-if(VC_BUILD_UI_TRACER OR VC_BUILD_APPS)
+# 2026-09-29 (coordinator, frontier-vacuum-abort build on v100): was `if(VC_BUILD_UI_TRACER OR
+# VC_BUILD_APPS)`, which forced a Qt6 find_package for EVERY apps/ build, including the plain
+# CLI tools (vc_grow_seg_from_seed, vc_flatten, ...) that apps/CMakeLists.txt defines with no Qt
+# dependency at all -- only apps/VC3D (the GUI) actually needs it. On a box new enough for
+# cmake/nvcc but running Ubuntu 20.04 (Qt6 not in the default apt repos, no PPA set up), this
+# made the CLI tools unbuildable for a reason that has nothing to do with them. VC_BUILD_UI_TRACER
+# is the option that already exists to express "I want the Qt bits"; apps/CMakeLists.txt now
+# gates add_subdirectory(VC3D) on the SAME flag, so a CLI-only build (VC_BUILD_APPS=ON,
+# VC_BUILD_UI_TRACER=OFF) needs neither Qt nor Boost::program_options's GUI-only use.
+if(VC_BUILD_UI_TRACER)
     find_package(Qt6 QUIET REQUIRED COMPONENTS Widgets Gui Core Network Concurrent OpenGLWidgets)
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTORCC ON)
     set(CMAKE_AUTOUIC ON)
 
+    find_package(Boost CONFIG REQUIRED COMPONENTS program_options)
+elseif(VC_BUILD_APPS)
+    # apps/CMakeLists.txt links Boost::program_options into several CLI tools directly
+    # (e.g. vc_grow_seg_from_seed) independent of the GUI.
     find_package(Boost CONFIG REQUIRED COMPONENTS program_options)
 endif()
 # Ceres is required unconditionally: core/CMakeLists.txt always builds

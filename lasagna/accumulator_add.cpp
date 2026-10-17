@@ -117,7 +117,11 @@ void add_float_avx512(float* dst, const float* src, ssize_t count) {
 
 bool avx512_available() {
     __builtin_cpu_init();
-    return __builtin_cpu_supports("avx512f") && __builtin_cpu_supports("f16c");
+    // GCC < 10 (seen on both rtx and v100: Ubuntu 20.04, gcc-8/9 only) rejects "f16c" as an
+    // invalid __builtin_cpu_supports() feature string even though the hardware supports it --
+    // this is a GCC-version gap, not a real feature check. Drop the sub-check; avx512f alone is
+    // what this file's SIMD path actually requires.
+    return __builtin_cpu_supports("avx512f");
 }
 #else
 bool avx512_available() { return false; }

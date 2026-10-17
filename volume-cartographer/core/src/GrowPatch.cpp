@@ -3426,6 +3426,20 @@ QuadSurface *tracer(Volume& volume, float scale, int level, cv::Vec3f origin, co
     TraceParameters trace_params;
     int snapshot_interval = params.value("snapshot-interval", 0);
     int stop_gen = params.value("generations", 100);
+    // Mid-round frontier vacuum early abort (coordinator, 2026-09-29; see
+    // docs/experiments/frontier_abort/STATE.md). Default 0.0 = OFF, byte-identical output
+    // (proven by md5 on real seeds before this was enabled anywhere). When > 0: at the START of
+    // each generation, BEFORE the expensive Ceres solve for it, sample a subset of the CURRENT
+    // fringe's OWN already-placed 3D positions (trace_params.dpoints(p), known from the PRIOR
+    // generation -- never a not-yet-placed candidate's position, which does not exist yet)
+    // against the raw CT volume. If the sampled vacuum fraction exceeds this threshold, with at
+    // least frontier_vacuum_abort_min_samples points sampled (avoids a tiny/noisy fringe
+    // triggering on few points), the round loop ends here exactly as it does on fringe.empty()
+    // -- the generation that would have expanded into background is never solved.
+    const double frontier_vacuum_abort_frac = std::clamp(params.value("frontier_vacuum_abort_frac", 0.0), 0.0, 1.0);
+    const int frontier_vacuum_abort_min_samples = std::max(1, params.value("frontier_vacuum_abort_min_samples", 24));
+    const double frontier_vacuum_abort_threshold = std::clamp(static_cast<double>(params.value("frontier_vacuum_abort_threshold", 20.0)), 0.0, 255.0);
+    const int frontier_vacuum_abort_start_gen = std::max(1, params.value("frontier_vacuum_abort_start_gen", 2));
 
     // Load normal grid first if provided, so we can use its spiral-step
     std::unique_ptr<vc::core::util::NormalGridVolume> ngv;
@@ -4679,6 +4693,45 @@ QuadSurface *tracer(Volume& volume, float scale, int level, cv::Vec3f origin, co
         generation++;
         if (stop_gen && generation >= stop_gen)
             break;
+
+        // Mid-round frontier vacuum early abort (default OFF; see the params declaration above
+        // for the full rationale). Runs STRICTLY SEQUENTIALLY, before any OpenMP-parallel work
+        // for this generation begins, so it needs no locking of its own: `raw_volume` is read
+        // by direct (z,y,x) indexing, the exact same accessor call this file already uses for a
+        // diagnostic raw sample (see `dbg_tensor(origin[2],origin[1],origin[0])` above, where
+        // `raw_volume` is first wired up) -- no interpolator object is shared across threads
+        // because none is constructed here at all; this is a cheap nearest-voxel lookup, not the
+        // sub-voxel interpolation the solver's own cost functions use, which is enough for a
+        // coarse "is this frontier heading into background" signal. Samples the FRINGE's own
+        // ALREADY-PLACED 3D positions (trace_params.dpoints(p), real coordinates from the prior
+        // generation) -- never a not-yet-placed candidate, whose position does not exist before
+        // this generation's solve runs.
+        if (frontier_vacuum_abort_frac > 0.0 && generation >= frontier_vacuum_abort_start_gen &&
+            trace_data.raw_volume && static_cast<int>(fringe.size()) >= frontier_vacuum_abort_min_samples) {
+            int sampled = 0, vacuum = 0;
+            for (const auto& p : fringe) {
+                const cv::Vec3d& xyz = trace_params.dpoints(p);
+                if (!dpoint_valid(xyz))
+                    continue;
+                const int z = static_cast<int>(std::lround(xyz[2]));
+                const int y = static_cast<int>(std::lround(xyz[1]));
+                const int x = static_cast<int>(std::lround(xyz[0]));
+                const uint8_t value = (*trace_data.raw_volume)(z, y, x);
+                ++sampled;
+                if (static_cast<double>(value) < frontier_vacuum_abort_threshold)
+                    ++vacuum;
+            }
+            if (sampled >= frontier_vacuum_abort_min_samples) {
+                const double vac_frac = static_cast<double>(vacuum) / static_cast<double>(sampled);
+                if (vac_frac >= frontier_vacuum_abort_frac) {
+                    std::cout << "frontier_vacuum_abort: gen " << generation << " fringe "
+                              << fringe.size() << " sampled " << sampled << " vacuum_frac "
+                              << vac_frac << " >= " << frontier_vacuum_abort_frac
+                              << " -- ending round early" << std::endl;
+                    break;
+                }
+            }
+        }
 
         auto is_loc_valid = [&](const cv::Vec2i& p) {
             return bounds.contains(cv::Point(p[1], p[0])) &&

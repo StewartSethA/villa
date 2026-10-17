@@ -1,3 +1,11 @@
+// Must precede every header: a feature-test macro has no effect once any libc
+// header has already been included, and save() below needs the GNU prototypes
+// for renameat2(). This was previously defined further down (after <stdio.h>),
+// where it silently did nothing.
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
 #include "vc/core/util/QuadSurface.hpp"
 
 #include "vc/core/util/Geometry.hpp"
@@ -41,12 +49,45 @@
 #endif
 
 #ifdef __linux__
-// renameat2(RENAME_EXCHANGE) in save() needs the GNU prototypes.
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
+// (_GNU_SOURCE is defined at the very top of this file — it must come before
+// any libc header to have any effect.)
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/syscall.h>
+#ifndef RENAME_EXCHANGE
+#include <linux/fs.h>
+#endif
+#ifndef RENAME_EXCHANGE
+#define RENAME_EXCHANGE (1 << 1)
+#endif
+
+namespace
+{
+// glibc only grew a renameat2() wrapper in 2.28, but the kernel has had the
+// syscall since 3.15. Portable builds target an older sysroot (the conda
+// x86_64-conda-linux-gnu sysroot is glibc 2.17) where the wrapper is absent
+// while the syscall is still perfectly available, so issue it directly there.
+//
+// This is the SAME kernel call, so RENAME_EXCHANGE's atomic-swap guarantee is
+// identical on both paths — no silent downgrade to a non-atomic swap. Where
+// the syscall genuinely cannot be named we return ENOSYS, which the caller
+// already handles explicitly with its documented remove + rename fallback.
+int vcRenameExchange(const char* oldPath, const char* newPath)
+{
+#if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 28))
+    return ::renameat2(AT_FDCWD, oldPath, AT_FDCWD, newPath, RENAME_EXCHANGE);
+#elif defined(SYS_renameat2)
+    return static_cast<int>(
+        ::syscall(SYS_renameat2, AT_FDCWD, oldPath, AT_FDCWD, newPath,
+                  static_cast<unsigned int>(RENAME_EXCHANGE)));
+#else
+    (void)oldPath;
+    (void)newPath;
+    errno = ENOSYS;
+    return -1;
+#endif
+}
+}  // namespace
 #endif
 
 #include "vc/core/util/MemMap.hpp"
@@ -2115,7 +2156,7 @@ void QuadSurface::save(const std::filesystem::path &path_, const std::string &uu
     bool replacedExisting = false;
     if (force_overwrite && std::filesystem::exists(final_path)) {
 #ifdef __linux__
-        if (renameat2(AT_FDCWD, temp_path.c_str(), AT_FDCWD, final_path.c_str(), RENAME_EXCHANGE) != 0) {
+        if (vcRenameExchange(temp_path.c_str(), final_path.c_str()) != 0) {
             const int err = errno;
             if (err == ENOSYS || err == EINVAL) {
                 // System doesn't support atomic exchange, fall back to remove + rename
