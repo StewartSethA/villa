@@ -1,0 +1,18 @@
+{"segment": "20250108000000-w025_2025010863", "cpu_abf_wall_s": 74.98789493797813, "gpu_lasagna_wall_s": 89.67301336897071, "error": null}
+{"segment": "20250108000001-w026_2025010854", "cpu_abf_wall_s": 97.84030178794637, "gpu_lasagna_wall_s": 111.84790441591758, "error": null}
+{"segment": "20250108000002-w027_2025010845", "cpu_abf_wall_s": 64.36143023800105, "gpu_lasagna_wall_s": 97.54364528600127, "error": null}
+{"segment": "20250108000003-w028_2025010836", "cpu_abf_wall_s": 74.06174494710285, "gpu_lasagna_wall_s": 115.6760530800093, "error": null}
+{"segment": "20250223000000-w059_2025022312", "cpu_abf_wall_s": 95.95700768602546, "gpu_lasagna_wall_s": 70.63757858402096, "error": null}
+{"segment": "20251226000000-w055_2025122611", "cpu_abf_wall_s": 43.52467461605556, "gpu_lasagna_wall_s": 117.99932812096085, "error": null}
+{"segment": "20260115000001-w056_2026011514", "cpu_abf_wall_s": 137.97019568900578, "gpu_lasagna_wall_s": 117.54921553796157, "error": null}
+{"segment": "20260127000000-w057_2026012713", "cpu_abf_wall_s": 153.16969485906884, "gpu_lasagna_wall_s": 90.97328241006471, "error": null}
+{"segment": "20260130000000-w031_2026013019", "cpu_abf_wall_s": 62.97859535703901, "gpu_lasagna_wall_s": 117.8162686539581, "error": null}
+{"segment": "20260203000000-w032_2026020303", "cpu_abf_wall_s": 63.56065910193138, "gpu_lasagna_wall_s": 99.75293262593914, "error": null}
+{"segment": "20260206000000-w042_2026020613", "cpu_abf_wall_s": 55.878894639899954, "gpu_lasagna_wall_s": 66.35565399599727, "error": null}
+{"segment": "20260206000002-w054_2026020617", "cpu_abf_wall_s": 205.84501280705445, "gpu_lasagna_wall_s": 75.28717366501223, "error": null}
+{"segment": "20260210000000-w058_2026021020", "cpu_abf_wall_s": 96.7497949959943, "gpu_lasagna_wall_s": 79.69777636195067, "error": null}
+{"segment": "20260219000000-w033_2026021913", "cpu_abf_wall_s": 78.25149179704022, "gpu_lasagna_wall_s": 67.05887661594898, "error": null}
+{"segment": "20260219000001-w048_2026021912", "cpu_abf_wall_s": 49.93062781798653, "gpu_lasagna_wall_s": 66.59551960404497, "error": null}
+{"segment": "20260227000000-w052_2026022705", "cpu_abf_wall_s": 203.40038166602608, "gpu_lasagna_wall_s": 63.979769393918104, "error": null}
+{"segment": "20260302000001-w050_2026030220", "cpu_abf_wall_s": 16.771366480970755, "gpu_lasagna_wall_s": 95.96363727899734, "error": null}
+FLATTEN_DONE 17

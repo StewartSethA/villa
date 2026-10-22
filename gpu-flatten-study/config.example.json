@@ -1,0 +1,7 @@
+{
+ "data_dir": "data",
+ "flat_dir": "flat",
+ "cpu_flattener": "bin/vc_flatten",
+ "lasagna_dir": "villa/lasagna",
+ "lasagna_python": "python"
+}
