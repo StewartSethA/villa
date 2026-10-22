@@ -1,0 +1,26 @@
+date: 2026-10-22T07:27:27Z
+CPU(s): 32
+Model name: AMD EPYC 7282 16-Core Processor
+Thread(s) per core: 2
+Socket(s): 1
+CPU(s) scaling MHz: 98%
+ total used free shared buff/cache available
+Mem: 499 91 53 10 368 407
+Tesla V100-SXM2-16GB, 16384 MiB, 580.178.04
+Tesla V100-SXM2-16GB, 16384 MiB, 580.178.04
+torch 2.2.0+cu121 cuda 12.1 zarr 3.1.5 numpy 1.26.4 tifffile 2026.3.3
+load: load average: 12.95, 17.13, 15.31
+volume: <volume>/PHerc0139.zarr shape [20974, 6621, 6621] u1 uncompressed; fs: ext4
+md5 f60d1c84c04b2c493827fed91ad20c7d <cpu_renderer>/vc_render_tifxyz
+md5 f08ed0097bd4b56af7e661e4a7c7f40e scripts/render_gpu.py
+md5 e94f3e665cb5e97fe6e72586974b3726 scripts/kernels.cu
+md5 903bad5d83b02b20c81f63411b2d8397 scripts/cuda_rt.py
+md5 04f85f86e808b36883e2d712a2d2fd56 scripts/bench_render.py
+md5 9a321bbf04f052913fce8e24352eccd1 scripts/bench_full.py
+md5 0b90076c81146063cad40248a808c86b scripts/analyse.py
+md5 c792decadf526e26820c786d48dcddf0 <volume>/PHerc0139.zarr/.zattrs
+harness commit: f5d11371f35d688bcaccee4773b82ac24d071301
+villa commit (volume-cartographer source of vc_render_tifxyz): 9252773b6c01a345ea26260453a4464b63ac5f73
+
+md5 7fe1e3175f1e1892562e3485af2191e9 scripts/common.py
+# md5 of the scripts above are of the files in this folder (paths made config-relative after the runs; the measured code path is unchanged)

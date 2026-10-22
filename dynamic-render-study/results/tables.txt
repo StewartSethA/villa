@@ -1,0 +1,46 @@
+windows n = 66; segments n = 22; window 1024x1024 px x 28 planes = 29.36 Mvoxel
+
+WALL SECONDS per window (p10 / p50 / p90):
+  pre-rendered read                  0.02319 / 0.02859 / 0.03132
+  CPU render (process)               0.6518 / 0.696 / 0.7422
+  CPU render + read TIFFs back       0.9108 / 0.9573 / 1.048
+  GPU render, first call             0.2804 / 0.3093 / 0.4159
+  GPU render, steady                 0.2821 / 0.3304 / 0.4267
+
+Mvoxel/s per window (p10 / p50 / p90):
+  pre-rendered read                  937.5 / 1027 / 1266
+  CPU render                         39.56 / 42.19 / 45.05
+  CPU render + read-back             28.01 / 30.67 / 32.23
+  GPU render, steady                 68.81 / 88.87 / 104.1
+
+PER-SEGMENT medians of the window medians (n segments):
+  pre-rendered read s                0.02453 / 0.02842 / 0.03083
+  CPU render s                       0.6638 / 0.6883 / 0.7199
+  GPU render s                       0.2886 / 0.3385 / 0.423
+
+IDENTITY (fraction of voxels exactly equal; max |diff| grey levels):
+  C_vs_P: frac_equal p10/p50/p90 0.996 / 0.9967 / 0.9976; max|diff| over all windows 1; windows with ZERO differing voxels 0/66; total differing voxels 6372055 of 1.938e+09
+  G_vs_P: frac_equal p10/p50/p90 0.996 / 0.9967 / 0.9976; max|diff| over all windows 1; windows with ZERO differing voxels 0/66; total differing voxels 6374637 of 1.938e+09
+  G_vs_C: frac_equal p10/p50/p90 1 / 1 / 1; max|diff| over all windows 1; windows with ZERO differing voxels 0/66; total differing voxels 5412 of 1.938e+09
+
+DISK (bytes per segment): pre-rendered 28-plane zarr p10/p50/p90 GB 1.626 / 1.772 / 2.592 ; mesh (dynamic) MB 1.464 / 1.604 / 2.253
+
+PRE-RENDER COST (whole canvas, once), n segments = 22
+  voxels                               1.366e+09 / 1.496e+09 / 2.102e+09
+  cpu_full_wall_s_with_tiff_write      20.75 / 23.53 / 35.33
+  cpu_full_Mvox_s_with_tiff_write      59.62 / 63.17 / 67.96
+  gpu_full_wall_s_no_write             3.675 / 4.889 / 6.734
+  gpu_full_Mvox_s_no_write             293.8 / 308.7 / 405.1
+  gpu_zarr_write_s                     4.568 / 5.081 / 7.269
+  prerendered_zarr_bytes               1.202e+09 / 1.307e+09 / 1.918e+09
+  cpu_full_tiff_bytes                  8.958e+08 / 9.962e+08 / 1.445e+09
+
+FLEXIBILITY (same GPU call; one window per segment, n = 22 )
+  D17_z+0.0                  wall s p10/p50/p90 0.271 / 0.2992 / 0.4014; identical to the matching planes of the D65 render: 22 true / 0 false / 0 not comparable
+  D17_z+3.0                  wall s p10/p50/p90 0.2696 / 0.319 / 0.4021; identical to the matching planes of the D65 render: 22 true / 0 false / 0 not comparable
+  D17_z-4.0                  wall s p10/p50/p90 0.2712 / 0.2793 / 0.3944; identical to the matching planes of the D65 render: 22 true / 0 false / 0 not comparable
+  D33_z+0.0                  wall s p10/p50/p90 0.2886 / 0.3164 / 0.4079; identical to the matching planes of the D65 render: 22 true / 0 false / 0 not comparable
+  D33_z+3.0                  wall s p10/p50/p90 0.3027 / 0.3206 / 0.434; identical to the matching planes of the D65 render: 22 true / 0 false / 0 not comparable
+  D33_z-4.0                  wall s p10/p50/p90 0.2869 / 0.3231 / 0.4181; identical to the matching planes of the D65 render: 22 true / 0 false / 0 not comparable
+  opposite_direction_D33     wall s p10/p50/p90 0.3019 / 0.3278 / 0.4332; identical to the matching planes of the D65 render: 22 true / 0 false / 0 not comparable
+  D65 wall s 0.3389 / 0.3874 / 0.5065

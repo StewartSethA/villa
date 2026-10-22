@@ -1,0 +1,8 @@
+{
+ "data_dir": "data",
+ "volume": "volume/PHerc0139.zarr",
+ "cpu_renderer": "bin/vc_render_tifxyz",
+ "tmp_dir": "tmp",
+ "out_dir": "out",
+ "num_slices": 28
+}
