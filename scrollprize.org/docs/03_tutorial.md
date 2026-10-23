@@ -1,7 +1,6 @@
 ---
 id: tutorial
 title: "The Tutorials"
-hide_table_of_contents: true
 ---
 
 <head>
@@ -9,7 +8,7 @@ hide_table_of_contents: true
 
   <meta
     name="description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="Overview of the Vesuvius Challenge pipeline for reading Herculaneum scrolls: scanning, representation, segmentation, ink detection, and reading the text."
   />
 
   <meta property="og:type" content="website" />
@@ -17,7 +16,7 @@ hide_table_of_contents: true
   <meta property="og:title" content="Vesuvius Challenge" />
   <meta
     property="og:description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="Overview of the Vesuvius Challenge pipeline for reading Herculaneum scrolls: scanning, representation, segmentation, ink detection, and reading the text."
   />
   <meta
     property="og:image"
@@ -29,7 +28,7 @@ hide_table_of_contents: true
   <meta property="twitter:title" content="Vesuvius Challenge" />
   <meta
     property="twitter:description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="Overview of the Vesuvius Challenge pipeline for reading Herculaneum scrolls: scanning, representation, segmentation, ink detection, and reading the text."
   />
   <meta
     property="twitter:image"
@@ -37,19 +36,24 @@ hide_table_of_contents: true
   />
 </head>
 
-import { TutorialsTop } from '@site/src/components/TutorialsTop';
 
 These tutorials share the best tools and techniques for virtually unwrapping and reading carbonized papyrus scrolls.
 
-We expect you will build on these techniques, improving the tools and models. But of course, you may have better ideas, and are free to approach the Vesuvius Challenge any way you think will work!
+We expect you will build on these techniques, improving the tools and models. But of course, you may have better ideas, and are free to approach Vesuvius Challenge any way you think will work!
 
 There are five steps in our process for reading a carbonized scroll:
 
-<TutorialsTop/>
+
+:::warning[ARCHIVED]
+
+This page has been archived and is no longer maintained. It describes an earlier generation of the Vesuvius Challenge pipeline — tools, data layouts, and results referenced here may have been superseded. See [Open Problems](2026_open_problems) for the current state of the pipeline and [Prizes](prizes) for what is open today.
+
+:::
+
 
 1. <b>Scan:</b> use X-ray tomography to create a 3D scan of a scroll or fragment. The digital twin is a volumetric image where each voxel (3D pixel) represents the average density of the material at the scan resolution.
 2. <b>Representation:</b> choosing a digital or mathematical representation for data manipulation. Scanning outputs voxels in a 3D grid, but other options like point clouds exist. Switching between representations is possible if no important information is lost.
-3. <b>Segmentation::</b> mapping and transforming the written surface into a flat, 2D projection and sampling nearby voxels to create a flattened volume that contains all surface features.
+3. <b>Segmentation:</b> mapping and transforming the written surface into a flat, 2D projection and sampling nearby voxels to create a flattened volume that contains all surface features.
 4. <b>Ink Detection:</b> identifying the inked regions in the flattened surface volume using a machine learning model
 5. <b>Read:</b> decipher ink strokes, interpret meaning, unlock history
 
@@ -61,7 +65,7 @@ Here is an excellent 2 minute overview of how this was achieved:
 
 <iframe className="w-[100%] aspect-video mb-4" src="https://www.youtube.com/embed/GduCExxB0vw" title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen/>
 
-For the Herculaneum papyri, many of the same steps apply, with one key change - the ink is much less readily visible. There is much room for improvement in each step of the pipeline: We can currently only read 5% of a complete scroll. We would like to read 90% in 2024. That is your goal!
+For the Herculaneum papyri, many of the same steps apply, with one key change - the ink is much less readily visible. There is still room for improvement in each step of the pipeline as the project scales from isolated readable passages toward broad, reliable scroll reading. Current milestones and prize criteria are maintained on the [Prizes](prizes) page.
 
 
 Let's go through each of the key steps one by one.
@@ -93,7 +97,7 @@ The X-ray photos are combined into a 3D scan volume using [tomographic reconstru
   <figcaption className="mt-0">Artistic visualization of constructing a 3D volume; in reality the object rotates as it is scanned.</figcaption>
 </figure>
 
-We store the 3D scan volume as a directory full of .tif files, where each file represents one horizontal cross-section or "slice" of the object, typically starting at the bottom of the scroll or scroll fragment and moving upwards. We call this a .tif image stack. You can view and explore a 3D scan volume of a scroll in your browser right now in [one click](https://dl.ash2txt.org/view/Scroll1), or with a few lines of code ([Python](https://github.com/ScrollPrize/vesuvius), [C](https://github.com/ScrollPrize/vesuvius-c)).
+We store the 3D scan volume as a directory full of .tif files, where each file represents one horizontal cross-section or "slice" of the object, typically starting at the bottom of the scroll or scroll fragment and moving upwards. We call this a .tif image stack. You can view and explore a 3D scan volume of a scroll in your browser right now in [one click](https://dl.ash2txt.org/view/Scroll1), or with a few lines of code ([Python](https://github.com/ScrollPrize/vesuvius)).
 
 Remember that each pixel in the image stack actually represents a cube (voxel) of physical space. If your volume has a 10um voxel size, then 100 slices will be 1mm (1000um) of the object.
 
@@ -136,14 +140,14 @@ The goal of segmentation is to map and capture information near the written surf
 
 <div>There are four steps to segmentation:</div>
 
-* **Map.** Working from the chosen representation, map the surface (VC, Khartes, Thaumato) or volume (Slicer, Napari, Dragonfly) of the targeted scroll section.
+* **Map.** Working from the chosen representation, map the surface (VC, Khartes) or volume (Slicer, Napari, Dragonfly) of the targeted scroll section.
 * **Mesh.** Once the surface has been mapped in three dimensions, we need to start preparing the ground to visualize the results. In computer vision, the common approach is triangulating the surface obtaining a “triangular mesh”. Triangular meshes allow coherent texturization and rendering of the surface for both enhanced 3D visualization and flattened 2D visualization. The triangular mesh is stored in a “.obj” file. 
 * **Subvolume.** Sample voxels around the mesh to extract a subvolume containing information around the surface (surface volume).
 * **Flatten.** Transform this subvolume into a new .tif image stack where each layer is 2D, similar to creating a map of the earth on flat paper
 
 The output of this process is a flattened 3D volume of the voxels around the mapped surface, which we call a “surface volume”. This is again a .tif image stack, just like our original volume. However, it is much smaller than the original volume and more consistent since the papyrus always sits roughly in the middle of the volume.
 
-In ["Tutorial: Segmentation and Flattening"](tutorial3) we’ll dive deeper into segmentation and virtual unwrapping.
+In ["Tutorial: Segmentation"](segmentation) we’ll dive deeper into segmentation and virtual unwrapping, and in ["Tutorial: Spiral Fitting"](tutorial_spiral) we show how to combine many small segments into a single coherent surface covering a whole scroll.
 
 ### 4. Ink detection
 
@@ -174,7 +178,7 @@ We go into great detail in [“Tutorial 5: Ink Detection”](tutorial5).
 </div>
 
 <figure className="">
-  <video autoPlay playsInline loop muted className="w-[100%]" poster="/img/tutorials/engedi-reconstruction3.webm">
+  <video autoPlay playsInline loop muted className="w-[100%]">
     <source src="/img/tutorials/engedi-reconstruction3.webm" type="video/webm"/>
   </video>
   <figcaption className="mt-0">En-Gedi reconstruction of multiple segments, showing Hebrew text. Can you read it? <a href="https://www.youtube.com/watch?v=tL7rhIFNtQg">(source)</a></figcaption>
@@ -190,25 +194,25 @@ graph TD
 
 classDef substep fill:#223B46
 
-Scanning["1. Micro-CT scan"]:::substep
+Scanning["1\. Micro-CT scan"]:::substep
 Papyrus([Papyrus scroll]) --> Scanning --> tif[/"Scroll volume (.tif stack)"/]
 
-Segmentation["2. Segmentation"]:::substep
+Segmentation["2\. Segmentation"]:::substep
 tif --> Segmentation --> obj[/"3D mesh (.obj)"/]
 
-Volumes["3. Flattening and rendering"]:::substep
+Volumes["3\. Flattening and rendering"]:::substep
 tif --> Volumes
 obj --> Volumes
 Volumes --> surfVol[/"Surface volume (.tif stack)"/]
 
-Alignment["4. Ground data truth alignment"]:::substep
+Alignment["4\. Ground data truth alignment"]:::substep
 Infrared[/Infrared photo/] --> Alignment --> alInf[/Aligned infrared/] --> labels[/Hand-labeled binary mask/]
 surfVol --> Alignment
 
-Ink["5. Ink detection"]:::substep
+Ink["5\. Ink detection"]:::substep
 surfVol --> Ink
 labels --> Ink --> predInk[/Ink predictions/]
 
-Interpretation["6. Interpretation"]:::substep
+Interpretation["6\. Interpretation"]:::substep
 predInk --> Interpretation --> Knowledge([New knowledge])
 ```

@@ -1,0 +1,287 @@
+# this is basically copy/pasted from dynamic_network_architectures : https://github.com/MIC-DKFZ/dynamic-network-architectures/tree/main
+# reworked a bit to function here. again probably easier to import , but now gives me a good baseline i can modify without having
+# to rely on a 3rd party folder with a custom module. i baked the split conv and res encoder/decoder into one shared one
+
+import numpy as np
+from typing import Union, Tuple, List, Type
+
+import torch
+import torch.nn.functional as F
+from vesuvius.models.utilities.utils import get_matching_convtransp
+from .resblocks import StackedResidualBlocks
+from .simple_conv_blocks import StackedConvBlocks
+from torch import nn
+from torch.nn.modules.dropout import _DropoutNd
+
+
+class TrilinearUpsample3d(nn.Module):
+    """Trilinear interpolation + 1x1 conv to adjust channels."""
+
+    def __init__(self, in_channels, out_channels, stride, bias=True):
+        super().__init__()
+        self.scale_factor = [int(s) for s in stride]
+        self.conv = nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=bias)
+
+    def forward(self, x):
+        x = F.interpolate(x, scale_factor=self.scale_factor, mode='trilinear', align_corners=False)
+        return self.conv(x)
+
+
+class PixelShuffle3d(nn.Module):
+    """1x1 conv expanding channels by r^3, then spatial rearrange."""
+
+    def __init__(self, in_channels, out_channels, stride, bias=True):
+        super().__init__()
+        if not all(int(s) == int(stride[0]) for s in stride):
+            raise ValueError(
+                f"PixelShuffle3d requires isotropic stride, got {list(stride)}")
+        r = int(stride[0])
+        self.r = r
+        self.conv = nn.Conv3d(in_channels, out_channels * r * r * r, kernel_size=1, bias=bias)
+
+    def forward(self, x):
+        x = self.conv(x)
+        B, C_total, D, H, W = x.shape
+        r = self.r
+        C = C_total // (r * r * r)
+        x = x.view(B, C, r, r, r, D, H, W)
+        x = x.permute(0, 1, 5, 2, 6, 3, 7, 4).contiguous()
+        return x.view(B, C, D * r, H * r, W * r)
+
+
+class Decoder(nn.Module):
+    def __init__(self,
+                 encoder,
+                 basic_block: str,
+                 num_classes: Union[int, None],
+                 n_conv_per_stage: Union[int, Tuple[int, ...], List[int]],
+                 deep_supervision,
+                 skip_channels: Union[None, Tuple[int, ...], List[int]] = None,
+                 nonlin_first: bool = False,
+                 norm_op: Union[None, Type[nn.Module]] = None,
+                 norm_op_kwargs: dict = None,
+                 dropout_op: Union[None, Type[_DropoutNd]] = None,
+                 dropout_op_kwargs: dict = None,
+                 nonlin: Union[None, Type[torch.nn.Module]] = None,
+                 nonlin_kwargs: dict = None,
+                 conv_bias: bool = None,
+                 upsample_mode: str = "transpconv",
+                 ):
+        """
+        This class needs the skips of the encoder as input in its forward.
+
+        the encoder goes all the way to the bottleneck, so that's where the decoder picks up. stages in the decoder
+        are sorted by order of computation, so the first stage has the lowest resolution and takes the bottleneck
+        features and the lowest skip as inputs
+        the decoder has two (three) parts in each stage:
+        1) conv transpose to upsample the feature maps of the stage below it (or the bottleneck in case of the first stage)
+        2) n_conv_per_stage conv blocks to let the two inputs get to know each other and merge
+        3) (optional if deep_supervision=True) a segmentation output Todo: enable upsample logits?
+        :param encoder:
+        :param num_classes:
+        :param n_conv_per_stage:
+        :param deep_supervision:
+        """
+        super().__init__()
+        self.deep_supervision = deep_supervision
+        # If num_classes is None, operate in features-only mode (no seg heads)
+        self.return_features_only = num_classes is None
+        # Store encoder reference without registering as submodule to avoid
+        # duplicate state_dict keys when decoder is used with separate_decoders=True
+        object.__setattr__(self, '_encoder_ref', encoder)
+        self.num_classes = num_classes if num_classes is not None else 0
+        n_stages_encoder = len(encoder.output_channels)
+        if skip_channels is None:
+            skip_channels = list(encoder.output_channels)
+        elif isinstance(skip_channels, tuple):
+            skip_channels = list(skip_channels)
+        else:
+            skip_channels = list(skip_channels)
+        assert len(skip_channels) == n_stages_encoder, (
+            "skip_channels must have as many entries as encoder.output_channels, "
+            f"got {len(skip_channels)} and {n_stages_encoder}"
+        )
+        self.skip_channels = [int(v) for v in skip_channels]
+        self.native_encoder_channels = [int(v) for v in encoder.output_channels]
+        self.bottleneck_input_channels = int(self.skip_channels[-1])
+        self.decoder_stage_input_channels = []
+        self.decoder_stage_output_channels = []
+        if isinstance(n_conv_per_stage, int):
+            n_conv_per_stage = [n_conv_per_stage] * (n_stages_encoder - 1)
+        assert len(n_conv_per_stage) == n_stages_encoder - 1, "n_conv_per_stage must have as many entries as we have " \
+                                                              "resolution stages - 1 (n_stages in encoder - 1), " \
+                                                              "here: %d" % n_stages_encoder
+
+        transpconv_op = get_matching_convtransp(conv_op=encoder.conv_op)
+        conv_bias = encoder.conv_bias if conv_bias is None else conv_bias
+        norm_op = encoder.norm_op if norm_op is None else norm_op
+        norm_op_kwargs = encoder.norm_op_kwargs if norm_op_kwargs is None else norm_op_kwargs
+        dropout_op = encoder.dropout_op if dropout_op is None else dropout_op
+        dropout_op_kwargs = encoder.dropout_op_kwargs if dropout_op_kwargs is None else dropout_op_kwargs
+        nonlin = encoder.nonlin if nonlin is None else nonlin
+        nonlin_kwargs = encoder.nonlin_kwargs if nonlin_kwargs is None else nonlin_kwargs
+
+        # we start with the bottleneck and work out way up
+        if basic_block == 'BasicBlockD' or basic_block == 'BottleneckBlockD':
+            stages = []
+            transpconvs = []
+            seg_layers = []
+            for s in range(1, n_stages_encoder):
+                input_features_below = self.skip_channels[-1] if s == 1 else encoder.output_channels[-s]
+                input_features_skip_native = encoder.output_channels[-(s + 1)]
+                input_features_skip = self.skip_channels[-(s + 1)]
+                stride_for_transpconv = encoder.strides[-s]
+                if upsample_mode == "trilinear":
+                    transpconvs.append(TrilinearUpsample3d(
+                        input_features_below, input_features_skip_native, stride_for_transpconv, bias=encoder.conv_bias))
+                elif upsample_mode == "pixelshuffle":
+                    transpconvs.append(PixelShuffle3d(
+                        input_features_below, input_features_skip_native, stride_for_transpconv, bias=encoder.conv_bias))
+                else:
+                    transpconvs.append(transpconv_op(
+                        input_features_below, input_features_skip_native, stride_for_transpconv, stride_for_transpconv,
+                        bias=encoder.conv_bias
+                    ))
+                conv_input_channels = input_features_skip_native + input_features_skip
+                stages.append(StackedResidualBlocks(
+                    n_blocks=n_conv_per_stage[s - 1],
+                    conv_op=encoder.conv_op,
+                    input_channels=conv_input_channels,
+                    output_channels=input_features_skip_native,
+                    kernel_size=encoder.kernel_sizes[-(s + 1)],
+                    initial_stride=1,
+                    conv_bias=conv_bias,
+                    norm_op=norm_op,
+                    norm_op_kwargs=norm_op_kwargs,
+                    dropout_op=dropout_op,
+                    dropout_op_kwargs=dropout_op_kwargs,
+                    nonlin=nonlin,
+                    nonlin_kwargs=nonlin_kwargs,
+                ))
+                self.decoder_stage_input_channels.append(int(conv_input_channels))
+                self.decoder_stage_output_channels.append(int(input_features_skip_native))
+
+                # Only build segmentation layers if we are not in features-only mode
+                if not self.return_features_only:
+                    # we always build the deep supervision outputs so that we can always load parameters. If we don't do this
+                    # then a model trained with deep_supervision=True could not easily be loaded at inference time where
+                    # deep supervision is not needed. It's just a convenience thing
+                    seg_layers.append(encoder.conv_op(input_features_skip_native, self.num_classes, 1, 1, 0, bias=True))
+
+        if basic_block == 'ConvBlock':
+            stages = []
+            transpconvs = []
+            seg_layers = []
+            for s in range(1, n_stages_encoder):
+                input_features_below = self.skip_channels[-1] if s == 1 else encoder.output_channels[-s]
+                input_features_skip_native = encoder.output_channels[-(s + 1)]
+                input_features_skip = self.skip_channels[-(s + 1)]
+                stride_for_transpconv = encoder.strides[-s]
+                if upsample_mode == "trilinear":
+                    transpconvs.append(TrilinearUpsample3d(
+                        input_features_below, input_features_skip_native, stride_for_transpconv, bias=conv_bias))
+                elif upsample_mode == "pixelshuffle":
+                    transpconvs.append(PixelShuffle3d(
+                        input_features_below, input_features_skip_native, stride_for_transpconv, bias=conv_bias))
+                else:
+                    transpconvs.append(transpconv_op(
+                        input_features_below, input_features_skip_native, stride_for_transpconv, stride_for_transpconv,
+                        bias=conv_bias
+                    ))
+                conv_input_channels = input_features_skip_native + input_features_skip
+                stages.append(StackedConvBlocks(
+                    n_conv_per_stage[s - 1], encoder.conv_op, conv_input_channels, input_features_skip_native,
+                    encoder.kernel_sizes[-(s + 1)], 1,
+                    conv_bias,
+                    norm_op,
+                    norm_op_kwargs,
+                    dropout_op,
+                    dropout_op_kwargs,
+                    nonlin,
+                    nonlin_kwargs,
+                    nonlin_first
+                ))
+                self.decoder_stage_input_channels.append(int(conv_input_channels))
+                self.decoder_stage_output_channels.append(int(input_features_skip_native))
+
+                # Only build segmentation layers if we are not in features-only mode
+                if not self.return_features_only:
+                    # we always build the deep supervision outputs so that we can always load parameters. If we don't do this
+                    # then a model trained with deep_supervision=True could not easily be loaded at inference time where
+                    # deep supervision is not needed. It's just a convenience thing
+                    seg_layers.append(encoder.conv_op(input_features_skip_native, self.num_classes, 1, 1, 0, bias=True))
+
+        self.stages = nn.ModuleList(stages)
+        self.transpconvs = nn.ModuleList(transpconvs)
+        # In features-only mode there are no segmentation layers
+        self.seg_layers = nn.ModuleList(seg_layers) if not self.return_features_only else nn.ModuleList()
+
+    @property
+    def encoder(self):
+        """Access the encoder reference (not a submodule to avoid duplicate state_dict keys)."""
+        return self._encoder_ref
+
+    def forward(self, skips):
+        """
+        we expect to get the skips in the order they were computed, so the bottleneck should be the last entry
+        :param skips:
+        :return:
+        """
+        lres_input = skips[-1]
+        seg_outputs = []
+        for s in range(len(self.stages)):
+            x = self.transpconvs[s](lres_input)
+            x = torch.cat((x, skips[-(s + 2)]), 1)
+            x = self.stages[s](x)
+            if self.return_features_only:
+                # No segmentation heads; just propagate features
+                pass
+            elif self.deep_supervision:
+                seg_outputs.append(self.seg_layers[s](x))
+            elif s == (len(self.stages) - 1):
+                seg_outputs.append(self.seg_layers[-1](x))
+            lres_input = x
+
+        if self.return_features_only:
+            # Return final high-resolution decoder features
+            return lres_input
+        else:
+            # invert seg outputs so that the largest segmentation prediction is returned first
+            seg_outputs = seg_outputs[::-1]
+
+            if not self.deep_supervision:
+                r = seg_outputs[0]
+            else:
+                r = seg_outputs
+            return r
+
+
+
+    def compute_conv_feature_map_size(self, input_size):
+        """
+        IMPORTANT: input_size is the input_size of the encoder!
+        :param input_size:
+        :return:
+        """
+        # first we need to compute the skip sizes. Skip bottleneck because all output feature maps of our ops will at
+        # least have the size of the skip above that (therefore -1)
+        skip_sizes = []
+        for s in range(len(self.encoder.strides) - 1):
+            skip_sizes.append([i // j for i, j in zip(input_size, self.encoder.strides[s])])
+            input_size = skip_sizes[-1]
+        # print(skip_sizes)
+
+        assert len(skip_sizes) == len(self.stages)
+
+        # our ops are the other way around, so let's match things up
+        output = np.int64(0)
+        for s in range(len(self.stages)):
+            # print(skip_sizes[-(s+1)], self.encoder.output_channels[-(s+2)])
+            # conv blocks
+            output += self.stages[s].compute_conv_feature_map_size(skip_sizes[-(s + 1)])
+            # trans conv
+            output += np.prod([self.encoder.output_channels[-(s + 2)], *skip_sizes[-(s + 1)]], dtype=np.int64)
+            # segmentation
+            if self.deep_supervision or (s == (len(self.stages) - 1)):
+                output += np.prod([self.num_classes, *skip_sizes[-(s + 1)]], dtype=np.int64)
+        return output

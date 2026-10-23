@@ -1,6 +1,6 @@
 ---
-title: "The Data"
-hide_table_of_contents: true
+title: "Data Formats"
+sidebar_label: "Data Formats"
 ---
 
 <head>
@@ -8,7 +8,7 @@ hide_table_of_contents: true
 
   <meta
     name="description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="Vesuvius Challenge open data portal: synchrotron X-ray CT volumes, segments, and meshes of the carbonized Herculaneum scrolls for virtual unwrapping research."
   />
 
   <meta property="og:type" content="website" />
@@ -16,7 +16,7 @@ hide_table_of_contents: true
   <meta property="og:title" content="Vesuvius Challenge" />
   <meta
     property="og:description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="Vesuvius Challenge open data portal: synchrotron X-ray CT volumes, segments, and meshes of the carbonized Herculaneum scrolls for virtual unwrapping research."
   />
   <meta
     property="og:image"
@@ -28,7 +28,7 @@ hide_table_of_contents: true
   <meta property="twitter:title" content="Vesuvius Challenge" />
   <meta
     property="twitter:description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="Vesuvius Challenge open data portal: synchrotron X-ray CT volumes, segments, and meshes of the carbonized Herculaneum scrolls for virtual unwrapping research."
   />
   <meta
     property="twitter:image"
@@ -36,84 +36,111 @@ hide_table_of_contents: true
   />
 </head>
 
-**To download:** Fill out the [registration form](https://forms.gle/HV1J6dJbmCB2z5QL8) and then visit the [data server](https://dl.ash2txt.org) ([LICENSE](https://dl.ash2txt.org/LICENSE.txt)).
+import JsonLd from '@site/src/components/JsonLd';
 
-To learn more about the data, see the linked pages below.
-Also be sure to check out:
+<JsonLd data={{ "@context":"https://schema.org","@type":"Dataset","name":"Herculaneum Scrolls — X-ray CT Data Portal","description":"Open data portal aggregating synchrotron micro-CT volumes, extracted surface segments, meshes, and ML predictions of the carbonized Herculaneum scrolls and fragments.","url":"https://scrollprize.org/data","creator":{"@type":"Organization","name":"Vesuvius Challenge","url":"https://scrollprize.org/"},"measurementTechnique":"X-ray computed tomography","keywords":["Herculaneum scrolls","papyri","X-ray CT","virtual unwrapping","ink detection","machine learning"],"isAccessibleForFree":true,"license":"https://dl.ash2txt.org/LICENSE.txt","distribution":{"@type":"DataDownload","encodingFormat":"image/tiff","contentUrl":"https://scrollprize.org/data"} }} />
 
-* [EduceLab-Scrolls (2019)](https://arxiv.org/abs/2304.02084): technical paper describing the original data.
-* [EduceLab Data Sheet (2023)](https://drive.google.com/file/d/1I6JNrR6A9pMdANbn6uAuXbcDNwjk8qZ2/view?usp=sharing): technical paper describing more recent scans added to the dataset.
-* [Tutorials](tutorial): what to do with the data.
-* Our libraries to access data in 1-2 lines of code: in [Python](https://github.com/ScrollPrize/villa/tree/main/vesuvius) (with [intro notebook](https://colab.research.google.com/github/ScrollPrize/villa/blob/main/vesuvius/notebooks/example1_data_access.ipynb)) and [in C](https://github.com/ScrollPrize/villa/tree/main/vesuvius-c)!
+**Quick start:** [example quick data access notebook](https://github.com/ScrollPrize/open-data/blob/main/examples/get-to-know-a-dataset.ipynb)
 
-## Scrolls
+## Overview
 
-Micro-CT scans of intact Herculaneum scrolls.
-The mission is to virtually unwrap the contents of the scrolls from the CT scans, revealing the text hidden within.
-Scroll 1 was used to win the 2023 Grand Prize, but 95% of the scroll remains unread!
+A vast library of papyrus scrolls in ancient Herculaneum was buried beneath volcanic mud and ash during the 79 AD eruption of Mount Vesuvius. The scrolls were carbonized into a fragile but remarkably preserved state. The Vesuvius Challenge uses synchrotron micro‑CT imaging to study both **intact scrolls** and **detached fragments**.
 
-[More information](data_scrolls)
+## Multiple datasets
 
-<div>
-  <table>
-    <tbody>
-      <tr>
-        <td>
-          <div className="flex flex-wrap max-w-[500px]">
-            <div className="sm:w-[45%] mb-2 mr-2"><img src="/img/overview/scroll1-actual-new.webp" className="w-[100%]"/><figcaption className="mt-[-6px]">Scroll 1 (PHerc. Paris. 4)</figcaption></div>
-            <div className="sm:w-[45%] mb-2"><img src="/img/overview/scroll2-small-actual.webp" className="w-[100%]"/><figcaption className="mt-[-6px]">Scroll 2 (PHerc. Paris. 3)</figcaption></div>
-            <div className="sm:w-[35.5%] mb-2 mr-2"><img src="/img/overview/PHerc332.webp" className="w-[100%]"/><figcaption className="mt-[-6px]">Scroll 3 (PHerc. 332)</figcaption></div>
-            <div className="sm:w-[55%] mb-2"><img src="/img/overview/PHerc1667.webp" className="w-[100%]"/><figcaption className="mt-[-6px]">Scroll 4 (PHerc. 1667)</figcaption></div>
-            <div className="sm:w-[55%] mb-2"><img src="/img/overview/PHerc172.webp" className="w-[100%]"/><figcaption className="mt-[-6px]">Scroll 5 (PHerc. 172)</figcaption></div>
-          </div>
-        </td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+This portal aggregates multiple released datasets under one Vesuvius Challenge data portal.
 
-## Fragments
+- **Vesuvius Challenge - CT Scans of Herculaneum Papyri**: newer scans released directly by Vesuvius Challenge. Most current releases on this portal belong to this dataset.
+- **EduceLab-Scrolls**: the legacy dataset. Scrolls 1-4 and Fragments 1-6 scanned before 2025 at DLS belong to this dataset.
 
-Micro-CT scans of detached scroll fragments.
-Since the fragments have exposed text on their surfaces, they can be used as ground truth for machine learning-based ink detection approaches (see [Tutorial 5: Ink Detection](tutorial5)).
+If you are publishing or presenting results, make sure you cite the dataset that corresponds to the scans you used.
 
-[More information](data_fragments)
+## Data repositories
 
-<div>
-  <table>
-    <tbody>
-      <tr>
-        <td>
-          <div className="flex flex-wrap">
-            <div className="sm:w-[45%] max-w-[200px] mb-2 mr-2"><img src="/img/data/fr1.webp" className="w-[100%]"/><figcaption className="mt-[-6px]">Fragment 1 (PHerc. Paris. 2 Fr 47)</figcaption></div>
-            <div className="sm:w-[45%] max-w-[200px] mb-2 mr-2"><img src="/img/data/fr2.webp" className="w-[100%]"/><figcaption className="mt-[-6px]">Fragment 2 (PHerc. Paris. 2 Fr 143)</figcaption></div>
-            <div className="sm:w-[45%] max-w-[200px] mb-2 mr-2"><img src="/img/data/fr3.webp" className="w-[100%]"/><figcaption className="mt-[-6px]">Fragment 3 (PHerc. Paris. 1 Fr 34)</figcaption></div>
-            <div className="sm:w-[45%] max-w-[200px] mb-2 mr-2"><img src="/img/data/fr4.webp" className="w-[100%]"/><figcaption className="mt-[-6px]">Fragment 4 (PHerc. Paris. 1 Fr 39)</figcaption></div>
-            <div className="sm:w-[45%] max-w-[130px] mb-2 mr-2"><img src="/img/data/fr5.webp" className="w-[100%]"/><figcaption className="mt-[-6px]">Fragment 5 (PHerc. 1667 Cr 1 Fr 3)</figcaption></div>
-            <div className="sm:w-[45%] max-w-[220px] mb-2 mr-2"><img src="/img/data/fr6.webp" className="w-[100%]"/><figcaption className="mt-[-6px]">Fragment 6 (PHerc. 51 Cr 4 Fr 48)</figcaption></div>
-          </div>
-        </td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+We host the dataset in the **open data bucket**: `s3://vesuvius-challenge-open-data/`, usable with any S3‑compatible client (e.g., AWS CLI, boto3, s3fs, etc.). It's also [browsable directly](https://vesuvius-challenge-open-data.s3.us-east-1.amazonaws.com/index.html).
 
-## Segments
+An overview of the dataset can be found in the [Data Browser](data_browser).
+The browser is the unified sample index for both scrolls and fragments.
+For deeper exploration, use [Curated Datasets](data_datasets) for ready-to-use bundles built for specific research tasks.
 
-Segmentation is the mapping of sheets of papyrus in a 3D X-ray volume. The resulting surface volumes can be used directly to look for ink.
+## What's included
 
-[More information](data_segments)
+The open data repository provides a consistent set of artifacts across scrolls and fragments:
 
-<div>
-  <table>
-    <tbody>
-      <tr>
-        <td>
-          <div className="flex flex-wrap max-w-[500px]">
-            <div className="w-[100%] max-w-[400px] mb-4"><div className="overflow-hidden mb-2"><img loading="eager" src="/img/data/segmentation-animation.webp" className="w-[100%] mt-[-30px] mb-[-50px]"/></div><figcaption className="mt-[-6px]">Some segments from Scroll 1.</figcaption></div>
-          </div>
-        </td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+- **Volumes**: 3D micro‑CT reconstructions of papyrus (primary input for virtually unrolling).
+- **Segments**: extracted papyrus surfaces (geometry + surface‑aligned "texture" volumes).
+- **Representations / Predictions**: derived products such as ML‑predicted surfaces and ink detection outputs (when available).
+- **Metadata**: lightweight JSON/text files that describe scans, exports, and processing (where available).
+
+## Formats at a glance
+
+This is a practical "what you'll actually see on disk" summary.
+
+| Data type                        | What it represents                                             | Common formats                                                  |
+| -------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Volumetric scans ("volumes")** | 3D density/intensity values from CT reconstruction             | **OME‑Zarr** (primary), sometimes **TIFF stacks**               |
+| **Segment surface volumes**      | 2D/3D data extracted along a papyrus surface at several depths | **OME‑Zarr** and/or **TIFF stacks** (`00.tif`, `01.tif`, …)     |
+| **Surface geometry ("meshes")**  | The 3D sheet geometry and its flattened mapping                | **OBJ** meshes, plus **TIFXYZ** (x/y/z TIFF triplet + metadata) |
+| **Model outputs**                | Predicted surfaces, ink probability maps, derived images       | **OME‑Zarr** (volumetric outputs), **TIFF** (image outputs)     |
+| **Metadata**                     | Provenance, parameters, IDs, links between artifacts           | **JSON** (and occasional text files)                            |
+
+### Why OME‑Zarr?
+
+OME‑Zarr is the primary distribution format because it is cloud‑optimized (chunked, multi‑resolution) and supports **streaming / partial reads**—so you don't need to download entire terabyte‑scale volumes to get started.
+
+## Organization on disk
+
+The repository follows this high‑level structure:
+
+```text
+{SAMPLE_ID}/
+├── volumes/            # 3D reconstructed volumes (OME‑Zarr, sometimes TIFF)
+├── segments/           # Extracted surfaces: meshes, surface volumes, (optional) ink results
+└── representations/    # Derived artifacts (e.g., predictions)
+```
+
+You will typically browse by **sample ID** (e.g., a specific scroll or fragment), then choose the artifact you need (a volume, a segment, or a derived representation).
+
+## Scrolls and Fragments
+
+- Herculaneum scrolls scanned via synchrotron micro‑CT. These are the core targets for "virtual unwrapping" and reading.
+
+- Detached fragments with exposed ink on their surfaces. These are especially useful for building and validating ML approaches (e.g., ink detection), because they provide ground truth signals.
+
+➡️ **Browse all samples:** [Data Browser](data_browser)
+
+
+## Documentation and references
+
+- For information on the updated scans (2026), read the [technical pre-print](https://arxiv.org/abs/2606.29085).
+- [Scan at ESRF Draft Info Sheet (2025)](https://docs.google.com/document/d/1CDPgx7XhNsnLJw6uErT8Z5tgY3wnETQdvXpR5Kwu9K4/edit?usp=sharing) draft regarding the 2025 scans.
+- [EduceLab Data Sheet (2023)](https://drive.google.com/file/d/1I6JNrR6A9pMdANbn6uAuXbcDNwjk8qZ2/view?usp=sharing): technical description of the 2023 scans.
+- [EduceLab-Scrolls (2023)](https://arxiv.org/abs/2304.02084): technical paper describing the original dataset work.
+
+## How to Cite
+
+If you use Vesuvius Challenge data in a publication or presentation, cite the dataset that corresponds to the scans you used.
+
+### Vesuvius Challenge - CT Scans of Herculaneum Papyri
+
+Use this citation for newer scans released directly by Vesuvius Challenge:
+
+> Giorgio Angelotti, Stephen Parsons, Sean Johnson, Elian Rafael Dal Prà, Johannes Rudolph, Paul Tafforeau, Alessandro Mirone, Paul Henderson, Hendrik Schilling, Forrest McDonald, David Josey, Youssef Nader, C. Seth Parker, W. Brent Seales. *Vesuvius Challenge - CT Scans of Herculaneum Papyri*. Vesuvius Challenge.
+
+### EduceLab-Scrolls
+
+Scrolls 1-4 and Fragments 1-6 scanned at DLS before 2025 belong to the legacy EduceLab-Scrolls dataset.
+
+- In any published abstract, cite `EduceLab-Scrolls` as the source of the data.
+- In any published manuscripts using data from EduceLab-Scrolls, reference: Parsons, S., Parker, C. S., Chapman, C., Hayashida, M., & Seales, W. B. (2023). *EduceLab-Scrolls: Verifiable Recovery of Text from Herculaneum Papyri using X-ray CT*. ArXiv [Cs.CV]. https://doi.org/10.48550/arXiv.2304.02084.
+- Include language similar to the following in the methods section: "Data used in the preparation of this article were obtained from the EduceLab-Scrolls dataset [above citation]."
+
+## Support
+
+- GitHub Issues: [Vesuvius Challenge repository](https://github.com/scrollprize/villa)
+- Community Forum: [Discord](https://discord.gg/V4fJhvtaQn)
+
+## Licenses
+
+- [CC‑BY‑NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (unless otherwise noted for specific assets)
+- Scrolls 1-4 and Fragments 1-6 scanned at DLS before 2025 are from the EduceLab-Scrolls Dataset, copyrighted by EduceLab/The University of Kentucky. Permission to use the data linked herein according to the terms outlined above is granted to Vesuvius Challenge, with additional citation requirements listed in [How to Cite](#how-to-cite).

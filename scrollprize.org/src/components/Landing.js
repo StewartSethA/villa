@@ -1,1690 +1,844 @@
 import React, { useEffect, useRef, useState } from "react";
-import Marquee from "react-fast-marquee";
-import useBrokenLinks from '@docusaurus/useBrokenLinks';
+import useBrokenLinks from "@docusaurus/useBrokenLinks";
+import Head from "@docusaurus/Head";
+import Heading from "@theme/Heading";
+import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
+import { usePluginData } from "@docusaurus/useGlobalData";
+import BeforeAfter from "./BeforeAfter";
+import LatestPosts from "./LatestPosts";
+import {
+  creators,
+  projectLeads,
+  sponsors,
+  team,
+  partners,
+} from "./landingData";
 
-const inlineImage = (src) => (
-  <div
-    className="md:mb-8 mb-4 rounded-lg md:h-80 h-full md:w-auto w-full aspect-[4/3] sepia-[.4] inline-block mr-4"
-    style={{ backgroundImage: `url(${src})`, backgroundSize: "cover" }}
-  />
+/* ==========================================================================
+   Landing — "Obsidian Minimal" restyle (WP1).
+   No boxed sections: content sits on the page, divided by hairlines; only
+   media and the hero countdown are framed. One accent (--vc-accent), no
+   gradient text, no box shadows. Layout/skin lives in src/css/landing.css.
+   ========================================================================== */
+
+const usd = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
+/* ---------------------------------------------------------------------------
+   Our story beats: `line` is the headline sentence, `more` the follow-up,
+   `media` one image or clip per beat.
+--------------------------------------------------------------------------- */
+
+const storyImage = (src, alt) => (
+  <img src={src} alt={alt} loading="lazy" decoding="async" className="vc-media" />
 );
 
-const stories = ({ unrollVideo, mlVideo, xrayVideo }) => [
-  {
-    date: "79 AD",
-    text: "Mount Vesuvius erupts.",
-    anchor: "vesuvius",
-    description: (
-      <>
-        <div className="mb-4 max-w-3xl">
-          In Herculaneum, twenty meters of hot mud and ash bury an enormous
-          villa once owned by the father-in-law of Julius Caesar. Inside, there
-          is a vast library of papyrus scrolls.
-        </div>
-        <div className="mb-8 max-w-3xl">
-          The scrolls are carbonized by the heat of the volcanic debris. But
-          they are also preserved. For centuries, as virtually every ancient
-          text exposed to the air decays and disappears, the library of the
-          Villa of the Papyri waits underground, intact.
-        </div>
-        {inlineImage("/img/landing/rocio-espin-pinar-villa-papyri-small.webp")}
-      </>
-    ),
-    background: "/img/landing/story1.webp",
-  },
-  {
-    date: "1750 AD",
-    text: "A farmer discovers the buried villa.",
-    description: (
-      <>
-        <div className="max-w-3xl mb-8">
-          While digging a well, an Italian farmworker encounters a marble
-          pavement. Excavations unearth beautiful statues and frescoes – and
-          hundreds of scrolls. Carbonized and ashen, they are extremely fragile.
-          But the temptation to open them is great; if read, they would significantly
-          increase the corpus of literature we have from antiquity.
-        </div>
-        <div className="max-w-3xl mb-8">
-          Early attempts to open the scrolls unfortunately destroy many of them.
-          A few are painstakingly unrolled by a monk over several
-          decades, and they are found to contain philosophical texts written in
-          Greek. More than six hundred remain unopened and unreadable.
-        </div>
-        {inlineImage("/img/landing/scroll.webp")}
-        {inlineImage("/img/landing/herc-materials.webp")}
-        {/* <div className="max-w-3xl mb-8">
-          What's more, excavations were never completed, and many historians
-          believe that thousands more scrolls remain underground.
-        </div>
-
-        <div className="max-w-3xl mb-8">
-          Imagine the secrets of Roman and Greek philosophy, science,
-          literature, mathematics, poetry, and politics, which are locked away
-          in these lumps of ash, waiting to be read!{" "}
-        </div> */}
-      </>
-    ),
-    background: "/img/landing/story2.webp",
-  },
-  {
-    date: "2015 AD",
-    text: "Dr. Brent Seales pioneers virtual unwrapping.",
-    description: (
-      <>
-        <div className="max-w-3xl mb-4">
-          Using X-ray tomography and computer vision, a team led by Dr. Brent
-          Seales at the University of Kentucky reads the En-Gedi scroll without
-          opening it. Discovered in the Dead Sea region of Israel, the scroll is
-          found to contain text from the book of Leviticus.
-        </div>
-        <div className="max-w-3xl mb-8">
-          Virtual unwrapping has since emerged as a growing field with multiple
-          successes. Their work went on to show the elusive carbon ink of
-          the Herculaneum scrolls can also be detected using X-ray tomography,
-          laying the foundation for the Vesuvius Challenge.
-        </div>
-        <video
-          // autoPlay
-          playsInline
-          loop
-          muted
-          className="md:mb-8 mb-4 rounded-lg md:h-80 h-full md:w-auto w-full aspect-[4/3] sepia-[.8] inline-block mr-4 object-cover"
-          poster="/img/landing/engedi5.webp"
-          ref={unrollVideo}
-        >
-          <source src="/img/landing/engedi5.webm" type="video/webm" />
-        </video>
-        {inlineImage("/img/landing/brent1.webp")}
-        {/* <div className="max-w-3xl mb-8">
-          But the Herculaneum Papyri prove more challenging: unlike the denser
-          inks used in the En-Gedi scroll, the Herculaneum ink is carbon-based,
-          affording no X-ray contrast against the underlying carbon-based
-          papyrus.
-        </div> */}
-      </>
-    ),
-    background: "/img/landing/story3.webp",
-  },
-  {
-    date: "2023 AD",
-    text: "A remarkable breakthrough.",
-    description: (
-      <>
-        <div className="max-w-3xl mb-8">
-          The Vesuvius Challenge was launched in March 2023 to bring the world
-          together to read the Herculaneum scrolls. Along with smaller
-          progress prizes, a Grand Prize was issued for the first team to
-          recover 4 passages of 140 characters from a Herculaneum scroll.
-        </div>
-        <div className="max-w-3xl mb-8">
-          Following a year of remarkable progress, <a href="grandprize">the prize was claimed</a>. After 275
-          years, the ancient puzzle of the Herculaneum Papyri has been cracked open.
-          But the quest to uncover the secrets of the scrolls is just beginning.
-        </div>
-        <div className="flex overflow-hidden rounded-lg md:mb-8 mb-4 h-96 relative bg-black">
-          <img
-            src="/img/landing/scroll-full-min.webp"
-            className="pan-horizontal max-w-none"
-          />
-        </div>
-        {/* <figure className="md:w-[26%] w-[46%] sepia-[.4] mb-0">
-            <img
-              src="/img/landing/fragment-zoomed.webp"
-              className="h-full object-cover w-full"
-            />
-          </figure>
-          <figure className="w-[40.5%] sepia-[.8] mb-0 md:block hidden">
-            <video
-              autoPlay
-              playsInline
-              loop
-              muted
-              className="w-[100%] h-full object-cover"
-              poster="/img/landing/model-input3.webp"
-            >
-              <source src="/img/landing/model-input3.webm" type="video/webm" />
-            </video>
-          </figure>
-          <figure className="md:w-[33.4%] w-[54%] sepia-[.4] mb-0">
-            <video
-              // autoPlay
-              playsInline
-              loop
-              muted
-              className="w-[100%] h-full object-cover"
-              poster="/img/landing/fragment-training2.webp"
-              ref={xrayVideo}
-            >
-              <source
-                src="/img/landing/fragment-training2.webm"
-                type="video/webm"
-              />
-              <source
-                src="/img/landing/fragment-training2.webm"
-                type="video/webm"
-              />
-            </video>
-          </figure> */}
-        {/* <div className="max-w-3xl mb-8">
-          After 275 years, the ancient puzzle of the Herculaneum Papyri has been
-          reduced to a software problem – one that you can help solve!
-        </div> */}
-      </>
-    ),
-    background: "/img/landing/story5.webp",
-  },
-];
-
-const prizes = [
-  {
-    title: "2023 Grand Prize",
-    prizeMoney: "$850,000",
-    description: "First team to read a scroll by December 31st 2023",
-    requirement: "Success requires that the Review Team can:",
-    winnersLabel: "4 Winning Teams",
-    winners: [
-      {
-        name: "Youssef Nader",
-        image: "/img/landing/youssef.webp",
-      },
-      {
-        name: "Luke Farritor",
-        image: "/img/landing/luke.webp",
-      },
-      {
-        name: "Julian Schilliger",
-        image: "/img/landing/julian.webp",
-      },
-    ],
-    bannerImage: "/img/landing/grand-prize-preview.webp",
-    href: "/grandprize",
-  },
-  {
-    title: "First Letters & First Ink",
-    prizeMoney: "$60,000",
-    description: "Detect 10 letters in a 4 cm² area in a scroll",
-    requirement: "",
-    winners: [
-      {
-        name: "Luke Farritor",
-        image: "/img/landing/luke.webp",
-      },
-      {
-        name: "Youssef Nader",
-        image: "/img/landing/youssef.webp",
-      },
-      {
-        name: "Casey Handmer",
-        image: "/img/landing/casey.webp",
-      },
-    ],
-    bannerImage: "/img/landing/first-letters.webp",
-    href: "/firstletters",
-  },
-  {
-    title: "Open Source Prizes",
-    prizeMoney: "$170,000",
-    description: "Detect 10 letters in a 4 cm² area in a scroll",
-    requirement: "",
-    winnersLabel: "54 Winners",
-    winners: [
-      // {
-      //   name: "Philip Allgaier",
-      //   image: "https://pbs.twimg.com/profile_images/460039964365836288/n6b-1m3K_400x400.jpeg",
-      // },
-      // {
-      //   name: "Chuck",
-      //   image: "https://avatars.githubusercontent.com/u/133787404?v=4",
-      // },
-      // {
-      //   name: "Sean Johnson",
-      //   image: "https://avatars.githubusercontent.com/u/120566210?v=4",
-      // },
-      {
-        name: "Giorgio Angelotti",
-        image: "/img/landing/giorgio.webp",
-      },
-      {
-        name: "Yao Hsiao",
-        image: "/img/landing/yao.webp",
-      },
-      {
-        name: "Brett Olsen",
-        image: "/img/landing/brett.webp",
-      },
-      // {
-      //   name: "Dalufishe",
-      //   image: "https://avatars.githubusercontent.com/u/118270401?v=4",
-      // },
-      // {
-      //   name: "Santiago Pelufo",
-      //   image: "https://avatars.githubusercontent.com/u/1312203?v=4",
-      // },
-      {
-        name: "Moshe Levy",
-        image: "/img/landing/moshe.webp",
-      },
-    ],
-    won: true,
-    href: "/winners",
-  },
-  {
-    title: "Ink Detection Prizes",
-    prizeMoney: "$112,000",
-    description: "Detect 10 letters in a 4 cm² area in a scroll",
-    requirement: "",
-    winnersLabel: "16 Winners",
-    winners: [
-      {
-        name: "Yannick Kirchoff",
-        image: "/img/landing/yannick.webp",
-      },
-      {
-        name: "tattaka",
-        image: "/img/landing/tattaka.webp",
-      },
-      {
-        name: "Ryan Chesler",
-        image: "/img/landing/ryan.webp",
-      },
-      {
-        name: "Felix Yu",
-        image: "/img/landing/felix.webp",
-      },
-    ],
-    href: "/winners",
-  },
-  {
-    title: "Segmentation Prizes",
-    prizeMoney: "$90,000",
-    description: "Detect 10 letters in a 4 cm² area in a scroll",
-    requirement: "",
-    winnersLabel: "12 Winners",
-    winners: [
-      {
-        name: "Ahron Wayne",
-        image: "/img/landing/ahron.webp",
-      },
-      {
-        name: "Julian Schilliger",
-        image: "/img/landing/julian.webp",
-      },
-      {
-        name: "Santiago Pelufo",
-        image: "/img/landing/santiago.webp",
-      },
-      {
-        name: "Yao Hsiao",
-        image: "/img/landing/yao.webp",
-      },
-    ],
-    won: true,
-    href: "/winners",
-  },
-  {
-    title: "Grand Prize",
-    prizeMoney: "$200,000",
-    description: "Read 90% of each four scrolls",
-    requirement: "",
-    href: "2024_prizes#2024-grand-prize",
-  },
-  {
-    title: "First Automated Segmentation Prize",
-    prizeMoney: "$100,000",
-    description: "Reproduce the 2023 Grand Prize result but faster",
-    requirement: "",
-    href: "2024_prizes#first-automated-segmentation-prize",
-  },
-  {
-    title: "First Letters / First Title Prizes",
-    prizeMoney: "4 x $60,000",
-    description: "Find first letters in Scrolls 2, 3, and 4, or the title of Scroll 1",
-    requirement: "",
-    href: "2024_prizes#3-first-letters-prizes-scrolls-2-4",
-    // tba: true,
-  },
-  {
-    title: "Monthly Progress Prizes",
-    prizeMoney: "$350,000",
-    description: "Open ended prizes from $1,000-20,000",
-    requirement: "",
-    href: "2024_prizes#monthly-progress-prizes",
-  }
-];
-
-const creators = [
-  {
-    name: "Nat Friedman",
-    image: "/img/landing/nat.webp",
-    href: "https://nat.org/",
-  },
-  {
-    name: "Daniel Gross",
-    image: "/img/landing/daniel.webp",
-    href: "https://dcgross.com/",
-  },
-  {
-    name: "Dr. Brent Seales",
-    image: "/img/landing/brent.webp",
-    href: "https://educelab.engr.uky.edu/w-brent-seales",
-  },
-];
-
-const sponsors = [
-  {
-    name: "Musk Foundation",
-    amount: 2084000,
-    href: "https://www.muskfoundation.org/",
-    image: "/img/landing/musk.webp",
-  },
-  {
-    name: "Alex Gerko",
-    amount: 450000,
-    href: "https://www.xtxmarkets.com/",
-    image: "/img/landing/gerko.webp",
-  },
-  {
-    name: "Joseph Jacks",
-    amount: 250000,
-    href: "https://twitter.com/JosephJacks_",
-    image: "/img/landing/Joseph Jacks.webp",
-  },
-  {
-    name: "Nat Friedman",
-    amount: 225000,
-    href: "https://nat.org/",
-    image: "/img/landing/nat.webp",
-  },
-  {
-    name: "Daniel Gross",
-    amount: 225000,
-    href: "https://dcgross.com/",
-    image: "/img/landing/daniel.webp",
-  },
-  {
-    name: "Matt Mullenweg",
-    amount: 150000,
-    href: "https://ma.tt/",
-    image: "/img/landing/Matt Mullenweg.webp",
-  },
-  {
-    name: "Emergent Ventures",
-    amount: 100000,
-    href: "https://www.mercatus.org/emergent-ventures",
-  },
-  {
-    name: "Matt Huang",
-    amount: 50000,
-    href: "https://twitter.com/matthuang",
-    image: "/img/landing/Matt Huang.webp",
-  },
-  {
-    name: "John & Patrick Collison",
-    amount: 125000,
-    href: "https://stripe.com/",
-    image: ["/img/landing/collison1.webp", "/img/landing/collison2.webp"],
-  },
-  {
-    name: "Eugene Jhong",
-    amount: 100000,
-    href: "https://twitter.com/ejhong",
-    image: "/img/landing/Eugene Jhong.webp",
-  },
-  {
-    name: "Anonymous",
-    amount: 100000,
-    href: "https://www.youtube.com/watch?v=JqrJ4wGid4Y",
-    image: "/img/landing/mystery.webp",
-  },
-  {
-    name: "Bastian Lehmann",
-    amount: 75000,
-    href: "https://twitter.com/Basti",
-    image: "/img/landing/Bastian Lehmann.webp",
-  },
-  {
-    name: "Tobi Lutke",
-    amount: 50000,
-    href: "https://twitter.com/tobi",
-    image: "/img/landing/Tobi Lutke.webp",
-  },
-  {
-    name: "Guillermo Rauch",
-    amount: 50000,
-    href: "https://rauchg.com/",
-    image: "/img/landing/Guillermo Rauch.webp",
-  },
-  {
-    name: "Arthur Breitman",
-    amount: 50000,
-    href: "https://ex.rs/",
-    image: "/img/landing/Arthur Breitman.webp",
-  },
-  {
-    name: "Julia DeWahl & Dan Romero",
-    amount: 50000,
-    href: "https://twitter.com/natfriedman/status/1637959778558439425",
-    image: [
-      "/img/landing/Julia DeWahl.webp",
-      "/img/landing/Dan Romero.webp",
-    ],
-  },
-  {
-    name: "Anonymous",
-    amount: 50000,
-    href: "https://www.youtube.com/watch?v=JqrJ4wGid4Y",
-    image: "/img/landing/mystery.webp",
-  },
-  {
-    name: "Anonymous",
-    amount: 50000,
-    href: "https://www.youtube.com/watch?v=JqrJ4wGid4Y",
-    image: "/img/landing/mystery.webp",
-  },
-  {
-    name: "Aaron Levie",
-    amount: 25000,
-    href: "https://twitter.com/levie",
-    image: "/img/landing/Aaron Levie.webp",
-  },
-  {
-    name: "Akshay Kothari",
-    amount: 25000,
-    href: "https://twitter.com/akothari",
-    image: "/img/landing/Akshay Kothari.webp",
-  },
-  {
-    name: "Alexa McLain",
-    amount: 25000,
-    href: "https://twitter.com/alexamclain",
-    image: "/img/landing/Alexa McLain.webp",
-  },
-  {
-    name: "Anjney Midha",
-    amount: 25000,
-    href: "https://twitter.com/AnjneyMidha",
-    image: "/img/landing/Anjney Midha.webp",
-  },
-  {
-    name: "franciscosan.org",
-    amount: 25000,
-    href: "https://franciscosan.org/",
-    image: "/img/landing/franciscosan.webp",
-  },
-  {
-    name: "John O'Brien",
-    amount: 25000,
-    href: "https://twitter.com/jobriensf",
-    image: "/img/landing/John O'Brien.webp",
-  },
-  {
-    name: "Mark Cummins",
-    amount: 25000,
-    href: "https://twitter.com/mark_cummins",
-    image: "/img/landing/Mark Cummins.webp",
-  },
-  {
-    name: "Jamie Cox & Gary Wu",
-    amount: 15000,
-    href: "https://www.fluidstack.io/",
-    image: ["/img/landing/Jamie Cox.webp", "/img/landing/Gary Wu.webp"],
-  },
-  {
-    name: "Mike Mignano",
-    amount: 15000,
-    href: "https://mignano.co/",
-    image: "/img/landing/Mike Mignano.webp",
-  },
-  {
-    name: "Aravind Srinivas",
-    amount: 10000,
-    href: "https://twitter.com/AravSrinivas",
-    image: "/img/landing/Aravind Srinivas.webp",
-  },
-  {
-    name: "Brandon Reeves",
-    amount: 10000,
-    href: "https://www.luxcapital.com/people/brandon-reeves",
-    image: "/img/landing/Brandon Reeves.webp",
-  },
-  {
-    name: "Brandon Silverman",
-    amount: 10000,
-    href: "https://twitter.com/brandonsilverm",
-    image: "/img/landing/Brandon Silverman.webp",
-  },
-  {
-    name: "Chet Corcos",
-    amount: 10000,
-    href: "https://chetcorcos.com",
-    image: "/img/landing/Chet Corcos.webp",
-  },
-  {
-    name: "Ivan Zhao",
-    amount: 10000,
-    href: "https://twitter.com/ivanhzhao",
-    image: "/img/landing/Ivan Zhao.webp",
-  },
-  {
-    name: "Neil Parikh",
-    amount: 10000,
-    href: "https://www.neilparikh.com/",
-    image: "/img/landing/Neil Parikh.webp",
-  },
-  {
-    name: "Stephanie Sher",
-    amount: 10000,
-    href: "https://twitter.com/stephxsher",
-    image: "/img/landing/Stephanie Sher.webp",
-  },
-  {
-    name: "Raymond Russell",
-    amount: 10000,
-    href: "https://twitter.com/raymondopolis",
-    image: "/img/landing/Raymond Russell.webp",
-  },
-  {
-    name: "Vignan Velivela",
-    amount: 10000,
-    href: "https://vignanv.com/",
-    image: "/img/landing/Vignan Velivela.webp",
-  },
-  {
-    name: "Katsuya Noguchi",
-    amount: 10000,
-    href: "https://twitter.com/kn",
-    image: "/img/landing/Katsuya Noguchi.webp",
-  },
-  {
-    name: "Shariq Hashme",
-    amount: 10000,
-    href: "https://shar.iq/",
-    image: "/img/landing/Shariq Hashme.webp",
-  },
-  {
-    name: "Sahil Chaudhary",
-    amount: 10000,
-    href: "https://twitter.com/csahil28",
-    image: "/img/landing/Sahil Chaudhary.webp",
-  },
-  {
-    name: "Maya & Taylor Blau",
-    amount: 10000,
-    href: "https://ttaylorr.com/",
-    image: ["/img/landing/Maya Blau.webp", "/img/landing/Taylor Blau.webp"],
-  },
-  {
-    name: "Matias Nisenson",
-    amount: 10000,
-    href: "https://twitter.com/MatiasNisenson",
-    image: "/img/landing/Matias Nisenson.webp",
-  },
-  {
-    name: "Mikhail Parakhin",
-    amount: 10000,
-    href: "https://twitter.com/mparakhin",
-    image: "/img/landing/Mikhail Parakhin.webp",
-  },
-  {
-    name: "Alex Petkas",
-    amount: 5000,
-    href: "https://twitter.com/costofglory",
-    image: "/img/landing/Alex Petkas.webp",
-  },
-  {
-    name: "Amjad Masad",
-    amount: 5000,
-    href: "https://twitter.com/amasad",
-    image: "/img/landing/Amjad Masad.webp",
-  },
-  {
-    name: "Conor White-Sullivan",
-    amount: 5000,
-    href: "https://twitter.com/Conaw",
-    image: "/img/landing/Conor White-Sullivan.webp",
-  },
-  {
-    name: "Will Fitzgerald",
-    amount: 5000,
-    href: "https://github.com/willf",
-    image: "/img/landing/Will Fitzgerald.webp",
-  },
-];
-
-const team = {
-  challenge: [
-    {
-      name: "Nat Friedman",
-      title: "Instigator & Founding Sponsor",
-      href: "https://nat.org/",
-    },
-    {
-      name: "Daniel Gross",
-      title: "Founding Sponsor",
-      href: "https://dcgross.com/",
-    },
-    {
-      name: "Stephen Parsons",
-      title: "Project Lead",
-      href: "https://www2.cs.uky.edu/dri/stephen-parsons/",
-    },
-    {
-      name: "Julian Schilliger",
-      title: "Software Engineer",
-      href: "https://www.linkedin.com/in/julian-schilliger-963b21294/",
-    },
-    {
-      name: "Giorgio Angelotti",
-      title: "Machine Learning Consultant",
-      href: "https://www.linkedin.com/in/giorgio-angelotti/",
-    },
-    {
-      name: "Youssef Nader",
-      title: "Machine Learning Researcher",
-      href: "https://youssefnader.com/",
-    },
-    {
-      name: "Ben Kyles",
-      title: "Segmentation Team Lead",
-      href: "https://twitter.com/ben_kyles",
-    },
-    {
-      name: "Adrionna Fey",
-      title: "Segmentation Team Member",
-      href: "https://twitter.com/Meadowsnax1",
-    },
-    {
-      name: "David Josey",
-      title: "Segmentation Team Member",
-      href: "https://www.linkedin.com/in/davidsjosey/",
-    },
-    {
-      name: "Konrad Rosenberg",
-      title: "Segmentation Team Member",
-      href: "https://twitter.com/germanicgems",
-    },
-    {
-      name: "JP Posma",
-      title: "Technical Advisor, former Project Lead",
-      href: "https://janpaulposma.nl/",
-    },
-    {
-      name: "Daniel Havíř",
-      title: "Machine Learning Advisor",
-      href: "https://danielhavir.com/",
-    },
-    {
-      name: "Ian Janicki",
-      title: "Design Advisor",
-      href: "https://ianjanicki.com/",
-    },
-    {
-      name: "Chris Frangione",
-      title: "Prize Advisor",
-      href: "https://www.linkedin.com/in/chrisfrangione/",
-    },
-    {
-      name: "Garrett Ryan",
-      title: "Classics Advisor",
-      href: "https://toldinstone.com/",
-    },
-    {
-      name: "Dejan Gotić",
-      title: "3d Animator",
-      href: "https://www.instagram.com/dejangotic_constructology/",
-    },
-    {
-      name: "Jonny Hyman",
-      title: "2d Animator",
-      href: "https://jonnyhyman.com/",
-    },
-  ],
-  educe: [
-    {
-      name: "Brent Seales",
-      title: "Principal Investigator, Professor of Computer Science",
-      href: "https://educelab.engr.uky.edu/w-brent-seales",
-    },
-    {
-      name: "Seth Parker",
-      title: "Research Manager",
-      href: "https://www2.cs.uky.edu/dri/seth-parker/",
-    },
-    {
-      name: "Christy Chapman",
-      title: "Research & Partnership Manager",
-      href: "https://educelab.engr.uky.edu/christy-chapman",
-    },
-    {
-      name: "Mami Hayashida",
-      title: "Research Staff",
-      href: "https://www.ccs.uky.edu/about-ccs/staff-directory/mami-hayashida/",
-    },
-    {
-      name: "James Brusuelas",
-      title: "Associate Professor of Classics",
-      href: "https://mcl.as.uky.edu/users/jbr454",
-    },
-    {
-      name: "Beth Lutin",
-      title: "College Business Analyst",
-      href: "https://www.engr.uky.edu/directory/lutin-elizabeth",
-    },
-    {
-      name: "Roger Macfarlane",
-      title: "Professor of Classical Studies",
-      href: "https://hum.byu.edu/directory/roger-macfarlane",
-    },
-  ],
-  papyrology2024: [
-    {
-      name: "Federica Nicolardi (Coordinator)",
-      title: "Assistant Professor of Papyrology, University of Naples Federico II",
-      href: "https://www.docenti.unina.it/federica.nicolardi",
-    },
-    {
-      name: "Marzia D'Angelo",
-      title: "Postdoctoral Fellow in Papyrology, University of Naples Federico II",
-      href: "https://unina.academia.edu/MDAngelo",
-    },
-    {
-      name: "Kilian Fleischer",
-      title: "Research Director and Papyrologist, University of Tübingen and CNR",
-      href: "https://www.klassphil.uni-wuerzburg.de/team/pd-dr-kilian-fleischer/",
-    },
-    {
-      name: "Alessia Lavorante",
-      title: "Postdoctoral Fellow in Papyrology, University of Naples Federico II",
-      href: "https://unina.academia.edu/AlessiaLavorante",
-    },
-    {
-      name: "Michael McOsker",
-      title: "Researcher, University College London",
-      href: "https://www.ucl.ac.uk/classics/michael-mcosker",
-    },
-    {
-      name: "Claudio Vergara",
-      title: "Postdoctoral Fellow in Papyrology, University of Naples Federico II",
-      href: "https://unina.academia.edu/ClaudioVergara",
-    },
-    {
-      name: "Rossella Villa",
-      title: "Research Assistant in Papyrology, University of Salerno",
-      href: "https://salerno.academia.edu/RossellaVilla",
-    },
-  ],
-  papyrology2023: [
-    {
-      name: "Daniel Delattre",
-      title: "Emeritus Research Director and Papyrologist, CNRS and IRHT",
-      href: "https://www.irht.cnrs.fr/fr/annuaire/delattre-daniel",
-    },
-    {
-      name: "Gianluca Del Mastro",
-      title:
-        "Professor of Papyrology, l’Università della Campania «L. Vanvitelli»",
-      href: "https://www.facebook.com/GianlucaDelMastroSindaco",
-    },
-    {
-      name: "Robert Fowler",
-      title:
-        "Fellow of the British Academy;  Professor Emeritus of Classics, Bristol University",
-      href: "https://www.thebritishacademy.ac.uk/fellows/robert-fowler-FBA/",
-    },
-    {
-      name: "Richard Janko",
-      title:
-        "Fellow of the American Academy of Arts and Sciences; Professor of Classics, University of Michigan",
-      href: "https://lsa.umich.edu/classics/people/departmental-faculty/rjanko.html",
-    },
-    {
-      name: "Federica Nicolardi",
-      title: "Assistant Professor of Papyrology, University of Naples Federico II",
-      href: "https://www.docenti.unina.it/federica.nicolardi",
-    },
-    {
-      name: "Tobias Reinhardt",
-      title:
-        "Corpus Christi Professor of the Latin Language and Literature, Oxford",
-      href: "https://www.classics.ox.ac.uk/people/professor-tobias-reinhardt",
-    },
-  ],
+/* Muted looping clip; plays on mount unless the viewer prefers reduced
+   motion, in which case the poster stays. */
+const StoryVideo = ({ sources, poster, title }) => {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    autoPlay(ref);
+  }, []);
+  return (
+    <video
+      ref={ref}
+      playsInline
+      loop
+      muted
+      preload="metadata"
+      poster={poster}
+      title={title}
+      aria-label={title}
+      className="vc-media"
+    >
+      {sources.map(([src, type]) => (
+        <source src={src} type={type} key={src} />
+      ))}
+    </video>
+  );
 };
 
-const partners = [
+const storyBeats = [
   {
-    icon: "/img/landing/educe.svg",
-    href: "https://educelab.engr.uky.edu/",
+    date: "79 AD",
+    id: "vesuvius",
+    line: (
+      <>
+        Vesuvius erupts, burying a villa and its library of papyrus scrolls
+        under twenty meters of ash.
+      </>
+    ),
+    more: (
+      <>
+        The scrolls are carbonized by the heat, but also preserved. For
+        centuries, as almost every other ancient text decays, the library of
+        the Villa of the Papyri waits underground, intact.
+      </>
+    ),
+    media: storyImage("/img/landing/vesuvius.webp", "Mount Vesuvius"),
   },
   {
-    icon: "/img/landing/institute.svg",
-    href: "https://www.institutdefrance.fr/en/home/",
+    date: "1750",
+    line: (
+      <>
+        The villa is rediscovered. Early attempts to open the scrolls destroy
+        many; hundreds remain unopened.
+      </>
+    ),
+    more: (
+      <>
+        A farmworker digging a well strikes a marble pavement. Excavations
+        unearth hundreds of scrolls, too fragile to unroll. More than six
+        hundred remain unread.
+      </>
+    ),
+    media: storyImage("/img/landing/scroll.webp", "Carbonized Herculaneum scroll"),
+    credit: true,
   },
   {
-    icon: "/img/landing/diamond.svg",
-    href: "https://www.diamond.ac.uk/",
+    date: "2015",
+    line: (
+      <>
+        Dr. Brent Seales's team virtually unwraps the En-Gedi scroll with X-ray
+        tomography.
+      </>
+    ),
+    more: (
+      <>
+        Their work goes on to show that the elusive carbon ink of the
+        Herculaneum scrolls can also be detected, laying the foundation for
+        Vesuvius Challenge.
+      </>
+    ),
+    media: (
+      <StoryVideo
+        sources={[["/img/landing/engedi5.webm", "video/webm"]]}
+        poster="/img/landing/engedi5.webp"
+        title="Virtual unwrapping of the En-Gedi scroll"
+      />
+    ),
+    credit: true,
   },
   {
-    icon: "/img/landing/biblioteca.svg",
-    href: "https://www.bnnonline.it/",
+    date: "2023",
+    line: (
+      <>
+        Vesuvius Challenge launches; within a year,{" "}
+        <a href="/grandprize">the Grand Prize is claimed</a>.
+      </>
+    ),
+    more: (
+      <>
+        Teams recover four passages of 140 characters from a sealed scroll,
+        the first text ever read from inside one.
+      </>
+    ),
+    media: (
+      <div className="vc-strip__pan">
+        <img
+          src="/img/landing/scroll-full-min.webp"
+          alt="Herculaneum scroll panorama"
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+    ),
   },
   {
-    icon: "/img/landing/getty.svg",
-    href: "https://www.getty.edu/",
-  },
-  {
-    icon: "/img/landing/kaggle.svg",
-    href: "https://www.kaggle.com/",
-  },
-  {
-    icon: "/img/landing/panua.svg",
-    href: "https://panua.ch/",
+    date: "2026",
+    line: (
+      <>
+        PHerc. 1667 becomes the first Herculaneum
+        scroll <a href="/firstscroll">read end to end</a>.
+      </>
+    ),
+    more: (
+      <>
+        Hundreds more remain sealed, and reading them needs unwrapping that is
+        faster and more automated. That's the{" "}
+        <a href="/prizes#2027-grand-prize">$1M Grand Prize</a>.
+      </>
+    ),
+    media: (
+      <StoryVideo
+        sources={[
+          ["/img/firstscroll/hero-reveal.webm", "video/webm"],
+          ["/img/firstscroll/hero-reveal.mp4", "video/mp4"],
+        ]}
+        poster="/img/firstscroll/hero-poster.webp"
+        title="PHerc. 1667 being virtually unwrapped"
+      />
+    ),
   },
 ];
 
-const educelabFunders = [
-  {
-    name: "The National Science Foundation",
-    href: "https://www.nsf.gov/",
-  },
-  {
-    name: "The National Endowment for the Humanities",
-    href: "https://www.neh.gov/",
-  },
-  {
-    name: "The Andrew W. Mellon Foundation",
-    href: "https://www.mellon.org/",
-  },
-  {
-    name: "The Digital Restoration Initiative",
-    href: "https://www2.cs.uky.edu/dri/",
-  },
-  {
-    name: "The Arts & Humanities Research Council",
-    href: "https://www.ukri.org/councils/ahrc/",
-  },
-  {
-    name: "The Lighthouse Beacon Foundation — Stanley and Karen Pigman",
-    href: undefined,
-  },
-  {
-    name: "John & Karen Maxwell",
-    href: undefined,
-  },
-  {
-    name: "Lee & Stacie Marksbury",
-    href: undefined,
-  },
-];
+const StoryCredit = () => (
+  <p className="vc-strip__credit">
+    © EduceLab/University of Kentucky
+  </p>
+);
 
-const Story = ({ story, index }) => (
-  <section
-    id={`story-section-${index}`}
-    className="mb-30 md:h-full h-auto"
-    style={{
-      opacity: 1,
-      ...(index === 0 && {
-        background:
-          "linear-gradient(360deg, rgba(28, 26, 29, 0) 59.11%, #1C1A1D 99.36%)",
-      }),
-    }}
-  >
-    <div className="container mx-auto z-30 relative">
-      <div className="py-10 max-w-4xl">
-        <h1 className="text-3xl md:text-6xl font-black mb-2 leading-none tracking-tighter" id={story.anchor}>
-          <span
-            style={{
-              background:
-                "radial-gradient(53.44% 245.78% at 13.64% 46.56%, #F5653F 0%, #D53A17 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-              textFillColor: "transparent",
-            }}
+/* Timeline strip: dates ticked off the header rule, one shared text + media panel.
+   Opens on 79 AD so the eruption is the first thing shown. */
+const StoryStrip = () => {
+  const [active, setActive] = useState(0);
+  const beat = storyBeats[active];
+  return (
+    <div className="vc-strip">
+      <div className="vc-strip__dates" role="tablist" aria-label="Timeline">
+        {storyBeats.map((b, i) => (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={i === active}
+            className={`vc-strip__date vc-nums${
+              i === active ? " is-active" : ""
+            }`}
+            onClick={() => setActive(i)}
+            key={b.date}
           >
-            {story.date}
-          </span>
-          <br />
-          {story.text}
-        </h1>
-        <div className="md:text-xl text-lg font-medium mb-8 text-[rgba(255,255,255,0.7)] leading-6 tracking-tight whitespace-pre-line">
-          {story.description}
+            {b.date}
+          </button>
+        ))}
+      </div>
+      <div className="vc-strip__stage">
+        <button
+          type="button"
+          className="vc-strip__arrow"
+          aria-label="Previous"
+          disabled={active === 0}
+          onClick={() => setActive(active - 1)}
+        >
+          ‹
+        </button>
+        <div className="vc-strip__panel" role="tabpanel">
+          <div className="vc-strip__text">
+            <p className="vc-strip__line">{beat.line}</p>
+            <p className="vc-strip__more">{beat.more}</p>
+          </div>
+          <div className="vc-strip__media" key={beat.date}>
+            {beat.media}
+            {beat.credit && <StoryCredit />}
+          </div>
         </div>
+        <button
+          type="button"
+          className="vc-strip__arrow"
+          aria-label="Next"
+          disabled={active === storyBeats.length - 1}
+          onClick={() => setActive(active + 1)}
+        >
+          ›
+        </button>
       </div>
     </div>
-  </section>
+  );
+};
+
+/* --------------------------------------------------------------------------
+   Small presentational pieces
+-------------------------------------------------------------------------- */
+
+const SponsorAvatar = ({ sponsor }) => {
+  if (!sponsor.image) {
+    return <span className="vc-sponsor__avatar" aria-hidden="true" />;
+  }
+  const images = Array.isArray(sponsor.image) ? sponsor.image : [sponsor.image];
+  return (
+    <span className="vc-avatars vc-avatars--mono vc-sponsor__avatar">
+      {images.map((img, i) => (
+        <img
+          key={i}
+          src={img}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          style={{ zIndex: 10 - i }}
+        />
+      ))}
+    </span>
+  );
+};
+
+const SponsorRow = ({ sponsor, hidden }) => (
+  <a
+    href={sponsor.href}
+    className="vc-sponsor"
+    target="_blank"
+    rel="nofollow sponsored noopener noreferrer"
+    hidden={hidden}
+  >
+    <SponsorAvatar sponsor={sponsor} />
+    <span className="vc-sponsor__name">{sponsor.name}</span>
+    <span className="vc-sponsor__amount vc-nums">
+      {usd.format(sponsor.amount)}
+    </span>
+  </a>
 );
 
-const StoryBackground = ({ story, index }) => (
-  <div
-    className="fixed inset-0 z-0"
-    id={`story-image-${index}`}
-    style={{
-      background: `url(${story.background})`,
-      backgroundSize: "60%",
-      backgroundPosition: "center right",
-      backgroundRepeat: "no-repeat",
-      opacity: 0,
-    }}
-  />
-);
+/* Sponsor ordering: amount descending; ties alphabetical, Anonymous last. */
+const sponsorOrder = (a, b) =>
+  b.amount - a.amount ||
+  (a.name === "Anonymous") - (b.name === "Anonymous") ||
+  a.name.localeCompare(b.name);
 
-const Winners = ({ winners, large }) => (
-  <div className={`flex ml-3 ${large ? "h-10" : "h-8"}`}>
-    {winners.map((winner, i) => (
-      <React.Fragment key={i}>
-        <div className="-ml-3" style={{ zIndex: (100-i)}}>
-          <img
-            src={winner.image}
-            className={`${large ? "h-10" : "h-8"} rounded-full border-2 ${
-              large ? "border-[#272222]" : "border-[#1C1A1D]"
-            } border-solid`}
+/* Every sponsor in one list; gifts below the fold amount stay in the markup
+   but hidden until "Show more" is clicked. */
+const SPONSOR_FOLD_AMOUNT = 50000;
+
+const SponsorList = ({ list }) => {
+  const [expanded, setExpanded] = useState(false);
+  const folded = list.filter((s) => s.amount < SPONSOR_FOLD_AMOUNT).length;
+  return (
+    <>
+      <div className="vc-sponsors__grid">
+        {list.map((s, i) => (
+          <SponsorRow
+            sponsor={s}
+            hidden={!expanded && s.amount < SPONSOR_FOLD_AMOUNT}
+            key={i}
           />
-        </div>
-      </React.Fragment>
+        ))}
+      </div>
+      {!expanded && folded > 0 && (
+        <button
+          type="button"
+          className="vc-team-tabs__tab vc-sponsors__more"
+          aria-expanded={false}
+          onClick={() => setExpanded(true)}
+        >
+          Show more
+          <span className="vc-team-tabs__arrow" aria-hidden="true">
+            ▾
+          </span>
+        </button>
+      )}
+    </>
+  );
+};
+
+const TeamGroup = ({ title, list }) => (
+  <div className="vc-team__group">
+    <h3>{title}</h3>
+    {list.map((t, i) => (
+      <PersonLink link={t} key={i} />
     ))}
   </div>
 );
 
-const Prize = ({ prize }) => (
-  <a
-    href={!prize.tba ? prize.href : "#"}
-    className={`text-white hover:text-white hover:no-underline group ${
-      prize.tba ? "opacity-40" : ""
-    }`}
-  >
-    <div
-      className={`flex flex-col bg-[#131114bf] border border-solid h-full ${
-        prize.bannerImage ? "" : "md:p-6 p-4"
-      } rounded-2xl relative ${
-        prize.winners ? `border-[#F5653F40]` : `border-[#FFFFFF40]`
-      }  hover:-translate-y-2 transition-transform ease-in-out duration-300 overflow-hidden`}
-      style={{
-        boxShadow:
-          "0px 2.767px 2.214px 0px rgba(0, 0, 0, 0.09), 0px 6.65px 5.32px 0px rgba(0, 0, 0, 0.13), 0px 12.522px 10.017px 0px rgba(0, 0, 0, 0.16), 0px 22.336px 17.869px 0px rgba(0, 0, 0, 0.19), 0px 41.778px 33.422px 0px rgba(0, 0, 0, 0.23), 0px 100px 80px 0px rgba(0, 0, 0, 0.32)",
-      }}
-    >
-      <div className={`${!prize.bannerImage ? "" : "md:p-6 p-4"}`}>
-        {prize.winners && (
-          <p
-            className={`font-bold uppercase text-[var(--ifm-color-primary)] ${
-              prize.bannerImage ? "!mb-2 text-sm" : "!mb-0 text-xs"
-            }`}
-          >
-            won
-          </p>
-        )}
-        <h2
-          className={`${
-            prize.bannerImage ? "text-2xl lg:text-4xl " : "text-xl md:text-2xl "
-          } font-black !mb-0 !leading-none tracking-tighter !my-0`}
-        >
-          {prize.title} {prize.tba && <span className="opacity-60">TBA</span>}
-        </h2>
-        <h3
-          className={`${
-            prize.bannerImage ? "text-xl lg:text-3xl " : "text-lg md:text-2xl"
-          } font-black !leading-none tracking-tighter !mb-0`}
-          style={{
-            background:
-              "radial-gradient(53.44% 245.78% at 13.64% 46.56%, #F5653F 0%, #D53A17 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-            textFillColor: "transparent",
-          }}
-        >
-          {prize.prizeMoney}
-        </h3>
-        {(!prize.winners || prize.bannerImage) && !prize.tba && (
-          <div className="pt-2">
-            <AnimatedArrow
-              text={prizes.winners ? "Read the announcement" : "Learn more"}
-            />
-          </div>
-        )}
-      </div>
-      {prize.winners && !prize.bannerImage && (
-        <div className="flex gap-2 items-center pt-2">
-          <Winners
-            winners={prize.winners}
-            winnersLabel={prize.winnersLabel}
-            large={prize.bannerImage ? true : false}
-          />
-          <h3 className="!mb-0 opacity-60">
-            {prize.winnersLabel
-              ? prize.winnersLabel
-              : `${prize.winners.length} Winners`}
-          </h3>
-        </div>
-      )}
-      {!prize.winners && (
-        <p className="flex-1 md:text-xl text-lg font-medium opacity-60 leading-none tracking-tight">
-          {prize.description}
-        </p>
-      )}
-      {prize.bannerImage && (
-        <div className="bg-[#232222] h-full flex flex-col justify-between">
-          <div className="flex gap-2 items-center md:px-6 px-4 py-3">
-            <Winners
-              winners={prize.winners}
-              large={prize.bannerImage ? true : false}
-            />
-            <h3 className="!mb-0 opacity-60">
-              {prize.winnersLabel
-                ? prize.winnersLabel
-                : `${prize.winners.length} Winners`}
-            </h3>
-          </div>
-          <img
-            src={prize.bannerImage}
-            className={`block max-h-16 ${
-              prize.href === "/firstletters"
-                ? "object-contain object-right -mt-6"
-                : "object-cover"
-            }`}
-          />
-          {/* <div className="">
-          </div> */}
-        </div>
-      )}
-    </div>
-  </a>
-);
-
-const Creator = ({ creator }) => (
-  <a
-    href={creator.href}
-    className="text-white hover:text-white hover:no-underline"
-  >
-    <div className="flex items-center gap-3 rounded-2xl bg-[#131114bf] border border-solid h-full md:p-6 p-4 border-[#FFFFFF40] hover:bg-[#292525d6] transition-color ease-in-out duration-300">
-      <img
-        src={creator.image}
-        className="md:w-20 md:h-20 w-12 h-12 rounded-full saturate-0"
-      />
-      <h2 className="text-2xl md:text-4xl font-black !mb-0 !leading-[90%] tracking-tighter !my-0">
-        {creator.name}
-      </h2>
-    </div>
-  </a>
-);
-
-const Sponsor = ({ sponsor }) => {
-  let image = "";
-  let name = "";
-  let amount = "";
-  let padding = "";
-  let radius = "";
-  let level = "";
-  let multipleScale = "";
-  if (sponsor.amount >= 200000) {
-    image = "w-16 h-16";
-    name = "text-xl md:text-2xl";
-    amount = "text-lg md:text-xl";
-    padding = "md:p-3 p-2";
-    radius = "rounded-2xl";
-    level = "text-[#E8A42F]";
-    multipleScale = "xl:scale-[0.65]";
-  } else if (sponsor.amount >= 50000 && sponsor.amount < 200000) {
-    image = "w-12 h-12";
-    name = "text-lg md:text-xl";
-    amount = "text-sm md:text-md";
-    padding = "p-2";
-    radius = "rounded-xl";
-    level = "text-[#8658ED]";
-    multipleScale = "xl:scale-[0.65]";
-  } else {
-    image = "w-8 h-8";
-    name = "text-sm md:text-md";
-    amount = "text-xs";
-    padding = "md:p-2 p-1";
-    radius = "rounded-lg";
-    level = "text-[#F5653F]";
-    multipleScale = "xl:scale-[0.85]";
-  }
-
+/* Secondary team lists as tabs: at most one open, its people flowing across
+   the full width below the tab row. All closed by default to keep the page
+   short; clicking the open tab closes it. */
+const TeamTabs = ({ groups }) => {
+  const [active, setActive] = useState(null);
   return (
-    <a
-      href={sponsor.href}
-      className={`text-white hover:text-white hover:no-underline`}
-      target="_blank"
-    >
+    <div className="vc-team-tabs">
       <div
-        className={`${padding} ${radius} flex items-center gap-2 bg-[#131114bf] border border-solid h-full border-[#FFFFFF40] hover:bg-[#292525d6] transition-color ease-in-out duration-300`}
+        className={`vc-team-tabs__row${active !== null ? " has-open" : ""}`}
+        role="tablist"
       >
-        {!sponsor.image ? (
-          <></>
-        ) : typeof sponsor.image === "object" ? (
-          <div className={`flex ${multipleScale} origin-left`}>
-            {sponsor.image.map((img, i) => (
-              <img
-                key={i}
-                src={img}
-                className={`${image} ${
-                  i === 1 ? "-ml-3" : ""
-                } rounded-full saturate-0 border-2 border-solid border-[#272222]`}
-                style={{ zIndex: (100-i) }}
-              />
-            ))}
-          </div>
-        ) : (
-          <img
-            src={sponsor.image}
-            className={`${image} rounded-full saturate-0`}
-          />
-        )}
-        <div className="flex flex-col z-[1000]">
-          <h2
-            className={`${name} font-black !mb-0 !leading-[90%] tracking-tighter !my-0`}
+        {groups.map((g, i) => (
+          <button
+            type="button"
+            role="tab"
+            id={`team-tab-${i}`}
+            aria-selected={active === i}
+            aria-controls={`team-panel-${i}`}
+            className={`vc-team-tabs__tab${active === i ? " is-active" : ""}`}
+            onClick={() => setActive(active === i ? null : i)}
+            key={g.title}
           >
-            {sponsor.name}
-          </h2>
-          <h3
-            className={`${amount} ${level} font-bold !leading-none tracking-tighter !mb-0`}
-          >
-            {new Intl.NumberFormat("en-US", {
-              style: "currency",
-              currency: "USD",
-              maximumSignificantDigits: 10,
-            }).format(sponsor.amount)}
-          </h3>
-        </div>
+            {g.title}
+            <span className="vc-team-tabs__arrow" aria-hidden="true">
+              ▾
+            </span>
+          </button>
+        ))}
       </div>
-    </a>
+      {groups.map((g, i) => (
+        <div
+          role="tabpanel"
+          id={`team-panel-${i}`}
+          aria-labelledby={`team-tab-${i}`}
+          className="vc-team-tabs__panel"
+          hidden={active !== i}
+          key={g.title}
+        >
+          {g.list.map((t, k) => (
+            <PersonLink link={t} key={k} />
+          ))}
+        </div>
+      ))}
+    </div>
   );
 };
 
-const Link = ({ link }) => (
-  <div>
-    <a
-      className=" text-white hover:no-underline inline-block fit-content"
-      href={link.href}
-    >
-      <h3 className="mb-0 text-xl font-medium">
-        {link.name}&nbsp;&nbsp;
-        <span className="opacity-70">{link.title}</span>
-      </h3>
-    </a>
+const PersonLink = ({ link }) => (
+  <div className="vc-person">
+    {link.href ? (
+      <a href={link.href} className="vc-person__name">
+        {link.name}
+      </a>
+    ) : (
+      <span className="vc-person__name">{link.name}</span>
+    )}
+    {link.title && <span className="vc-person__role">{link.title}</span>}
   </div>
 );
 
-const crossfadeHeight = 150;
-
-const getBounds = (div) => div.getBoundingClientRect();
-const getOpacity = ({ y, height }) =>
-  Math.max(0, Math.min(1, (1 - Math.abs(y) / height) * 1.5));
-const getBackgroundOpacity = ({ y, height }) => {
-  if (y > -height - crossfadeHeight && y < crossfadeHeight) {
-    // top transition
-    if (y < crossfadeHeight && y > -crossfadeHeight) {
-      return (1 - y / crossfadeHeight) / 2;
-      // bottom transition
-    } else if (y < -height + crossfadeHeight && y > -height - crossfadeHeight) {
-      return (y + height + crossfadeHeight) / (crossfadeHeight * 2);
-    } else {
-      return 1;
-    }
-  } else {
-    return 0;
-  }
-};
+/* Open problem column: framed before/after slider, title, short pitch, then the
+   prizes that pay for solving it (amounts from docs/34_prizes.md
+   frontmatter). */
+const ProblemCard = ({
+  title,
+  titleHref,
+  beforeImage,
+  afterImage,
+  children,
+  prizes,
+  linkText,
+  href,
+}) => (
+  <div className="vc-problem">
+    <BeforeAfter
+      beforeImage={beforeImage}
+      afterImage={afterImage}
+      className="vc-problem__slider"
+      hint
+    />
+    <div className="vc-problem__text">
+      <a href={titleHref} className="vc-problem__head">
+        <h3 className="vc-problem__title">{title}</h3>
+        <p className="vc-problem__body">{children}</p>
+      </a>
+      <div className="vc-problem__foot">
+        <div className="vc-problem__prizes">
+          {prizes.map((p) => (
+            <p className="vc-problem__line" key={p.id}>
+              <a href={p.href} className="vc-problem__prize">
+                Win the{" "}
+                <strong className="vc-nums">{usd.format(p.amount)}</strong>{" "}
+                {p.title}
+              </a>
+            </p>
+          ))}
+        </div>
+        <p className="vc-problem__line">
+          <a href={href} className="vc-problem__link">
+            {linkText}
+          </a>
+        </p>
+      </div>
+    </div>
+  </div>
+);
 
 const autoPlay = (ref) =>
   ref &&
+  ref.current &&
   ref.current
     .play()
     .then(() => {})
-    .catch((err) => {
-      // Video couldn't play, low power play button showing.
+    .catch(() => {
+      // Video couldn't play; poster stays visible.
     });
 
-// const RevealOnScroll = ({ children, delay }) => {
-//   const [isVisible, setIsVisible] = useState(false);
-//   const domRef = useRef();
-
-//   useEffect(() => {
-//     const observer = new IntersectionObserver(
-//       (entries) => {
-//         entries.forEach((entry) => setIsVisible(entry.isIntersecting));
-//       },
-//       {
-//         threshold: 0.1, // Adjust this value based on your needs
-//       }
-//     );
-
-//     const currentElement = domRef.current;
-//     if (currentElement) {
-//       observer.observe(currentElement);
-//     }
-
-//     return () => {
-//       if (currentElement) {
-//         observer.unobserve(currentElement);
-//       }
-//     };
-//   }, []);
-
-//   const delayClass = delay ? `delay-${delay}` : "";
-//   console.log(delayClass);
-//   return (
-//     <div
-//       ref={domRef}
-//       className={`transition ease-in duration-500 ${delayClass} ${
-//         isVisible
-//           ? "opacity-100 translate-y-0"
-//           : "opacity-0 transform translate-y-3"
-//       }`}
-//     >
-//       {children}
-//     </div>
-//   );
-// };
-
-// export default RevealOnScroll;
-
-const AnimatedArrow = ({ text, button }) => (
-  <div className={`flex ${button ? "" : "opacity-60"} text-sm`}>
-    <div className="hidden sm:block uppercase font-bold tracking-wider mr-1 group-hover:mr-3 transition-all ease-in-out duration-300">
-      {text}
-    </div>
-    <div className="block sm:hidden uppercase font-bold tracking-wider mr-1">
-      {text}
-    </div>
-    <img
-      src={
-        button
-          ? "/img/landing/arrow-right.svg"
-          : "/img/landing/arrow-right-white.svg"
-      }
-    />
-  </div>
-);
+/* --------------------------------------------------------------------------
+   Page
+-------------------------------------------------------------------------- */
 
 export function Landing() {
+  const { siteConfig } = useDocusaurusContext();
+  const canonicalUrl = `${siteConfig?.url ?? ""}${siteConfig?.baseUrl ?? "/"}`;
+
   useBrokenLinks().collectAnchor("sponsors");
-  useBrokenLinks().collectAnchor("educelab-funders");
+  useBrokenLinks().collectAnchor("partners");
   useBrokenLinks().collectAnchor("our-story");
 
+  // siteUrl is used by the OpenGraph/Twitter tags below. Sitewide JSON-LD
+  // (Organization + WebSite) is injected via headTags in docusaurus.config.js
+  // so it is present in the server-rendered static HTML (react-helmet drops
+  // <script> children from SSR output).
+  const siteUrl = (siteConfig?.url ?? "") + (siteConfig?.baseUrl ?? "/");
+
+  // Days until the 2027 Grand Prize deadline (client-only to avoid an SSR
+  // hydration mismatch; the chip simply appears after mount).
+  const [gpDaysLeft, setGpDaysLeft] = useState(null);
+  useEffect(() => {
+    const deadline = new Date("2027-06-25T23:59:59-07:00");
+    setGpDaysLeft(
+      Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / 86400000)),
+    );
+  }, []);
+
+  // The two "Led by" names swap order at random on each page load so
+  // neither is billed first. The server render keeps data order; the coin
+  // flip runs after mount to avoid a hydration mismatch.
+  const [leads, setLeads] = useState(projectLeads);
+  useEffect(() => {
+    if (Math.random() < 0.5) setLeads([...projectLeads].reverse());
+  }, []);
+
   const heroVideo = useRef(null);
-  const unrollVideo = useRef(null);
-  // const mlVideo = useRef(null);
-  // const xrayVideo = useRef(null);
 
   useEffect(() => {
-    if (!globalThis.window) {
-      return;
-    }
-    const storyDivs = Array.from(
-      document.querySelectorAll("[id^='story-section']")
-    );
-    const imageDivs = Array.from(
-      document.querySelectorAll("[id^='story-image']")
-    );
-    const onScroll = () => {
-      const storyBounds = storyDivs.map((div) => getBounds(div));
-      const backgroundOpacities = storyBounds.map((bounds) =>
-        getBackgroundOpacity({
-          y: bounds.y - window.innerHeight / 2,
-          height: bounds.height,
-        })
-      );
-      imageDivs.forEach(
-        (story, index) =>
-          (story.style.opacity = backgroundOpacities[index] * 0.4)
-      );
+    if (typeof window === "undefined") return;
+    // prefers-reduced-motion -> poster only: never attach the deferred hero
+    // video source, never autoplay anything.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Defer hero video source until idle (improves LCP); poster-first.
+    const v = heroVideo.current;
+    const srcEl = v?.querySelector("source[data-src]");
+    const enableVideo = () => {
+      if (!v || !srcEl || srcEl.src) return;
+      srcEl.src = srcEl.dataset.src;
+      v.load();
+      autoPlay(heroVideo);
     };
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
+    if ("requestIdleCallback" in window)
+      window.requestIdleCallback(enableVideo, { timeout: 1200 });
+    else setTimeout(enableVideo, 600);
   }, []);
 
-  useEffect(() => {
-    autoPlay(heroVideo);
-    autoPlay(unrollVideo);
-    // autoPlay(mlVideo);
-    // autoPlay(xrayVideo);
-  }, []);
+  // Open prizes are sourced from docs/34_prizes.md frontmatter at build time
+  // (plugins/prizes-data.js) — the landing updates with the prizes page.
+  const { prizes: openPrizes = [] } = usePluginData("prizes-data") || {};
+  const { awardedTotal = 0 } = usePluginData("winners-data") || {};
+  const { counts = {} } = usePluginData("atlas-data") || {};
+  const openById = Object.fromEntries(openPrizes.map((p) => [p.id, p]));
+  const grandPrize2027 = openById["grand-prize-2027"];
+  const firstLetters = openById["first-letters-2027"];
 
   return (
     <>
-      <div className="absolute inset-0 z-0 md:block hidden">
-        {stories({ unrollVideo }).map((s, index) => (
-          <StoryBackground story={s} key={s.date} index={index} />
-        ))}
-      </div>
-      <div className="text-white ">
-        <div className="z-20 relative">
-          {/* Hero */}
-          <section>
-            <div className="container mx-auto z-20 relative mb-12">
-              <div className="md:pt-20 pt-8 mb-4">
-                <h1 className="text-4xl md:text-7xl font-black !mb-4 tracking-tighter mix-blend-exclusion !leading-[90%] transition-opacity">
-                  <div className="max-w-3xl">
-                    Resurrect an ancient library from the ashes of a volcano.
-                  </div>
-                  <span
-                    className="text-3xl md:text-6xl drop-shadow-lg"
-                    style={{
-                      background:
-                        "radial-gradient(53.44% 245.78% at 13.64% 46.56%, #F5653F 0%, #D53A17 100%)",
-                      WebkitBackgroundClip: "text",
-                      WebkitTextFillColor: "transparent",
-                      backgroundClip: "text",
-                      textFillColor: "transparent",
-                    }}
-                  >
-                    <span className="whitespace-nowrap">
-                      Win Prizes.&nbsp;
-                    </span>&nbsp;
-                    <span className="whitespace-nowrap">
-                      Make History.&nbsp;
-                    </span>
-                  </span>
-                </h1>
-                <p className="max-w-lg md:text-xl text-lg font-medium mb-8 !leading-[110%] tracking-tight">
-                  <span className=" opacity-80 md:opacity-60">
-                    The Vesuvius Challenge is a machine learning and computer
-                    vision competition that has{" "}
-                  </span>
-                  <span className="opacity-100">
-                    <a href="grandprize">broken through</a> with the Herculaneum scrolls & awarded
-                    over $1,000,000 in prizes.
-                  </span>
-                  <br /> <br />
-                  <span className=" opacity-80 md:opacity-60">
-                    We're still going. 2024's challenge is to go from reading a few passages to entire scrolls.
-                  </span>
+      <Head>
+        <title>
+          Vesuvius Challenge — Reading the Herculaneum Scrolls with AI
+        </title>
+        <meta
+          name="description"
+          content={`Vesuvius Challenge uses machine learning and computer vision to read the carbonized Herculaneum scrolls buried by Vesuvius in 79 AD. Over ${usd.format(awardedTotal)} awarded.`}
+        />
+        <link rel="canonical" href={canonicalUrl} />
+        {/* Preload the LCP poster image */}
+        <link
+          rel="preload"
+          as="image"
+          href="/img/landing/vesuvius.webp"
+          fetchpriority="high"
+        />
+        {/* OpenGraph/Twitter */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={siteUrl} />
+        <meta
+          property="og:title"
+          content="Vesuvius Challenge — Reading the Herculaneum Scrolls with AI"
+        />
+        <meta
+          property="og:description"
+          content={`Vesuvius Challenge uses machine learning and computer vision to read the carbonized Herculaneum scrolls buried by Vesuvius in 79 AD. Over ${usd.format(awardedTotal)} awarded.`}
+        />
+        <meta
+          property="og:image"
+          content={siteUrl + "img/social/opengraph.jpg"}
+        />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta
+          name="twitter:title"
+          content="Vesuvius Challenge — Reading the Herculaneum Scrolls with AI"
+        />
+        <meta
+          name="twitter:description"
+          content={`Vesuvius Challenge uses machine learning and computer vision to read the carbonized Herculaneum scrolls buried by Vesuvius in 79 AD. Over ${usd.format(awardedTotal)} awarded.`}
+        />
+        <meta
+          name="twitter:image"
+          content={siteUrl + "img/social/opengraph.jpg"}
+        />
+        {/* Sitewide JSON-LD (Organization + WebSite) is injected via headTags in docusaurus.config.js */}
+      </Head>
+
+      <div className="vc-landing">
+        {/* ------------------------------------------------------------------
+            Hero — static --vc-bg base; the volcano video is a demoted backdrop
+            (≤40% opacity) behind a solid→transparent overlay on the media.
+            Height is navbar-aware (never bare 100vh).
+        ------------------------------------------------------------------ */}
+        <section className="vc-hero" aria-labelledby="home-hero-title">
+          <div className="vc-hero__backdrop" aria-hidden="true">
+            <video
+              playsInline
+              loop
+              muted
+              preload="metadata"
+              title="Vesuvius volcano hero background"
+              poster="/img/landing/vesuvius.webp"
+              className="vc-hero__video"
+              ref={heroVideo}
+            >
+              <source
+                data-src="/img/landing/vesuvius-flipped-960.webm"
+                type="video/webm"
+              />
+            </video>
+            <div className="vc-hero__scrim" />
+          </div>
+          <div className="container mx-auto vc-hero__content">
+            <div className="vc-hero__grid">
+              <div className="vc-hero__main">
+                <Heading as="h1" id="home-hero-title" className="vc-hero__title">
+                  Resurrecting an ancient library from the ashes of a volcano.
+                </Heading>
+                <p className="vc-hero__tagline">
+                  Buried in 79 AD, now being revealed.
                 </p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 auto-rows-fr gap-4 items-stretch max-w-7xl">
-                <a
-                  className="cursor-pointer group hover:no-underline"
-                  href="/get_started"
-                >
-                  <div
-                    className="relative rounded-2xl border-solid text-white border border-[#FFFFFF20] bg-[#131114bf] group-hover:-translate-y-2 transition-transform ease-in-out duration-300 flex flex-col overflow-hidden"
-                    style={{
-                      boxShadow:
-                        "0px 2.767px 2.214px 0px rgba(0, 0, 0, 0.09), 0px 6.65px 5.32px 0px rgba(0, 0, 0, 0.13), 0px 12.522px 10.017px 0px rgba(0, 0, 0, 0.16), 0px 22.336px 17.869px 0px rgba(0, 0, 0, 0.19), 0px 41.778px 33.422px 0px rgba(0, 0, 0, 0.23), 0px 100px 80px 0px rgba(0, 0, 0, 0.32)",
-                    }}
-                  >
-                    <div className="flex flex-col py-4 md:py-5 px-5 md:px-7 ">
-                      <h3 className="text-xl md:text-3xl text-white mt-0 mb-1 tracking-tighter !leading-[90%] flex-grow">
-                        Get Started
-                      </h3>
-                      <AnimatedArrow text="$1M+ already awarded" />
-                    </div>
-                    <img
-                      className=""
-                      src="/img/landing/grand-prize-preview.webp"
-                    />
-                    <Marquee
-                      autoFill
-                      className="py-1 md:py-2 text-xs md:text-sm font-bold text-[#E34E29] bg-[#68140160]"
-                    >
-                      WIN PRIZES&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;READ THE SCROLLS
-                      &nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;
-                    </Marquee>
-                  </div>
-                </a>
-                <a
-                  className="cursor-pointer group hover:no-underline"
-                  href="/master_plan"
-                >
-                  <div
-                    className="relative rounded-2xl border-solid text-white border border-[#FFFFFF20] bg-[#131114bf] group-hover:-translate-y-2 transition-transform ease-in-out duration-300 flex flex-col overflow-hidden"
-                    style={{
-                      height: "100%",
-                      boxShadow:
-                        "0px 2.767px 2.214px 0px rgba(0, 0, 0, 0.09), 0px 6.65px 5.32px 0px rgba(0, 0, 0, 0.13), 0px 12.522px 10.017px 0px rgba(0, 0, 0, 0.16), 0px 22.336px 17.869px 0px rgba(0, 0, 0, 0.19), 0px 41.778px 33.422px 0px rgba(0, 0, 0, 0.23), 0px 100px 80px 0px rgba(0, 0, 0, 0.32)",
-                    }}
-                  >
-                    <div className="flex flex-col py-4 md:py-5 px-5 md:px-7 z-10">
-                      <h3 className="text-xl md:text-3xl text-white mt-0 mb-1 tracking-tighter !leading-[90%] flex-grow">
-                        Read the Master Plan
-                      </h3>
-                      <AnimatedArrow text="Read the post" />
-                    </div>
-                    <img
-                      className="absolute top-[50px] right-0 max-w-[190px]"
-                      src="/img/landing/fragment.webp"
-                    />
-                  </div>
-                </a>
-              </div>
-              <div className="pt-8 mb-4">
-                <p className="max-w-lg md:text-xl text-lg font-medium mb-8 !leading-[110%] tracking-tight">
-                  <span id="our-story" className=" opacity-80 md:opacity-60">
-                    Our story ↓
-                  </span>
+                <p className="vc-hero__intro">
+                  Vesuvius Challenge is an open science research organization{" "}
+                  <a href="/firstscroll">reading</a> the carbonized Herculaneum
+                  scrolls without unrolling them. <strong>Anyone can help</strong>:
+                  we run a{" "}
+                  <a href="/prizes">$2M competition</a>, with prizes every
+                  month.
                 </p>
-              </div>
-            </div>
-            <div
-              className="absolute inset-0 h-[75vh] z-10"
-              style={{
-                background:
-                  "linear-gradient(90deg, rgba(28, 26, 29, 0.8) 20%, rgba(28, 26, 29, 0) 80%),linear-gradient(0deg, #1C1A1D 1%, rgba(28, 26, 29, 0) 30%)",
-              }}
-            />
-            <div className="absolute inset-0 h-[75vh] z-0">
-              <video
-                // autoPlay
-                playsInline
-                loop
-                muted
-                poster="/img/landing/vesuvius.webp"
-                className="w-full h-full object-cover object-[45%]"
-                ref={heroVideo}
-              >
-                <source
-                  src="img/landing/vesuvius-flipped-min.webm"
-                  type="video/webm"
-                />
-              </video>
-            </div>
-          </section>
-          {/* Stories */}
-          {stories({ unrollVideo }).map((s, index) => (
-            <Story story={s} key={s.date} index={index} />
-          ))}
-          {/* Prize */}
-          <section className="mb-24 md:mb-36">
-            <div className="container mx-auto z-30 relative">
-              <div className="flex flex-col py-8 md:py-16 ">
-                <h1 className="text-3xl md:text-6xl font-black !mb-2 leading-none tracking-tighter">
-                  <span
-                    className="font-black leading-none tracking-tighter mb-0"
-                    style={{
-                      background:
-                        "radial-gradient(53.44% 245.78% at 13.64% 46.56%, #F5653F 0%, #D53A17 100%)",
-                      WebkitBackgroundClip: "text",
-                      WebkitTextFillColor: "transparent",
-                      backgroundClip: "text",
-                      textFillColor: "transparent",
-                    }}
+                <div className="vc-hero__ctas">
+                  <a className="vc-btn" href="/get_started">
+                    Get Started
+                  </a>
+                  <a
+                    className="vc-btn-outline"
+                    href="https://discord.gg/V4fJhvtaQn"
                   >
-                    2024 AD
-                  </span>
-                  <br />
-                  The Challenge Continues
-                </h1>
-                <p className="max-w-xl md:text-xl text-lg font-medium !mb-8 md:w-full w-4/5  !leading-[110%] tracking-tight opacity-60">
-                  Due to the overwhelming success from the past year, the
-                  Vesuvius Challenge moves onto its next stage of reading 90%
-                  of all four scrolls. Read more about the prizes below, and on how
-                  they contribute towards the <a href="master_plan">The Master Plan</a>.
-                </p>
-                <div className="flex flex-col gap-3 max-w-7xl">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-6xl">
-                    {prizes
-                      .filter((p) => !p.winners)
-                      .map((p, i) => (
-                        <Prize prize={p} key={i} />
-                      ))}
-                  </div>
-                </div>
-              </div>
-              <div className="pt-10 md:pt-20 max-w-3xl">
-                <h1 className="text-4xl md:text-7xl font-black !mb-2 leading-none tracking-tighter">
-                  Awarded Prizes
-                </h1>
-                <p className="max-w-xl md:text-xl text-lg font-medium !mb-8 md:w-full w-4/5  !leading-[110%] tracking-tight opacity-60">
-                  Incredible teams of engineers are helping us unlock these secrets,
-                  providing unprecedented access to scrolls that have not been
-                  read in two millennia. Learn more about their accomplishments.
-                </p>
-              </div>
-              <div className="flex flex-col gap-3 max-w-7xl">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-6xl">
-                  {prizes
-                    .filter((p) => p.winners && p.bannerImage)
-                    .map((p, i) => (
-                      <Prize prize={p} key={i} />
-                    ))}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 max-w-6xl">
-                  {prizes
-                    .filter((p) => p.winners && !p.bannerImage)
-                    .map((p, i) => (
-                      <Prize prize={p} key={i} />
-                    ))}
-                </div>
-              </div>
-            </div>
-          </section>
-          {/* Team */}
-          <section>
-            <div className="container mx-auto z-30 relative">
-              <div className="mb-6 md:mb-24 max-w-6xl">
-                <h1 className="mb-16 text-4xl md:text-7xl font-black leading-none tracking-tighter ">
-                  Created By
-                </h1>
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 auto-rows-fr gap-2">
-                  {creators.map((c, i) => (
-                    <Creator creator={c} key={i} />
-                  ))}
-                </div>
-              </div>
-              <div className="mb-6 md:mb-10 max-w-6xl">
-                <h1 className="mb-16 text-4xl md:text-7xl font-black leading-none tracking-tighter " name="sponsors" id="sponsors">
-                  Sponsors
-                </h1>
-                <h2 className="text-3xl md:text-5xl text-[#E8A42F]">
-                  Caesars
-                </h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 auto-rows-fr  gap-2 pb-8">
-                  {sponsors
-                    .filter((s) => s.amount >= 200000)
-                    .map((s, i) => (
-                      <Sponsor sponsor={s} key={i} />
-                    ))}
-                </div>
-                <h2 className="text-3xl md:text-5xl text-[#8658ED]">
-                  Senators
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5 auto-rows-fr gap-2 pb-8">
-                  {sponsors
-                    .filter((s) => s.amount >= 50000 && s.amount < 200000)
-                    .map((s, i) => (
-                      <Sponsor sponsor={s} key={i} />
-                    ))}
-                </div>
-                <h2 className="text-3xl md:text-5xl text-[#F5653F]">
-                  Citizens
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6 gap-2">
-                  {sponsors
-                    .filter((s) => s.amount < 50000)
-                    .map((s, i) => (
-                      <Sponsor sponsor={s} key={i} />
-                    ))}
-                </div>
-                <div className="flex justify-center py-8">
-                  <a href="https://donate.stripe.com/aEUg101vt9eN8gM144">
-                    <button
-                      className="px-4 py-3 uppercase font-bold rounded-full border-[#F5653F] border-solid text-[#F5653F] bg-transparent cursor-pointer group
-                    "
-                    >
-                      <AnimatedArrow text="Become a sponsor" button />
-                    </button>
+                    Join Discord
                   </a>
                 </div>
               </div>
-              <div className="py-10">
-                <h1 className="hidden md:block text-4xl md:text-7xl font-black leading-none tracking-tighter ">
-                  Team
-                </h1>
-                <div className="flex flex-wrap">
-                  <div className="flex-1 flex-col lg:gap-0 gap-2 mt-8 min-w-[100%] md:min-w-[50%] pr-4 lg:pr-12">
-                    <h3 className="text-3xl font-black tracking-tighter">
-                      Vesuvius Challenge Team
-                    </h3>
-                    {team.challenge.map((t, i) => (
-                      <Link link={t} key={i} />
-                    ))}
-                  </div>
-                  <div className="flex-1 flex-col lg:gap-0 gap-2 mt-8 min-w-[100%] md:min-w-[50%] pr-4 lg:pr-12">
-                    <h3 className="text-3xl font-black tracking-tighter">
-                      EduceLab Team
-                    </h3>
-                    {team.educe.map((t, i) => (
-                      <Link link={t} key={i} />
-                    ))}
-                  </div>
-                  <div className="flex-1 flex-col lg:gap-0 gap-2 mt-8 min-w-[100%] md:min-w-[50%] pr-4 lg:pr-12">
-                    <h3 className="text-3xl font-black tracking-tighter text=[--ifm-color-primary]">
-                      2024 Papyrology Team
-                    </h3>
-                    {team.papyrology2024.map((t, i) => (
-                      <Link link={t} key={i} />
-                    ))}
-                  </div>
-                  <div className="flex-1 flex-col lg:gap-0 gap-2 mt-8 min-w-[100%] md:min-w-[50%] pr-4 lg:pr-12">
-                    <h3 className="text-3xl font-black tracking-tighter text=[--ifm-color-primary]">
-                      2023 Papyrology Team
-                    </h3>
-                    {team.papyrology2023.map((t, i) => (
-                      <Link link={t} key={i} />
-                    ))}
-                  </div>
-                </div>
-                &nbsp;
-                <br />
-                <Link
-                  link={{
-                    name: "Villa dei Papiri art by Rocío Espín",
-                    href: "https://www.artstation.com/rocioespin",
-                  }}
-                />
-              </div>
-              <div className="py-10">
-                <h1 className="mb-16 text-4xl md:text-7xl font-black leading-none tracking-tighter  mix-blend-exclusion">
-                  Partners
-                </h1>
-                <div className="flex lg:flex-row flex-col lg:gap-12 gap-6 lg:items-center items-start">
-                  {partners.map((p, i) => (
-                    <a key={i} href={p.href}>
-                      <img src={p.icon} className={`h-${i === 1 ? 28 : 12}`} />
-                    </a>
-                  ))}
-                </div>
-                <div className="flex flex-wrap">
-                  <div className="flex-1 flex-col lg:gap-0 gap-2 mt-8 min-w-[100%] md:min-w-[50%] pr-4 lg:pr-12">
-                    <h3
-                      className="text-3xl font-black tracking-tighter"
-                      id="educelab-funders"
-                    >
-                      EduceLab funders
-                    </h3>
-                    {educelabFunders.map((t, i) => (
-                      <Link link={t} key={i} />
-                    ))}
-                  </div>
-                </div>
+
+              <div className="vc-hero__aside">
+                {gpDaysLeft !== null && (
+                  <a
+                    className="vc-hero__countdown"
+                    href="/prizes#2027-grand-prize"
+                    aria-label={`${gpDaysLeft} days to the $1,000,000 Grand Prize deadline`}
+                  >
+                    <span className="vc-hero__countdown-label">
+                      $1,000,000 Grand Prize
+                    </span>
+                    <span className="vc-hero__countdown-row">
+                      <span className="vc-hero__countdown-value vc-nums">
+                        {gpDaysLeft}
+                      </span>
+                      <span className="vc-hero__countdown-unit">
+                        days
+                        <br />
+                        left
+                      </span>
+                    </span>
+                    <span className="vc-hero__countdown-date">
+                      deadline June 25th, 2027
+                    </span>
+                  </a>
+                )}
               </div>
             </div>
-          </section>
-        </div>
+          </div>
+        </section>
+
+        {/* News — latest Substack posts, text only */}
+        <section
+          className="vc-section vc-section--tight"
+          aria-labelledby="news"
+        >
+          <div className="container mx-auto">
+            <div className="vc-h2-row vc-updates__row">
+              <Heading as="h2" id="news" className="vc-h2">
+                News
+              </Heading>
+              <a
+                href="https://scrollprize.substack.com"
+                className="vc-cta vc-h2-row__action"
+              >
+                More on Substack
+              </a>
+            </div>
+            <LatestPosts />
+          </div>
+        </section>
+
+        {/* ------------------------------------------------------------------
+            Open problems — one card per problem, each carrying the prizes
+            that pay for it; progress prizes and the full rules below.
+        ------------------------------------------------------------------ */}
+        <section className="vc-section" aria-labelledby="open-problems">
+          <div className="container mx-auto">
+            <div className="vc-h2-row">
+              <Heading as="h2" id="open-problems" className="vc-h2">
+                Open problems &amp; prizes
+              </Heading>
+              <a href="/prizes" className="vc-cta vc-h2-row__action">
+                All prizes and rules
+              </a>
+            </div>
+            <div className="vc-problems">
+              <ProblemCard
+                title="Virtual Unwrapping"
+                titleHref="/2026_open_problems#2-unwrapping-turning-disconnected-voxels-into-a-surface"
+                beforeImage="/img/data/raw_pred.png"
+                afterImage="/img/data/patches.png"
+                prizes={[
+                  grandPrize2027 && { ...grandPrize2027, title: "Grand Prize" },
+                ].filter(Boolean)}
+                linkText="Learn about the current path"
+                href="/tutorial_spiral"
+              >
+                We can trace a scroll's surface, but where sheets are crushed
+                or torn it still needs human help. Help us make it fully
+                automatic.
+              </ProblemCard>
+
+              <ProblemCard
+                title="Ink Detection"
+                titleHref="/2026_open_problems#3-ink-recovery-reading-the-scrolls"
+                beforeImage="/img/ink/51002_crop/32.jpg"
+                afterImage="/img/ink/51002_crop/prediction.jpg"
+                prizes={[
+                  firstLetters && { ...firstLetters, title: "First Letters Prizes" },
+                ].filter(Boolean)}
+                linkText="Learn how to find a letter"
+                href="/tutorial5"
+              >
+                We can see ink in some scrolls, but models trained on one
+                rarely transfer to the next. Help us make them work on every
+                scroll.
+              </ProblemCard>
+            </div>
+          </div>
+        </section>
+
+        {/* ------------------------------------------------------------------
+            Our story — 79 AD to 2026 on one timeline strip; the 2026 beat
+            links on to the open prizes.
+        ------------------------------------------------------------------ */}
+        <section className="vc-section" aria-labelledby="our-story">
+          <div className="container mx-auto">
+            <div className="vc-h2-row">
+              <Heading as="h2" id="our-story" className="vc-h2">
+                Our story
+              </Heading>
+              <a href="/winners" className="vc-cta vc-h2-row__action">
+                All milestones
+              </a>
+            </div>
+            <StoryStrip />
+          </div>
+        </section>
+
+        {/* ------------------------------------------------------------------
+            Team — one credit line + the plain dense lists (already the target
+            aesthetic; heading scale fixed).
+        ------------------------------------------------------------------ */}
+        <section className="vc-section" aria-labelledby="team">
+          <div className="container mx-auto">
+            <Heading as="h2" id="team" className="vc-h2">
+              Team
+            </Heading>
+            <div className="vc-credits">
+              <div className="vc-credits__group">
+                <p className="vc-label vc-credits__label">Led by</p>
+                {leads.map((l) => (
+                  <div className="vc-person" key={l.name}>
+                    <a href={l.href} className="vc-person__name">
+                      {l.name}
+                    </a>
+                    <span className="vc-person__role">{l.title}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="vc-credits__group">
+                <p className="vc-label vc-credits__label">Created by</p>
+                {creators.map((c) => (
+                  <div className="vc-person" key={c.name}>
+                    <a href={c.href} className="vc-person__name">
+                      {c.name}
+                    </a>
+                    {c.role && (
+                      <span className="vc-person__role">{c.role}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="vc-team">
+              <TeamGroup title="Technical Team" list={team.challenge} />
+              <TeamGroup title="Papyrology Team" list={team.papyrology} />
+              <TeamGroup title="Annotation Team" list={team.annotation} />
+            </div>
+            {/* Secondary lists as tabs below the columns; the open one spans
+                the full width. */}
+            <TeamTabs
+              groups={[
+                { title: "Advisors & Alumni", list: team.alumni },
+                { title: "Papyrology Advisors", list: team.papyrologyAdvisors },
+                { title: "EduceLab Team (Partners)", list: team.educe },
+              ]}
+            />
+          </div>
+        </section>
+
+        {/* ------------------------------------------------------------------
+            Sponsors — every donor in one list, smaller gifts behind "Show more".
+        ------------------------------------------------------------------ */}
+        <section className="vc-section" aria-labelledby="sponsors">
+          <div className="container mx-auto">
+            <div className="vc-h2-row">
+              <Heading as="h2" id="sponsors" className="vc-h2">
+                Sponsors
+              </Heading>
+              <a
+                href="https://donate.stripe.com/aEUg101vt9eN8gM144"
+                className="vc-cta vc-h2-row__action"
+              >
+                Make a donation
+              </a>
+            </div>
+            <SponsorList list={[...sponsors].sort(sponsorOrder)} />
+          </div>
+        </section>
+
+        {/* ------------------------------------------------------------------
+            Partners — one monochrome logo row + EduceLab funders.
+        ------------------------------------------------------------------ */}
+        <section
+          className="vc-section vc-section--last"
+          aria-labelledby="partners"
+        >
+          <div className="container mx-auto">
+            <Heading as="h2" id="partners" className="vc-h2">
+              Partners
+            </Heading>
+            <div className="vc-partners">
+              {partners.map((p, i) => (
+                <a key={i} href={p.href} className="vc-partners__link">
+                  <img
+                    src={p.icon}
+                    alt={p.name}
+                    loading="lazy"
+                    decoding="async"
+                    className={`vc-partners__img${
+                      p.tall ? " vc-partners__img--tall" : ""
+                    }`}
+                  />
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
       </div>
     </>
   );
