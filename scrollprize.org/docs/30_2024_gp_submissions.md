@@ -1,5 +1,6 @@
 ---
 title: "2024 Grand Prize Submission Instructions"
+sidebar_label: "2024 GP Instructions (closed)"
 hide_table_of_contents: true
 slug: "2024_gp_submissions"
 ---
@@ -9,7 +10,7 @@ slug: "2024_gp_submissions"
 
   <meta
     name="description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="How to submit a 2024 Vesuvius Challenge Grand Prize entry: required unwrapped images, methodology, hallucination mitigation, and the technical review process."
   />
 
   <meta property="og:type" content="website" />
@@ -17,7 +18,7 @@ slug: "2024_gp_submissions"
   <meta property="og:title" content="Vesuvius Challenge" />
   <meta
     property="og:description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="How to submit a 2024 Vesuvius Challenge Grand Prize entry: required unwrapped images, methodology, hallucination mitigation, and the technical review process."
   />
   <meta
     property="og:image"
@@ -29,7 +30,7 @@ slug: "2024_gp_submissions"
   <meta property="twitter:title" content="Vesuvius Challenge" />
   <meta
     property="twitter:description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="How to submit a 2024 Vesuvius Challenge Grand Prize entry: required unwrapped images, methodology, hallucination mitigation, and the technical review process."
   />
   <meta
     property="twitter:image"
@@ -37,12 +38,18 @@ slug: "2024_gp_submissions"
   />
 </head>
 
+:::warning[ARCHIVED]
+
+This page has been archived: submissions for the 2024 Grand Prize are closed. See [Prizes](prizes) for what is open today.
+
+:::
+
 
 ### Submitting your result
 
 <div>If you have a qualifying result, submit it for consideration by sending an email to <a href="mailto:grandprize@scrollprize.org">grandprize@scrollprize.org</a> and provide the following:</div>
 
-* **Images.** Submissions must be in the form of images of the virtually unrolled papyrus, showing visible and legible text.
+* **Images.** Submissions must be in the form of images of the virtually unwrapped papyrus, showing visible and legible text.
     * Submit a single static image for each scroll. If necessary, the image can be tiled to reasonable dimensions. Images must be generated programmatically, as direct outputs of CT data inputs, and should not contain manual annotations of characters or text.
     * Specify which scroll each image came from.
     * Specify where in the scroll they were found: include information about the position of the text vertically as well as radially within the scroll. One easy way to do this is to provide images showing the 3D position of the text surface inside the scroll.

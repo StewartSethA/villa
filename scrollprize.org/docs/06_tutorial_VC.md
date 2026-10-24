@@ -1,6 +1,5 @@
 ---
 title: "Volume Cartographer (Segmentation)"
-hide_table_of_contents: true
 ---
 
 <head>
@@ -8,7 +7,7 @@ hide_table_of_contents: true
 
   <meta
     name="description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="Vesuvius Challenge Volume Cartographer tutorial: install VC, then manually segment a Herculaneum scroll sheet and flatten it into a textured surface volume."
   />
 
   <meta property="og:type" content="website" />
@@ -16,7 +15,7 @@ hide_table_of_contents: true
   <meta property="og:title" content="Vesuvius Challenge" />
   <meta
     property="og:description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="Vesuvius Challenge Volume Cartographer tutorial: install VC, then manually segment a Herculaneum scroll sheet and flatten it into a textured surface volume."
   />
   <meta
     property="og:image"
@@ -28,7 +27,7 @@ hide_table_of_contents: true
   <meta property="twitter:title" content="Vesuvius Challenge" />
   <meta
     property="twitter:description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="Vesuvius Challenge Volume Cartographer tutorial: install VC, then manually segment a Herculaneum scroll sheet and flatten it into a textured surface volume."
   />
   <meta
     property="twitter:image"
@@ -38,6 +37,12 @@ hide_table_of_contents: true
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
+
+:::warning[ARCHIVED]
+
+This page has been archived and is no longer maintained. It describes an earlier generation of the Vesuvius Challenge pipeline — tools, data layouts, and results referenced here may have been superseded. See [Open Problems](2026_open_problems) for the current state of the pipeline and [Prizes](prizes) for what is open today.
+
+:::
 
 Volume Cartographer was used to generate the 2023 [Grand Prize results](grandprize). This guide was made by @bruniss with feedback and help from @hari_seldon and @djosey of the segmentation team.
 
@@ -59,7 +64,7 @@ Weaknesses:
   - No preview during segmentation
   - Relatively high hardware requirements
 
-This guide will focus on [Volume Cartographer](https://github.com/educelab/volume-cartographer), a virtual unwrapping toolkit built by EduceLab’s Seth Parker. Volume Cartographer is designed to create meshes along surfaces of a manuscript (e.g. pages or scroll wraps) and then sample the voxels around these meshes to create a 2D image of the manuscript's contents. Volume Cartographer includes many tools and utilities. In this tutorial we’ll be looking at the main VC GUI as well as the vc_render tool.
+This guide will focus on [Volume Cartographer](https://github.com/educelab/volume-cartographer), a virtual unwrapping toolkit built by EduceLab’s Seth Parker. Volume Cartographer is designed to create meshes along surfaces of a manuscript (e.g. pages or scroll wraps) and then sample the voxels around these meshes to create a 2D image of the manuscript's contents. Volume Cartographer includes many tools and utilities. In this tutorial we’ll be looking at the main VC GUI as well as the vc_render tool. Volume Cartographer screenshots and recordings below are © EduceLab/University of Kentucky.
 
 The segmentation team uses a custom version of Volume Cartographer, initially forked by @RICHI and further enhanced by @spacegaier. These versions include significant improvements, such as Optical Flow Segmentation (OFS), substantial performance increases, ui improvements, and many other changes. The latest fork, maintained by @spacegaier, is available here: https://github.com/spacegaier/volume-cartographer.
 
@@ -92,7 +97,7 @@ docker pull ghcr.io/spacegaier/volume-cartographer:edge
     Install [Homebrew](https://brew.sh/). Run `brew install --no-quarantine educelab/casks/volume-cartographer`.
 
     * The GUI app will be installed to `/Applications/VC.app`.
-    * The command line tools are installed to `$(brew --prefix)/bin` and should be available in the terminal immediately (e.g. `vc_packager`) — if not, make sure you have `eval $(/opt/homebrew/bin/brew shellenv)` in your shell profile and restart your terminal.
+    * The command line tools are installed to `\$(brew --prefix)/bin` and should be available in the terminal immediately (e.g. `vc_packager`) — if not, make sure you have `eval \$(/opt/homebrew/bin/brew shellenv)` in your shell profile and restart your terminal.
   </TabItem>
   <TabItem value="mac_docker" label="macOS (using Docker)">
     <div>If you prefer Docker, here are the steps:</div>
@@ -167,7 +172,7 @@ make install
 
 Now let's gather our scroll data and setup our folders...
 
-We're going to start with Scroll 1 (PHerc. Paris 4) as this is the scroll that the 2023 Grand Prize segments were from, and is also the easiest of the current scrolls to segment. VC requires all of the folders listed under the PHercParis4.volpkg, in addition to the config.json and meta.json files.
+We're going to start with Scroll 1 (PHerc. Paris. 4) as this is the scroll that the 2023 Grand Prize segments were from, and is also the easiest of the current scrolls to segment. VC requires all of the folders listed under the PHercParis4.volpkg, in addition to the config.json and meta.json files.
 
 
 This is the recommended structure for the full_scrolls folder (with a full example given for Scroll1):
@@ -214,7 +219,7 @@ rclone copy :http:/full-scrolls/Scroll1/PHercParis4.volpkg/volumes/2023020518073
 If you wish to begin with a smaller portion of Scroll 1, rather than the entire scroll, you can download 1cm of scan data from the center using:
 
 ```bash
-for i in `seq 6000 7250`; do wget http://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes/20230205180739/0$i.tif; done
+for i in `seq 6000 7250`; do wget http://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes/20230205180739/0\$i.tif; done
 ```
 
 Be sure to have the config.json file at the root of the `.volpkg` directory, and the meta.json file in the `volumes` directory so that VC can work with it.
@@ -356,24 +361,24 @@ export SEGMENT=20240227040603 #change to the segment number you've created
 export SCROLL="Scroll1/PHercParis4.volpkg" #change to whatever scroll you are currently working in
 
 
-# Navigate to the segment folder, create a directory named after $SEGMENT
-cd ${SCROLL}
-mkdir -p "${SEGMENT}"
-cd "${SEGMENT}"
+# Navigate to the segment folder, create a directory named after \$SEGMENT
+cd \${SCROLL}
+mkdir -p "\${SEGMENT}"
+cd "\${SEGMENT}"
 
 # Copy necessary files from the scroll folder to the current directory
-cp "/full_scrolls/${SCROLL}/paths/${SEGMENT}/pointset.vcps" .
-cp "/full_scrolls/${SCROLL}/paths/${SEGMENT}/meta.json" .
-cp "/full_scrolls/${SCROLL}/paths/${SEGMENT}/pointset.vcano" .
+cp "/full_scrolls/\${SCROLL}/paths/\${SEGMENT}/pointset.vcps" .
+cp "/full_scrolls/\${SCROLL}/paths/\${SEGMENT}/meta.json" .
+cp "/full_scrolls/\${SCROLL}/paths/\${SEGMENT}/pointset.vcano" .
 
 # Convert and render pointset, then generate layers and calculate area
-nice vc_convert_pointset -i pointset.vcps -o "${SEGMENT}_points.obj"
-nice vc_render -v "/full_scrolls/${SCROLL}/" -s "${SEGMENT}" -o "${SEGMENT}.obj" --output-ppm "${SEGMENT}.ppm" --intermediate-mesh "${SEGMENT}_intermediate_mesh.obj" --save-graph 0 --orient-normals
+nice vc_convert_pointset -i pointset.vcps -o "\${SEGMENT}_points.obj"
+nice vc_render -v "/full_scrolls/\${SCROLL}/" -s "\${SEGMENT}" -o "\${SEGMENT}.obj" --output-ppm "\${SEGMENT}.ppm" --intermediate-mesh "\${SEGMENT}_intermediate_mesh.obj" --save-graph 0 --orient-normals
 
 mkdir -p layers
-nice vc_layers_from_ppm -v "/full_scrolls/${SCROLL}" -p "${SEGMENT}.ppm" --output-dir layers/ -r 32 -f tif --cache-memory-limit 50G
+nice vc_layers_from_ppm -v "/full_scrolls/\${SCROLL}" -p "\${SEGMENT}.ppm" --output-dir layers/ -r 32 -f tif --cache-memory-limit 50G
 
-vc_area "/full_scrolls/${SCROLL}" ${SEGMENT} | grep cm | awk '{print $2}' | tee area_cm2.txt
+vc_area "/full_scrolls/\${SCROLL}" \${SEGMENT} | grep cm | awk '{print \$2}' | tee area_cm2.txt
 
 # Set author name
 echo '<YourNameHere>' > author.txt

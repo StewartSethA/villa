@@ -1,6 +1,6 @@
 ---
 title: "Grand Prize submissions now closed"
-sidebar_label: "Announcement: Submissions now closed!"
+sidebar_label: "2023 GP Submissions Closed"
 hide_table_of_contents: true
 hide_title: true
 ---
@@ -8,35 +8,34 @@ hide_title: true
 <head>
   <html data-theme="dark" />
 
-  <meta name="description" content="Stay tuned for next stages" />
+  <meta name="description" content="The 2023 Vesuvius Challenge Grand Prize submission window has closed. Review teams are evaluating entries — stay tuned as we announce results and next stages." />
 
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://scrollprize.org/submissions_closed" />
   <meta property="og:title" content="Grand Prize submissions now closed" />
-  <meta property="og:description" content="Stay tuned for next stages" />
+  <meta property="og:description" content="The 2023 Vesuvius Challenge Grand Prize submission window has closed. Review teams are evaluating entries — stay tuned as we announce results and next stages." />
   <meta property="og:image" content="https://scrollprize.org/img/firstletters/purple_card-new.webp" />
 
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:url" content="https://scrollprize.org/submissions_closed" />
   <meta property="twitter:title" content="Grand Prize Submissions Now Closed" />
-  <meta property="twitter:description" content="Stay tuned for next stages" />
+  <meta property="twitter:description" content="The 2023 Vesuvius Challenge Grand Prize submission window has closed. Review teams are evaluating entries — stay tuned as we announce results and next stages." />
   <meta property="twitter:image" content="https://scrollprize.org/img/firstletters/purple_card-new.webp" />
 </head>
 
+:::warning[ARCHIVED]
+
+This page has been archived and is kept for historical reference: the prizes it describes have concluded. See [Winners](winners) for the results and [Prizes](prizes) for what is open today.
+
+:::
+
 <img src="/img/firstletters/composite_thumb.webp" />
 
-<h1 className="color-white text-4xl md:text-7xl font-black !mb-2 leading-none tracking-tighter">
-  Grand Prize submissions <span style={{
-    background:
-      "radial-gradient(53.44% 245.78% at 13.64% 46.56%, #F5653F 0%, #D53A17 100%)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-    backgroundClip: "text",
-    textFillColor: "transparent",
-  }}>now closed</span>
+<h1 className="color-white text-4xl md:text-7xl !mb-2 leading-none">
+  Grand Prize submissions <span className="text-accent">now closed</span>
 </h1>
 
-<div className="md:text-3xl text-lg font-medium mt-6 mb-2 opacity-80 leading-none tracking-tight">Stay tuned for next stages</div>
+<div className="md:text-3xl text-lg font-medium mt-6 mb-2 opacity-80 leading-none">The 2023 Vesuvius Challenge Grand Prize submission window has closed. Review teams are evaluating entries — stay tuned as we announce results and next stages.</div>
 
 <div className="opacity-60 mb-8 italic">January 1, 2024</div>
 

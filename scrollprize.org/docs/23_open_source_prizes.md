@@ -1,5 +1,6 @@
 ---
 title: "$12k Open Source Prizes (Dec 31)"
+sidebar_label: "Open Source Prizes (closed)"
 hide_table_of_contents: true
 ---
 
@@ -8,7 +9,7 @@ hide_table_of_contents: true
 
   <meta
     name="description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="A past Vesuvius Challenge round: four $3,000 open source prizes for tools that improved the odds of reading the Herculaneum scrolls, awarded December 2023."
   />
 
   <meta property="og:type" content="website" />
@@ -16,7 +17,7 @@ hide_table_of_contents: true
   <meta property="og:title" content="Vesuvius Challenge" />
   <meta
     property="og:description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="A past Vesuvius Challenge round: four $3,000 open source prizes for tools that improved the odds of reading the Herculaneum scrolls, awarded December 2023."
   />
   <meta
     property="og:image"
@@ -28,7 +29,7 @@ hide_table_of_contents: true
   <meta property="twitter:title" content="Vesuvius Challenge" />
   <meta
     property="twitter:description"
-    content="A $1,000,000+ machine learning and computer vision competition"
+    content="A past Vesuvius Challenge round: four $3,000 open source prizes for tools that improved the odds of reading the Herculaneum scrolls, awarded December 2023."
   />
   <meta
     property="twitter:image"
@@ -36,7 +37,13 @@ hide_table_of_contents: true
   />
 </head>
 
-In our tradition of progress prizes, we’re awarding four $3,000 prizes for qualifying submissions by Dec 31st. This time, we do not award prizes specific to segmentation or ink detection. Anything that increases the probability of reading the scrolls this year qualifies.
+:::warning[ARCHIVED]
+
+This page has been archived and is kept for historical reference: the prizes it describes have concluded. See [Winners](winners) for the results and [Prizes](prizes) for what is open today.
+
+:::
+
+In our tradition of progress prizes, we’re awarding four \$3,000 prizes for qualifying submissions by Dec 31st. This time, we do not award prizes specific to segmentation or ink detection. Anything that increases the probability of reading the scrolls this year qualifies.
 
 <div>There are some conditions:</div>
 
@@ -48,7 +55,7 @@ In our tradition of progress prizes, we’re awarding four $3,000 prizes for qua
 * Submissions are closed on December 31st 11:59pm PT, after which the Review Team will select winners.
 * Make your submission using [this form](https://forms.gle/A8eDKEJ8Xtm2J9u38).
 
-[Segmentation](data_segments) is still a big focus, since for the Grand Prize we need multiple large segments. Large enough to contain continuous passages of at least 140 characters.
+[Segmentation](segmentation) is still a big focus, since for the Grand Prize we need multiple large segments. Large enough to contain continuous passages of at least 140 characters.
 
 <div>Some ideas to get you started:</div>
 

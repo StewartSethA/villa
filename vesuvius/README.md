@@ -1,36 +1,52 @@
 # vesuvius
-From [Vesuvius Challenge](https://scrollprize.org), a Python library for accessing CT scans of ancient scrolls.
+From [Vesuvius Challenge](https://scrollprize.org), a Python library for : 
+- Accessing CT data of Herculaneum Scrolls
+- Training 2d or 3d semantic segmentation models, with support for multi-task and multi-class
+- Training 2d or 3d models on regression tasks
+- Inferring with models trained with the trainers provided in the package or with pretrained nnUNetv2 models
+  - Inference can be performed on remote data (http, s3) stored as Zarr arrays
+- Rendering .obj segments with local or remote data
+- Voxelizing large .obj segmentations for use as 3d labels
+- Preprocessing labels of fiber-like structures
+- Interactive labeling and model training through a Napari based trainer
+- Proofreading large arrays of image/label pairs and saving approved chunks
+- Computing structure tensors on large Zarr arrays, and deriving eigenvalues and eigenvectors from them
 
-`vesuvius` allows direct access to scroll data **without** managing download scripts or storing terabytes of CT scans locally:
+`vesuvius` also comes prepackaged with: 
+- extensive data augmentation
+- Dataset orchestrator with streaming adapters for image (tif/png/jpg), zarr, and napari-backed sources
 
-```python
-import vesuvius
-import matplotlib.pyplot as plt
+_this package is in active development_
 
-scroll = vesuvius.Volume("Scroll1")
-img = scroll[1000,:,:]
 
-plt.imshow(img)
-```
+### Entrypoints: 
 
-<img src="img/slice.png" alt="drawing" width="200"/>
+| Name                          | Script                             | Description                                                                                                                                                                                               |
+| ----------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vesuvius.surface_preflight`  | `surface_preflight`                | [fails closed](docs/surface-preflight.md) when a TIFXYZ surface is not structurally valid, has inconsistent metadata scale/bbox, or is not safely paired with its Zarr/OME-Zarr CT volume |
+| `vesuvius.predict`            | `models.run.inference`             | outputs logits from a pretrained nnUNet-v2 model or one trained within the Vesuvius training framework; currently only works on Zarr data and can be fully distributed with `--num_parts` and `--part_id` |
+| `vesuvius.blend_logits`       | `models.run.blending`              | blends the logits from `vesuvius.predict` using Gaussian blending                                                                                                                                         |
+| `vesuvius.finalize_outputs`   | `models.run.finalize_outputs`      | performs softmax / argmax / none on the blended array and writes a final `uint8` volume                                                                                                                   |
+| `vesuvius.compute_st`         | `structure_tensor.run_create_st`   | computes structure tensors on input data and derives eigen-values/vectors                                                                                                                                 |
+| `vesuvius.napari_trainer`     | `napari_trainer.main_window`       | launches a Napari window for interactive training and inference                                                                                                                                           |
+| `vesuvius.proofreader`        | `utils.vc_proofreader.main`        | opens a Napari window that loads local / remote image-label arrays and extracts training patches                                                                                                          |
+| `vesuvius.voxelize_obj`       | `scripts.voxelize_objs`            | converts input `.obj` meshes to voxel grids and outputs `.tif` stacks                                                                                                                                     |
+| `vesuvius.refine_labels`      | `scripts.edt_frangi_label`         | refines surface or fibre labels with a custom Frangi-based filter                                                                                                                                         |
+| `vesuvius.render_obj`         | `rendering.mesh_to_surface`        | renders `.obj` meshes and outputs their surface-volume layers                                                                                                                                             |
+| `vesuvius.flatten_obj`        | `rendering.slim_uv`                | flattens an `.obj` mesh using `slim_uv`                                                                                                                                                                   |
+| `vesuvius.train`              | `models.run.train`                 | main entry point for training models                                                                                                                                                                      |
 
-Data is streamed in the background, only serving the requested regions.
 
-The library provides tools for accessing, managing, and manipulating high-resolution volumetric data related to Vesuvius Challenge. It supports both remote and local data, with options for caching and normalization.
 
-For a similar library in C, see [vesuvius-c](https://github.com/ScrollPrize/vesuvius-c).
-
-> ⚠️ `vesuvius` is in beta and the interface may change. Not all Vesuvius Challenge data is currently available - data will continue to be added to the library.
 
 ## 📓 Introductory notebooks
 To get started, we recommend these notebooks that jump right in:
 
-1. 📊 [Scroll Data Access](https://colab.research.google.com/github/ScrollPrize/vesuvius/blob/main/notebooks/example1_data_access.ipynb): an introduction to accessing scroll data using a few lines of Python!
+1. 📊 [Scroll Data Access](https://colab.research.google.com/github/ScrollPrize/villa/blob/main/vesuvius/src/vesuvius/examples/notebooks/example1_data_access.ipynb): an introduction to accessing scroll data using a few lines of Python!
 
-2. ✒️ [Ink Detection](https://colab.research.google.com/github/ScrollPrize/vesuvius/blob/main/notebooks/example2_ink_detection.ipynb): load and visualize segments with ink labels, and train models to detect ink in CT.
+2. ✒️ [Ink Detection](https://colab.research.google.com/github/ScrollPrize/villa/blob/main/vesuvius/src/vesuvius/examples/notebooks/example2_ink_detection.ipynb): load and visualize segments with ink labels, and train models to detect ink in CT.
 
-3. 🧩 [Volumetric instance segmentation cubes](https://colab.research.google.com/github/ScrollPrize/vesuvius/blob/main/notebooks/example3_cubes_bootstrap.ipynb): how to access instance-annotated cubes with the `Cube` class, used for volumetric segmentation approaches.
+3. 🧩 [Volumetric instance segmentation cubes](https://colab.research.google.com/github/ScrollPrize/villa/blob/main/vesuvius/src/vesuvius/examples/notebooks/example3_cubes_bootstrap.ipynb): how to access instance-annotated cubes with the `Cube` class, used for volumetric segmentation approaches.
 
 ## `vesuvius` does:
 - **Data retrieval**: Fetches volumetric scroll data, surface volumes of scroll segments, and annotated volumetric instance segmentation labels. Remote repositories and local files are supported.
@@ -46,263 +62,123 @@ To get started, we recommend these notebooks that jump right in:
 ## Installation
 
 `vesuvius` can be installed with `pip`.
-Then, before using the library for the first time, accept the license terms:
 ```sh
 $ pip install vesuvius
-$ vesuvius.accept_terms --yes
 ```
 
-## Usage
+For monorepo development, `uv sync --extra models`, `uv sync --extra all`, and
+`uv sync --all-extras` build the local `volume-cartographer` Python bindings from
+C++ source. Install its [native build prerequisites](../volume-cartographer/README.md#python-source-builds)
+first, including **Qt6 Core development files** (`qt6-base-dev` on Ubuntu/Debian,
+`qt` in Homebrew), even for headless use. `uv` does not install these system
+libraries. This requirement does not apply to the base `vesuvius` installation
+shown above.
 
-The library can be imported in Python:
-```python
-import vesuvius
+## Data licence
+
+Using the data that `vesuvius` reads means agreeing to these terms:
+
+All Vesuvius Challenge datasets are released under CC BY-NC 4.0 (https://creativecommons.org/licenses/by-nc/4.0/legalcode.txt), except Scrolls 1–4 and Fragments 1–6, which are bound by the following terms:
+
+By registering for downloads from the EduceLab-Scrolls Dataset and Vesuvius Challenge Discord Server, I agree to license the data from Vesuvius Challenge* under the following licensing terms:
+- I agree that all points below apply to both the EduceLab-Scrolls Dataset downloaded from our webserver, as well as any data (e.g. text, pictures, code) downloaded from the Vesuvius Challenge Discord Server.
+- I will not redistribute the data without the written approval of Vesuvius Challenge (if I am working in a team, every team member will sign this form separately).
+Vesuvius Challenge reserves the right to use in any way, including in an academic or other publication, all submissions or results produced from this dataset.
+- I will not make public (outside of Discord) any revelation of hidden text (or associated code) without the written approval of Vesuvius Challenge.
+- I agree all publications and presentations resulting from any use of the EduceLab-Scrolls Dataset must cite use of the EduceLab-Scrolls Dataset as follows:
+- In any published abstract, I will cite "EduceLab-Scrolls" as the source of the data in the abstract.
+- In any published manuscripts using data from EduceLab-Scrolls, I will reference the following paper: Parsons, S., Parker, C. S., Chapman, C., Hayashida, M., & Seales, W. B. (2023). EduceLab-Scrolls: Verifiable Recovery of Text from Herculaneum Papyri using X-ray CT. ArXiv [Cs.CV]. https://doi.org/10.48550/arXiv.2304.02084.
+- I will include language similar to the following in the methods section of my manuscripts in order to accurately acknowledge the data source: "Data used in the preparation of this article were obtained from the EduceLab-Scrolls dataset [above citation]."
+- I understand that all submissions will be reviewed by the Vesuvius Challenge Review Team, and that prizes will be awarded as the sole discretion of Vesuvius Challenge.
+When I post or upload data in Discord (e.g. text, pictures, code), I agree to license it to other participants under these same terms.
+
+* All EduceLab-Scrolls data is copyrighted by EduceLab/The University of Kentucky. Permission to use the data linked herein according to the terms outlined above is granted to Vesuvius Challenge.
+
+___
+**Note:** 
+
+The model framework utilized by `vesuvius` is _heavily_ inspired by [nnUNetv2](https://github.com/MIC-DKFZ/nnUNet). The default configuration will use the same blocks and construct the same encoders/decoders as the default nnUNetv2 ResEncUNet. As such, a significant portion of the code from the nnUNetv2 repository is duplicated here, with modifications to enable multi-task support with dynamic decoder branches, as well as other data formats. 
+
+Additionally, the augmentations provided within this package are from another of [MIC-DKFZ's](https://github.com/MIC-DKFZ) fantastic array of machine learning libraries, in this case [batchgeneratorsv2](https://github.com/MIC-DKFZ/batchgeneratorsv2). 
+
+Copying the modules directly into `vesuvius` was a choice of end-user friendliness, as we were using highly modified branches of both libraries, which created conflicts if an end user were to attempt to run any of our models.
+
+_**Detailed documentation for training and inference are located in [the docs folder](docs/docs)**_
+___
+
+
+### Napari based training
+
+1. Run `vesuvius.napari_trainer`
+2. Add an image to the viewer
+3. Add a label layer, with the suffix as the name of your target (ex : `32_ink`)
+4. Optionally, add a label layer with the suffix `_mask` (ex : `32_mask`)
+5. Set your training configuration and hit `run training`
+6. Infer on the same layer, or another by importing an image, selecting it in the inference widget, and hitting `Run Inference`
+
+
+![alt text](docs/docs/images/napari_trainer.png)
+
+___
+
+### Proofreading labels
+
+1. Update the config in `/utils/vc_proofreader/config.py` with the proper paths
+2. Run `vesuvius.proofreader`
+3. Select your desired patch size and min labeled percentage 
+4. Click `run` 
+5. Approve patches with `a` or by checking the box
+6. Skip patches or continue with `spacebar` or `next pair`
+7. Patches are saved in the output dir, and their locations in the .json progress file
+
+![alt text](docs/docs/images/proofreader.png)
+
+### Training with `vesuvius.train`
+
+Supported model types:
+- Single task, single class semantic segmentation / regression
+- Single task, multi-class semantic segmentation / regression
+- Multi-task, single-class semantic segmentation / regression
+- Multi-task, multi-class semantic segmentation / regression
+
+By default, when provided with a single channel (binary) input label, the model will output 2 channels (fg/bg), but can adapt to any number of input channels.
+
+**Place your data in the following format:** 
 ```
-
-### Listing
-
-#### Listing files
-To list the available files in the remote repository, use the following code:
-
-```python
-from vesuvius import list_files
-
-files = list_files()
+data/
+  images/
+    volume1.zarr (or .tif, .png, .jpg)
+    volume2.zarr
+  labels/
+    volume1_ink.zarr (or tif, .png, .jpg) 
+    volume1_hz_fiber.zarr ( if you want an additional task for the same volume )
+    volume2_ink.zarr
+   ```
+**Begin training with:**
+```bash
+ vesuvius.train -i /path/to/data --batch-size 4 --patch-size 128,128,128 --model-name /path/to/save/checkpoints --config-path /vesuvius/models/configuration/multi-task_config.yaml
 ```
+There are a number of other optional parameters, which you can find with `--help`
 
-The output of `list_files` is a dictionary that contains the paths to all the scroll volumes and segment surface volumes available in the data repository. The dictionary structure is as follows:
+When this command is run: 
+- a ConfigManager class will be instantiated, which will take the arguments given and the configuration file, and store these as properties.
+- The trainer class will execute its class method `__build_model`, which will create an instance of `NetworkFromConfig`
+- `NetworkFromConfig` will dynamically determine the number of pooling operations, stages, feature map sizes, operation dimensionality, and other specified parameters
+- The trainer class will execute its `_configure_dataset` method, instantiating the `DatasetOrchestrator` with the adapter that matches `data_format`
+- The trainer class will execute the rest of the setup required for training, through the following additional class methods:
+  - `_build_loss`
+  - `_get_optimizer`
+  - `_get_scheduler`
+  - `_get_scaler`
+  - `_configure_dataloaders`
 
-- The top-level keys are `scroll_id`.
-- Under each `scroll_id`, there are keys for different `energy` levels.
-- Under each `energy`, there are keys for different `resolution` levels.
-- Under each `resolution`, there are keys for either `segments` or `volume`.
+- The training loop will begin
 
-`segments` can contain `segment_id`s.
+Training will output the current losses in the `tqdm` progress bar, and will save a "debug" png or gif (depending on dimensionality) in the checkpoint directory. 
 
-Here is a visual representation of what the dictionary can look like:
+By default, the last 10 checkpoints are saved. This is not a smart way to do it, and will be changed to just store the last 3 + last 2 best validation. 
 
-```plaintext
-{
-  'scroll_id1': {
-    'energy1': {
-      'resolution1': {
-        'segments': {
-          'segment_id1': 'path/to/segment_id1',
-          'segment_id2': 'path/to/segment_id2'
-        },
-        'volume': 'path/to/volumes'
-      },
-      'resolution2': {
-        'segments': {
-          'segment_id1': 'path/to/segment_id1',
-          'segment_id2': 'path/to/segment_id2'
-        },
-        'volume': 'path/to/volumes'
-      }
-    },
-    'energy2': {
-      'resolution1': {
-        'segments': {
-          'segment_id1': 'path/to/segment_id1',
-          'segment_id2': 'path/to/segment_id2'
-        },
-        'volume': 'path/to/volume'
-      },
-    }
-  },
-  'scroll_id2': {
-    'energy1': {
-      'resolution1': {
-        'segments': {
-          'segment_id1': 'path/to/segment_id1',
-          'segment_id2': 'path/to/segment_id2'
-        },
-        'volume': 'path/to/volumes'
-      },
-    }
-  }
-}
-```
+Training will run for 1,000 epochs by default, with 200 batches/epoch. This can be modified through the configuration file, which can be optionally provided to `vesuvius.train`, and some examples are provided in the [models folder](src/vesuvius/models/configuration/)
 
-This structure allows you to access specific paths based on the `scroll_id`, `energy`, `resolution`, and `segment_id` of the data you are interested in. This function is automatically executed when the library is imported to constantly keep the list of available files updated.
-
-#### Listing cubes
-To list the available instance annotated volumetric cubes:
-```python
-from vesuvius import cubes
-
-available_cubes = cubes()
-```
-
-Similarly to `list_files` the output of `cubes` is a dictionary:
-```plaintext
-{
-  'scroll_id1': {
-    'energy1': {
-      'resolution1': {
-        'z1_y1_x1': 'path/to/z1_y1_x1',
-        'z2_y2_x2': 'path/to/z2_y2_x2'
-        }
-      }
-    }
-}
-```
-`z_y_x` are the coordinates in the relative scroll volume of the origin of the reference frame of the selected cube.
-
-### Importing and using `Volume`
-The `Volume` class is used for accessing volumetric data, both for scrolls and surface volume of segments.
-
-#### Example usage
-```python
-from vesuvius import Volume
-# Basic usage
-scroll = Volume(type="Scroll1") # this is going to access directly the canonical scroll 1 volume
-
-# Basic usage specifying scan metadata
-scroll = Volume(type="scroll", scroll_id=1, energy=54, resolution=7.91) # if you want to access a non canonical volume, you have to specify the scan metadata
-
-# With cache (works only with remote repository)
-scroll = Volume(type="scroll", scroll_id=1, energy=54, resolution=7.91, cache=True)
-
-# Deactivate/activate caching (works only with remote repository)
-scroll.activate_caching() # Don't need to do this if loaded the volume with cache=True
-scroll.deactivate_caching()
-
-# With normalization
-scroll = Volume(type="scroll", scroll_id=1, energy=54, resolution=7.91, normalize=True)
-
-# Visualize which subvolumes are available
-scroll.meta()
-
-# To print meta at initialization, use the argument verbose=True
-scroll = Volume(type="Scroll1", verbose=True)
-
-# To access shapes of multiresolution arrays
-subvolume_index = 3  # third subvolume
-shape = scroll.shape(subvolume_index)
-
-# To access dtype
-dtype = scroll.dtype
-
-# Access data using indexing
-data = scroll[:, :, :, subvolume_index]  # Access the entire third subvolume
-
-# When only three or less indices are specified, you are automatically accessing to the main subvolume (subvolume_index = 0)
-
-data = scroll[15] # equal to scroll[15,:,:,0]
-data = scroll[15,12] # equal to scroll [15,12,:,0]
-
-# Slicing is also permitted for the first three indices
-data = scroll[20:300,12:18,20:40,2]
-
-```
-#### With local files
-If you fully downloaded a scroll volume, or a segment, you can directly specify its local path on your device:
-```python
-scroll = Volume(type="scroll", scroll_id=1, energy=54, resolution=7.91, domain="local", path="/path/to/54keV_7.91um.zarr")
-```
-
-#### Segments
-You can access segments in a similar fashion:
-```python
-from vesuvius import Volume
-# Basic usage
-segment = Volume("20230827161847") # access a segment specifying is unique timestamp
-
-# Basic usage specifying scan metadata
-segment = Volume(type="segment", scroll_id=1, energy=54, resolution=7.91, segment_id=20230827161847)
-
-```
-#### Constructor
-```python
-Volume(
-    type: Union[str, int],
-    scroll_id: Optional[int] = None,
-    energy: Optional[int] = None,
-    resolution: Optional[float] = None,
-    segment_id: Optional[int] = None,
-    cache: bool = True,
-    cache_pool: int = 1e10,
-    normalize: bool = False,
-    verbose: bool = True,
-    domain: str = "dl.ash2txt",
-    path: Optional[str] = None
-)
-```
-- **type**: Type of volume, either 'scroll', 'scroll#' or 'segment'.
-- **scroll_id**: Identifier for the scroll.
-- **energy**: Energy level.
-- **resolution**: Resolution level.
-- **segment_id**: Identifier for the segment.
-- **cache**: Enable caching.
-- **cache_pool**: Cache pool size in bytes.
-- **normalize**: Normalize the data.
-- **verbose**: Enable verbose output.
-- **domain**: Domain, either 'dl.ash2txt' or 'local'.
-- **path**: Path to the local data.
-
-#### Methods
-- **activate_caching()**: Activates caching.
-- **deactivate_caching()**: Deactivates caching.
-- **shape(subvolume_idx: int = 0)**: Returns the shape of the specified subvolume.
-
-### Importing and using `Cube`
-The `Cube` class is used for accessing segmented cube data.
-
-#### Example usage
-```python
-from vesuvius import Cube
-
-# Basic usage
-cube = Cube(scroll_id=1, energy=54, resolution=7.91, z=2256, y=2512, x=4816, cache=True, cache_dir='/path/to/cache')  # with caching
-
-# if caching=True but cache_dir is not selected, the instances will be automatically saved in $HOME / vesuvius / annotated-instances
-
-cube = Cube(scroll_id=1, energy=54, resolution=7.91, z=2256, y=2512, x=4816, cache=False)  # without caching
-
-# With normalization
-cube = Cube(scroll_id=1, energy=54, resolution=7.91, z=2256, y=2512, x=4816, normalize=True)
-
-# Deactivate/activate caching
-cube.activate_caching(cache_dir=None)  # or define your own cache_dir
-cube.deactivate_caching()
-
-# To access the volume and the masks
-volume, mask = cube[:, :, :]  # also works with slicing
-```
-
-#### Constructor
-```python
-Cube(
-    scroll_id: int,
-    energy: int,
-    resolution: float,
-    z: int,
-    y: int,
-    x: int,
-    cache: bool = True,
-    cache_dir: Optional[os.PathLike] = None,
-    normalize: bool = False
-)
-```
-- **scroll_id**: Identifier for the scroll.
-- **energy**: Energy level.
-- **resolution**: Resolution level.
-- **z**: Z-coordinate.
-- **y**: Y-coordinate.
-- **x**: X-coordinate.
-- **cache**: Enable caching.
-- **cache_dir**: Directory for cache.
-- **normalize**: Normalize the data.
-
-#### Methods
-- **load_data()**: Loads data.
-- **activate_caching()**: Activates caching.
-- **deactivate_caching()**: Deactivates caching.
-
-## Additional notes
-- **Terms acceptance**: Ensure that the terms are accepted before using the library.
-- **Caching**: Caching is only supported with the remote repository.
-- **Normalization**: The `normalize` parameter normalizes the data to the maximum value of the dtype.
-- **Local files**: For local files, provide the appropriate path in the `Volume` constructor.
-
+### Rendering and Flattening objs
+Documentation is provided in [the rendering folder](src/vesuvius/rendering/README.md)
