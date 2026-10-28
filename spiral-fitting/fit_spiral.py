@@ -177,6 +177,15 @@ _SDT_COVERAGE_AND_LOCATION_KEYS = (
 )
 
 _HEADLESS_AUTOSAVE_INTERVAL = int(os.environ.get('FIT_SPIRAL_AUTOSAVE_INTERVAL', '1000'))
+# Every step builds fresh transform objects (slice-to-spiral transform, the
+# integrated-flow diffeomorphism and its cached-integrator closures) that sit in
+# reference cycles and each hold a full gap-logit lattice copy and a full-resolution
+# flow copy. Reference counting never frees them; only the cyclic collector does,
+# at its own pace, so device memory grows with the iteration count until a
+# collection happens to run (measured: PHerc0343 z 9000-10500, shell 250,
+# torch peak 8.52 GiB without, 3.14 GiB with a collection after every step).
+# Collect after every N-th optimiser step; 0 disables.
+_GC_EVERY_STEPS = int(os.environ.get('FIT_SPIRAL_GC_EVERY_STEPS', '1'))
 
 
 def comparable_sdt_fingerprint(fingerprint):
@@ -4576,6 +4585,8 @@ class FitContext:
         self.step_timer.start('opt')
         self.optimiser.step()
         self.step_timer.stop('opt')
+        if _GC_EVERY_STEPS > 0 and iteration % _GC_EVERY_STEPS == 0:
+            gc.collect()
         if self.influence_state is not None and self.influence_state.active:
             self.influence_state.apply_masked_gap_decay_(self.spiral_and_transform, self.optimiser)
         self.optimiser.zero_grad(set_to_none=True)
