@@ -10,7 +10,7 @@ neighbouring sheets is never a target. Cost is about 1/25 of Hecate per mm^2 (re
    Evaluation: the 8 upstream test segments listed in the reader-v3 README (human-label AUC, equal weights), through the same harness for every row. No eligible-prize-scroll data is used or shown.
 2. **Why it raises the chance of reading scrolls.** In overlapped / crushed regions a 2-D model paints ink from the neighbouring sheet onto the sheet being read. A depth head that is trained to
    put ink on the sheet the mesh intends gives a reader-v3-cost model that can (a) be run over whole scrolls, (b) report the depth at which each stroke sits, and (c) be compared against
-   other 3-D models with the leakage metrics below. On the upstream test it also scores slightly higher than the stock model (table below).
+   other 3-D models with the leakage metrics below. On the upstream test the fine-tuned models score slightly higher than the stock model, but most of that gain is also present in the single-task control (table below); the part attributable to the depth head is within about two seed standard deviations.
 3. **What it enables that was not possible before.** (i) Per-pixel sheet/depth localisation from a model that costs about the same as the reader-v3 you already run, with no 3-D labels;
    (ii) a controlled ablation of *where* depth supervision should be allowed (+-1 plane around the teacher's peak vs any plane): limiting it to the sheet is better;
    (iii) a leakage measurement (`sheet_leakage_metrics.py`) that compares sheet maps against a laterally shifted null, usable for any 3-D ink output.
@@ -30,11 +30,15 @@ neighbouring sheets is never a target. Cost is about 1/25 of Hecate per mm^2 (re
 | **depth head, film +-1 plane** (seed 0) | **0.8968** | **0.8994** |
 | depth head, film +-1 plane (seed 1) | 0.8947 | 0.8957 |
 | depth head, film +-1 plane, 13 segments (seed 2) | 0.8968 | 0.8991 |
+| depth head, film +-1 plane (seed 3) | 0.8953 | 0.8964 |
+| depth head, film +-1 plane (seed 4) | 0.8924 | 0.8955 |
+| **film +-1, mean of seeds 0, 1, 3, 4 (n = 4 runs)** | **0.8948 (sd 0.0020)** | **0.8968 (sd 0.0017)** |
 | depth head, film +-3 planes | 0.8933 | 0.8953 |
 | depth head, any sheet (3-D target = teacher probability on every plane, 2-D = max over depth) | 0.8841 | 0.8871 |
 
-Reading: every film +-1 run is above stock (+0.0054 to +0.0075 AUC at P384) and above the control; the any-sheet variant is *below* stock. n = 8 segments per cell, no confidence interval yet (single seeds):
-treat the gain as a lead until the replicates finish.
+Reading: every film +-1 run is above stock (+0.0031 to +0.0075 AUC at P384; mean +0.0055). The control (one seed so far; two more are training) is already +0.0018 above stock, so the fine-tuning recipe explains about a third of the gain and the depth head about +0.0037 (P384) / +0.0027 (P448) on top, i.e. roughly 1.5 to 2 seed standard deviations: suggestive, not established. The any-sheet variant is *below* stock. n = 8 test segments per cell; no confidence interval over segments yet.
+
+**What this model is and is not.** It is a 2-D U-Net with a 3-D depth-fusion stem (reader-v3) plus a per-pixel 16-value depth profile read from the 2-D decoder features. It is *not* a volumetric (3-D decoder) network: lateral and depth context are fused only in the stem. The depth profile is trained to peak within +-1 plane of the mesh, so its peak lies on the mesh plane by construction; it can not by itself detect that the mesh sits on a neighbouring sheet. On Scroll 1 / 4 test windows the Hecate teacher's peak is on the labelled sheet, but on segments whose mesh is off the ink sheet the head would still report the mesh plane. The independent sheet check is the teacher (Hecate) peak offset or the winding-overlap measurement, not this head's argmax.
 Earlier versions of this recipe that (a) normalised with (x-150)/25 instead of the reader-v3 robust-MAD recipe and (b) trained on the S1/S4 stream only scored 0.749-0.795 on the same test:
 **the store mixing and the optimiser (SGD nesterov, not AdamW) are required**; both are in `train_depth_head.py`.
 
