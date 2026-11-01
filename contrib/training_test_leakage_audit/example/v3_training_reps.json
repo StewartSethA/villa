@@ -1,0 +1,596 @@
+[
+ {
+  "name": "pherc0139-w016",
+  "scroll": "0139",
+  "physical_segment": "20250108000004-w029_2025010827",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "pherc0139-w035",
+  "scroll": "0139",
+  "physical_segment": "20260317000000-w035_2026031718",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "pherc0139-w039",
+  "scroll": "0139",
+  "physical_segment": "20260302000000-w039_2026030210",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "pherc0139-w040",
+  "scroll": "0139",
+  "physical_segment": "20250831000000-w040_2025083102",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "pherc0139-w041",
+  "scroll": "0139",
+  "physical_segment": "20260108000000-w041_2026010816",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "pherc0139-w043",
+  "scroll": "0139",
+  "physical_segment": "20260112000000-w043_2026011217",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "pherc0139-w017",
+  "scroll": "0139",
+  "physical_segment": "20250108000005-w030_2025010818",
+  "label_kind": "pseudo"
+ },
+ {
+  "name": "pherc0139-w028",
+  "scroll": "0139",
+  "physical_segment": "20260115000000-w044_2026011522",
+  "label_kind": "pseudo"
+ },
+ {
+  "name": "pherc0139-w029",
+  "scroll": "0139",
+  "physical_segment": "20260126000000-w045_2026012619",
+  "label_kind": "pseudo"
+ },
+ {
+  "name": "pherc1667-w013",
+  "scroll": "1667",
+  "physical_segment": "20240304141531-w013_20240304141531_flatboi",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "pherc1667-w018",
+  "scroll": "1667",
+  "physical_segment": "20240304144031-w018_20240304144031_flatboi",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "pherc1667-w023",
+  "scroll": "1667",
+  "physical_segment": "20240304161941-w023_20240304161941_flatboi",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "pherc1667-w031",
+  "scroll": "1667",
+  "physical_segment": "20251223230000-w031_2025122323_flatboi",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "pherc1667-w028",
+  "scroll": "1667",
+  "physical_segment": "20251208130119-w028_20251208130119156_flatboi",
+  "label_kind": "pseudo"
+ },
+ {
+  "name": "pherc1667-w029",
+  "scroll": "1667",
+  "physical_segment": "20251212185248-w029_20251212185248662_flatboi",
+  "label_kind": "pseudo"
+ },
+ {
+  "name": "phercparis4-w00",
+  "scroll": "Paris4",
+  "physical_segment": "20231016151002",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "phercparis4-w01",
+  "scroll": "Paris4",
+  "physical_segment": "20230702185753",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "phercparis4-w02",
+  "scroll": "Paris4",
+  "physical_segment": "20231031143852",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "phercparis4-w03",
+  "scroll": "Paris4",
+  "physical_segment": "20231106155351",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "phercparis4-w05",
+  "scroll": "Paris4",
+  "physical_segment": "20231012184424",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "phercparis4-w06",
+  "scroll": "Paris4",
+  "physical_segment": "20231210121321",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "phercparis4-w07",
+  "scroll": "Paris4",
+  "physical_segment": "20231007101619",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "phercparis4-w09",
+  "scroll": "Paris4",
+  "physical_segment": "20230929220926",
+  "label_kind": "aligned"
+ },
+ {
+  "name": "pherc0814-46527",
+  "scroll": "0814",
+  "physical_segment": "20260226000000-46527_2um_try2",
+  "label_kind": "pseudo"
+ },
+ {
+  "name": "w035",
+  "scroll": "0139",
+  "physical_segment": "20260317000000-w035_2026031718",
+  "label_kind": "native9"
+ },
+ {
+  "name": "w039",
+  "scroll": "0139",
+  "physical_segment": "20260302000000-w039_2026030210",
+  "label_kind": "native9"
+ },
+ {
+  "name": "w040",
+  "scroll": "0139",
+  "physical_segment": "20250831000000-w040_2025083102",
+  "label_kind": "native9"
+ },
+ {
+  "name": "w041",
+  "scroll": "0139",
+  "physical_segment": "20260108000000-w041_2026010816",
+  "label_kind": "native9"
+ },
+ {
+  "name": "w044",
+  "scroll": "0139",
+  "physical_segment": "20260115000000-w044_2026011522",
+  "label_kind": "native9"
+ },
+ {
+  "name": "20250510172804",
+  "scroll": "0009B",
+  "physical_segment": "20250510172804",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250511200236",
+  "scroll": "0009B",
+  "physical_segment": "20250511200236",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250919064353",
+  "scroll": "0009B",
+  "physical_segment": "20250919064353",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250919123506",
+  "scroll": "0009B",
+  "physical_segment": "20250919123506",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250919124722",
+  "scroll": "0009B",
+  "physical_segment": "20250919124722",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250919124917",
+  "scroll": "0009B",
+  "physical_segment": "20250919124917",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250919125302",
+  "scroll": "0009B",
+  "physical_segment": "20250919125302",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250919125605",
+  "scroll": "0009B",
+  "physical_segment": "20250919125605",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250919130642",
+  "scroll": "0009B",
+  "physical_segment": "20250919130642",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250919131352",
+  "scroll": "0009B",
+  "physical_segment": "20250919131352",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250919131642",
+  "scroll": "0009B",
+  "physical_segment": "20250919131642",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250919132115",
+  "scroll": "0009B",
+  "physical_segment": "20250919132115",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250919135433",
+  "scroll": "0009B",
+  "physical_segment": "20250919135433",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250919135915",
+  "scroll": "0009B",
+  "physical_segment": "20250919135915",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250108000000-w025_2025010863",
+  "scroll": "0139",
+  "physical_segment": "20250108000000-w025_2025010863",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250108000001-w026_2025010854",
+  "scroll": "0139",
+  "physical_segment": "20250108000001-w026_2025010854",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250108000002-w027_2025010845",
+  "scroll": "0139",
+  "physical_segment": "20250108000002-w027_2025010845",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250108000003-w028_2025010836",
+  "scroll": "0139",
+  "physical_segment": "20250108000003-w028_2025010836",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250108000005-w030_2025010818",
+  "scroll": "0139",
+  "physical_segment": "20250108000005-w030_2025010818",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250223000000-w059_2025022312",
+  "scroll": "0139",
+  "physical_segment": "20250223000000-w059_2025022312",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20251226000000-w055_2025122611",
+  "scroll": "0139",
+  "physical_segment": "20251226000000-w055_2025122611",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260112000000-w043_2026011217",
+  "scroll": "0139",
+  "physical_segment": "20260112000000-w043_2026011217",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260115000001-w056_2026011514",
+  "scroll": "0139",
+  "physical_segment": "20260115000001-w056_2026011514",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260126000000-w045_2026012619",
+  "scroll": "0139",
+  "physical_segment": "20260126000000-w045_2026012619",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260127000000-w057_2026012713",
+  "scroll": "0139",
+  "physical_segment": "20260127000000-w057_2026012713",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260130000000-w031_2026013019",
+  "scroll": "0139",
+  "physical_segment": "20260130000000-w031_2026013019",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260203000000-w032_2026020303",
+  "scroll": "0139",
+  "physical_segment": "20260203000000-w032_2026020303",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260206000000-w042_2026020613",
+  "scroll": "0139",
+  "physical_segment": "20260206000000-w042_2026020613",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260206000002-w054_2026020617",
+  "scroll": "0139",
+  "physical_segment": "20260206000002-w054_2026020617",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260210000000-w058_2026021020",
+  "scroll": "0139",
+  "physical_segment": "20260210000000-w058_2026021020",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260219000000-w033_2026021913",
+  "scroll": "0139",
+  "physical_segment": "20260219000000-w033_2026021913",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260219000001-w048_2026021912",
+  "scroll": "0139",
+  "physical_segment": "20260219000001-w048_2026021912",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260227000000-w052_2026022705",
+  "scroll": "0139",
+  "physical_segment": "20260227000000-w052_2026022705",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20260302000001-w050_2026030220",
+  "scroll": "0139",
+  "physical_segment": "20260302000001-w050_2026030220",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250925161630-auto_grown_20250925161630",
+  "scroll": "0814",
+  "physical_segment": "20250925161630-auto_grown_20250925161630",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250925182632-auto_grown_20250925182632",
+  "scroll": "0814",
+  "physical_segment": "20250925182632-auto_grown_20250925182632",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250925204843-auto_grown_20250925204843",
+  "scroll": "0814",
+  "physical_segment": "20250925204843-auto_grown_20250925204843",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250925212701-auto_grown_20250925212701",
+  "scroll": "0814",
+  "physical_segment": "20250925212701-auto_grown_20250925212701",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250925222237-auto_grown_20250925222237",
+  "scroll": "0814",
+  "physical_segment": "20250925222237-auto_grown_20250925222237",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250926051122-auto_grown_20250926051122",
+  "scroll": "0814",
+  "physical_segment": "20250926051122-auto_grown_20250926051122",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250926165636-auto_trace_20250926165636",
+  "scroll": "0814",
+  "physical_segment": "20250926165636-auto_trace_20250926165636",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250926203608-auto_grown_20250926203608",
+  "scroll": "0814",
+  "physical_segment": "20250926203608-auto_grown_20250926203608",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250609204953-z_dbg_gen_00612",
+  "scroll": "0500P2",
+  "physical_segment": "20250609204953-z_dbg_gen_00612",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611132918-z_dbg_gen_00302_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611132918-z_dbg_gen_00302_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611133823-z_dbg_gen_00130_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611133823-z_dbg_gen_00130_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611134135-z_dbg_gen_00331_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611134135-z_dbg_gen_00331_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611153340-z_dbg_gen_00275",
+  "scroll": "0500P2",
+  "physical_segment": "20250611153340-z_dbg_gen_00275",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611153346-z_dbg_gen_00286_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611153346-z_dbg_gen_00286_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611153347-z_dbg_gen_00105_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611153347-z_dbg_gen_00105_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611154256-z_dbg_gen_00354_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611154256-z_dbg_gen_00354_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611161023-z_dbg_gen_00205_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611161023-z_dbg_gen_00205_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611161415-z_dbg_gen_00411_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611161415-z_dbg_gen_00411_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611170257-z_dbg_gen_00308_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611170257-z_dbg_gen_00308_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611171318-z_dbg_gen_00440_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611171318-z_dbg_gen_00440_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611171745-z_dbg_gen_00225_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611171745-z_dbg_gen_00225_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611172135-z_dbg_gen_00346_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611172135-z_dbg_gen_00346_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250611173014-z_dbg_gen_00506_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250611173014-z_dbg_gen_00506_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250628074500-500P2_front",
+  "scroll": "0500P2",
+  "physical_segment": "20250628074500-500P2_front",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250716055227-z_dbg_gen_00260_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250716055227-z_dbg_gen_00260_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250716055228-z_dbg_gen_00333_inp_hr",
+  "scroll": "0500P2",
+  "physical_segment": "20250716055228-z_dbg_gen_00333_inp_hr",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250511003658-tifxyz",
+  "scroll": "0343P",
+  "physical_segment": "20250511003658-tifxyz",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250902170435--5_b2",
+  "scroll": "0343P",
+  "physical_segment": "20250902170435--5_b2",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250902170441--4_b2",
+  "scroll": "0343P",
+  "physical_segment": "20250902170441--4_b2",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250902170447--3_b2",
+  "scroll": "0343P",
+  "physical_segment": "20250902170447--3_b2",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250902171202--2_b2",
+  "scroll": "0343P",
+  "physical_segment": "20250902171202--2_b2",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250902171204--1_b2",
+  "scroll": "0343P",
+  "physical_segment": "20250902171204--1_b2",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250917143559-w062_20250917143559205_fl",
+  "scroll": "0172",
+  "physical_segment": "20250917143559-w062_20250917143559205_fl",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250926112011-w078_20250926112011918_fl",
+  "scroll": "0172",
+  "physical_segment": "20250926112011-w078_20250926112011918_fl",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250926113336-w079_20250926113336891_fl",
+  "scroll": "0172",
+  "physical_segment": "20250926113336-w079_20250926113336891_fl",
+  "label_kind": "v2native"
+ },
+ {
+  "name": "20250926114310-w080_20250926114310705_fl",
+  "scroll": "0172",
+  "physical_segment": "20250926114310-w080_20250926114310705_fl",
+  "label_kind": "v2native"
+ }
+]
