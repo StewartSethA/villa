@@ -16,6 +16,9 @@ neighbouring sheets is never a target. Cost is about 1/25 of Hecate per mm^2 (re
    (iii) a leakage measurement (`sheet_leakage_metrics.py`) that compares sheet maps against a laterally shifted null, usable for any 3-D ink output.
 4. **Evidence** (all on real data; one training seed per row unless stated; replicate seeds are running and will be appended to this file):
 
+![stock reader-v3 vs depth head on held-out S4 and S1 windows](figures/before_after_S4_S1.png)
+*Columns: CT middle plane | refined human core label | stock reader-v3 probability | depth-head model probability | depth-head depth hue (blue = top plane, red = mesh plane, green = bottom plane) | Hecate depth hue. Rows: Scroll 4 20251212185248 (window y 3072, x 7040) and Scroll 1 20230929220926 (window y 3328, x 17568), 512 px at 9.6 um. The windows are in the held-out right 10 % band of segments the model was fine-tuned on, so the sharper probability map reflects fine-tuning to the refined labels as well as the head; the transfer evidence is the table below. Look at the last two columns: Hecate spreads ink over several depths (blue/green/red), the film +-1 head keeps it on the mesh plane (red).*
+
 ### Upstream test (8 segments, human-label AUC, equal weights, last checkpoint)
 | model | P384 | P448 |
 |---|---|---|
