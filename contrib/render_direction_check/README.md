@@ -34,6 +34,9 @@ Our layer k matched published layer 64-k (correlation 0.88-0.93); at layer 32 th
 | Scroll 1 | 5 | 11,657-23,478 | 0-1,854 | (no S1 label in the tiles) | |
 Forward is the right direction for all ten tiles; the reversed pass is not empty on four of the five Scroll 4 tiles (up to 13,565 columns), which is why a count is not enough and the per-block comparison against a reference is used.
 
+![direction check on two Scroll 4 tiles](figures/direction_S4_tiles.png)
+*Human label | Hecate forward | Hecate reversed, Scroll 4 tiles 20251208130119 (top) and 20251212185248 (bottom), 512 px: the forward pass reproduces the labelled strokes, the reversed pass does not.*
+
 ### `direction_check.py` run on the five Scroll 4 tiles (forward / reversed Hecate max maps against the human label, 128 px blocks)
 | tile | blocks | mean r forward | mean r reversed | blocks where forward is better | verdict |
 |---|---|---|---|---|---|
