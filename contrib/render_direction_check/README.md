@@ -34,6 +34,15 @@ Our layer k matched published layer 64-k (correlation 0.88-0.93); at layer 32 th
 | Scroll 1 | 5 | 11,657-23,478 | 0-1,854 | (no S1 label in the tiles) | |
 Forward is the right direction for all ten tiles; the reversed pass is not empty on four of the five Scroll 4 tiles (up to 13,565 columns), which is why a count is not enough and the per-block comparison against a reference is used.
 
+### `direction_check.py` run on the five Scroll 4 tiles (forward / reversed Hecate max maps against the human label, 128 px blocks)
+| tile | blocks | mean r forward | mean r reversed | blocks where forward is better | verdict |
+|---|---|---|---|---|---|
+| 20240304144031 | 9 | 0.392 | 0.076 | 0.89 | fwd |
+| 20240304161941 | 11 | 0.355 | -0.032 | 1.00 | fwd |
+| 20251208130119 | 9 | 0.598 | 0.012 | 1.00 | fwd |
+| 20251212185248 | 7 | 0.628 | 0.180 | 1.00 | fwd |
+| 20251223230000 | 7 | 0.450 | 0.121 | 0.86 | fwd |
+
 ## Limits
 - The verdict needs a reference map that is independent of the direction (another model's 2-D map or a label); on a surface with no signal it returns "ambiguous".
 - `layer_order_check.py` and `intensity_check.py` are tested on synthetic stacks only (`tests/`); the Scroll 5 numbers above were measured with the original in-house scripts and are reported, not re-derived here.
