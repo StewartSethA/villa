@@ -36,6 +36,8 @@ Stock reader-v3 through the upstream-test harness (equal-weight human-label AUC,
 | PHerc0841 20260220214732 | no | 0.8444 |
 | PHerc0841 20260221022814 | no | 0.8548 |
 
+![per-segment AUC and overlap](figures/per_segment_auc_overlap.png)
+
 Mean over the 3 overlapping segments 0.8966, over the 5 others 0.8850 (difference +0.012; n = 3 vs 5, so this does not separate in-sample inflation from segment difficulty: w045 is the weakest segment although it is in the list).
 We therefore train our own comparison models on the training list with those three segments removed and report both numbers.
 
