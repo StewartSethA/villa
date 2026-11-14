@@ -1,6 +1,6 @@
 # Fit whole scrolls on a 32 GB card: host-RAM offload of the lasagna brick pool (and a GC hook)
 
-**In one sentence:** with one environment variable, `fit_spiral.py` keeps its lasagna brick pool in pinned host RAM instead of on the GPU, so a full-height spiral fit of a tall or high-shell scroll fits a 32 GB V100 that it did not fit before, at about 1 % extra time per iteration where it was measured.
+**In one sentence:** with one environment variable, `fit_spiral.py` keeps its lasagna brick pool in pinned host RAM instead of on the GPU, so a full-height spiral fit of a scroll that is tall or has many windings fits a 32 GB V100 that it did not fit before, at about 1 % extra time per iteration where it was measured.
 
 **One real example:** starting with PHerc0268 (14,833 slices, shell 408, a 21.4 GiB lasagna pool, predicted 37.7 GiB resident (model peak 36.2 GiB plus 1.5 GiB headroom, `docs/ROUTEB_MEMORY.md`), so it does not fit a 31.7 GiB V100-32) and its extracted tracks, I ran `fit_spiral.py` over the whole height with `FIT_SPIRAL_POOL_OFFLOAD=1`, and a 600-iteration probe measured 0.425 it/s with a 25,720 MiB (25.1 GiB) peak on one V100-32; the production fit then ran to completion and wrote a fitted checkpoint and meshes (queue claim to checkpoint about 21 h, including queue waiting).
 
