@@ -27,6 +27,20 @@
 
 - [ ] I personally verified that the example and proof above were produced by this PR on the stated data. *(to be ticked by the submitter)*
 
+## Memory and time per scroll (model, with the measured runs overlaid)
+
+![VRAM per fit](charts/vram_per_scroll.png)
+
+- Per scroll and per flow-voxel grid: the whole-height fit's GPU memory without the offload (bar end including the hatched pool) and with it (bar end before the hatch), against the 31.7 GiB of a V100-32. Table: [`charts/vram_per_scroll.md`](charts/vram_per_scroll.md), CSV next to it.
+- Model: pool + tracks + flow field + 7 live gap-logit copies + per-step temporaries + 1.5 GiB headroom, calibrated on one scroll at full height (predicted 20.5 / 28.8 GiB against measured 20.1 / 28.2 GiB for the 32- / 16-voxel grid). Measured diamonds (nvidia-smi, 2 s samples): optimiser phase median, and the whole-run maximum, which includes the final mesh export (+4 to +10.5 GiB on the three scrolls measured; not in the model).
+- By the model, on one V100-32: with the GC hook alone 18 of 21 scrolls fit at the 32-voxel grid and 13 of 21 at the 16-voxel grid; with the offload as well all 21 fit at 32-voxel and 20 of 21 at 16-voxel. The one that does not is the tallest one in the set (24,298 slices, shell 275): the model needs 32.5 GiB there, 0.8 GiB over the card. A 17,000-iteration fit of it at the 16-voxel grid with the offload did complete on a shared card; its own peak was not recorded, so that is not a measurement.
+- Measured, 32-voxel grid, GC on, V100-32 (optimiser median / whole-run max): resident pool 20.1 / 24.0 GiB, offloaded 9.3 / 13.2 GiB (same fit, 18,000 slices); offloaded 14.7 / 25.1 GiB (14,833 slices, shell 408) and 13.3 / 20.1 GiB (24,298 slices, shell 275). No measured 16-voxel peak with the offload exists yet.
+
+![Time per fit](charts/time_per_scroll.png)
+
+- Left and middle: measured optimiser wall time of the whole-height fits on V100-32 cards (all with the GC hook on every step), normalised to 30,000 iterations; cards were shared with other jobs.
+- Right (controlled pairs, one run per arm, no seeds): the GC hook collecting every step costs 1.21 s per iteration against 0.65 s collecting every tenth step on a whole-height fit (+87 %, 22.6 GiB against 25.7 GiB peak); the pool offload costs 1.34 s against 1.33 s per iteration (+1.0 %) while freeing 10.8 GiB. Without the GC hook a fit cannot finish (the copies leak until out of memory), so the GC time is priced against a rarer collection, not against none.
+
 ## Details
 
 ### Files
